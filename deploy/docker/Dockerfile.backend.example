@@ -1,0 +1,11 @@
+FROM runtime-base-image AS runtime
+
+WORKDIR /app
+
+# Copy built backend artifact or source according to the selected stack.
+# COPY ./dist ./dist
+
+ENV NODE_ENV=production
+EXPOSE 8080
+
+CMD ["sh", "-c", "echo 'Replace with backend start command' && sleep infinity"]

@@ -1,0 +1,226 @@
+workflow:
+  initial_stage: INTAKE
+  terminal_stages:
+    - DONE
+    - STOPPED
+  strict_gates: true
+  state_file: workflow/state.md
+  openspec_root: openspec
+  evidence_root: workflow/changes
+  allow_parallel_design: false
+  allow_parallel_development: true
+  execution_policy: workflow/execution.config.yaml
+  gate_readiness_tool: tools/check-gate-readiness.py
+  code_readiness_tool: tools/check-workflow-readiness.py
+  transition_readiness_tool: tools/check-transition-readiness.py
+  task_completion_tool: tools/check-task-completion-readiness.py
+  gate_policy: workflow/gates/README.md
+  active_change_source: workflow/state.md
+  transition_policy:
+    no_skip_stages: true
+    enforced_pre_development_sequence:
+      - INTAKE
+      - INIT
+      - TRIAGE
+      - REQUIREMENT
+      - REQ_GATE
+      - DESIGN
+      - DESIGN_GATE
+      - DEVELOPMENT
+    development_tdd_sequence:
+      - TEST_CASE_ARTIFACTS
+      - RED_FAILURE_RECORD
+      - CODE_IMPLEMENTATION
+      - GREEN_PASS_RECORD
+
+  stages:
+    INTAKE:
+      owner: pl
+      reviewers:
+        - ceo
+      output:
+        - workflow/changes/<CR-ID>/change.md
+      next:
+        accept: INIT
+        reject: STOPPED
+        block: STOPPED
+
+    INIT:
+      owner: ceo
+      output:
+        - workflow/changes/<CR-ID>/review.md
+      next:
+        approve: TRIAGE
+        stop: STOPPED
+
+    TRIAGE:
+      owner: pl
+      output:
+        - workflow/changes/<CR-ID>/review.md
+      next:
+        submit: REQUIREMENT
+
+    REQUIREMENT:
+      owner: pm
+      output:
+        - openspec/changes/<change-name>/proposal.md
+        - openspec/changes/<change-name>/specs/**
+        - docs/prd/prd.md
+        - PROJECT.md
+        - docs/status/feature-status.md
+        - workflow/changes/<CR-ID>/acceptance.md
+      interaction_required_before:
+        - submit: REQ_GATE
+          rule: "主动向用户展示所有 Q 编号、待确认项和关键假设，标注是否阻塞 MVP，并把用户回答、处理结论和展示状态写回 OpenSpec。"
+      next:
+        submit: REQ_GATE
+
+    REQ_GATE:
+      owner: pl
+      reviewers:
+        - pl
+      output:
+        - workflow/changes/<CR-ID>/review.md
+      readiness_check:
+        command: python tools/check-gate-readiness.py --gate requirement --change <change-name> --change-id <CR-ID>
+        required_before:
+          - 写入 passed 结论前
+          - 推进 state 到 DESIGN 前
+      next:
+        approve: DESIGN
+        return_requirement: REQUIREMENT
+
+    DESIGN:
+      owner: architect
+      participants:
+        - pl
+        - qa
+      output:
+        - openspec/changes/<change-name>/design.md
+        - openspec/changes/<change-name>/tasks.md
+        - workflow/changes/<CR-ID>/test-plan.md
+        - docs/architecture/architecture.md
+        - docs/api/api.md
+        - docs/database/database.md
+        - docs/security/security.md
+        - docs/decisions/decisions.md
+      next:
+        submit: DESIGN_GATE
+
+    DESIGN_GATE:
+      owner: pl
+      reviewers:
+        - architect
+      output:
+        - workflow/changes/<CR-ID>/review.md
+      readiness_check:
+        command: python tools/check-gate-readiness.py --gate design --change <change-name> --change-id <CR-ID>
+        required_before:
+          - 写入 passed 结论前
+          - 推进 state 到 DEVELOPMENT 前
+      next:
+        approve: DEVELOPMENT
+        return_design: DESIGN
+        return_requirement: REQUIREMENT
+
+    DEVELOPMENT:
+      owner: pl
+      participants:
+        - frontend
+        - backend
+      optional_participants:
+        - ai
+        - admin
+      output:
+        - openspec/changes/<change-name>/tasks.md
+        - workflow/changes/<CR-ID>/test-plan.md
+        - workflow/changes/<CR-ID>/acceptance.md
+      internal_flow:
+        TEST_CASE_ARTIFACTS:
+          output:
+            - workflow/changes/<CR-ID>/test-plan.md
+          next: RED_FAILURE_RECORD
+        RED_FAILURE_RECORD:
+          output:
+            - workflow/changes/<CR-ID>/test-plan.md
+          next: CODE_IMPLEMENTATION
+        CODE_IMPLEMENTATION:
+          output:
+            - openspec_task_allowed_write_scope
+          next: GREEN_PASS_RECORD
+        GREEN_PASS_RECORD:
+          output:
+            - workflow/changes/<CR-ID>/test-plan.md
+            - workflow/changes/<CR-ID>/acceptance.md
+          readiness_check:
+            command: python tools/check-task-completion-readiness.py --change <change-name> --change-id <CR-ID> --task-id <TASK-ID>
+      next:
+        submit: INTEGRATION
+
+    INTEGRATION:
+      owner: pl
+      reviewers:
+        - architect
+      output:
+        - workflow/changes/<CR-ID>/review.md
+        - workflow/changes/<CR-ID>/acceptance.md
+      next:
+        approve: QA
+        return_development: DEVELOPMENT
+
+    QA:
+      owner: qa
+      output:
+        - workflow/changes/<CR-ID>/test-report.md
+        - workflow/changes/<CR-ID>/acceptance.md
+      next:
+        approve: SECURITY
+        return_integration: INTEGRATION
+        return_requirement: REQUIREMENT
+
+    SECURITY:
+      owner: security
+      output:
+        - workflow/changes/<CR-ID>/security-review.md
+      next:
+        approve: RELEASE_GATE
+        return_design: DESIGN
+        return_development: DEVELOPMENT
+
+    RELEASE_GATE:
+      owner: pl
+      reviewers:
+        - qa
+        - security
+        - ops
+      output:
+        - workflow/changes/<CR-ID>/review.md
+        - workflow/changes/<CR-ID>/deploy-plan.md
+      readiness_check:
+        command: python tools/check-gate-readiness.py --gate release --change <change-name> --change-id <CR-ID>
+        required_before:
+          - 写入 passed 结论前
+          - 推进 state 到 DEPLOY 前
+      next:
+        approve: DEPLOY
+        return_triage: TRIAGE
+
+    DEPLOY:
+      owner: ops
+      output:
+        - workflow/changes/<CR-ID>/deploy-record.md
+      next:
+        approve: FEEDBACK
+        rollback: RELEASE_GATE
+
+    FEEDBACK:
+      owner: pl
+      participants:
+        - pm
+      output:
+        - workflow/changes/<CR-ID>/review.md
+        - openspec/specs/**
+        - openspec/changes/archive/<change-name>/
+      next:
+        done: DONE
+        new_request: INTAKE

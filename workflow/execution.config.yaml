@@ -1,0 +1,332 @@
+execution:
+  mode: manual-orchestrated
+  controller: pl
+  state_file: workflow/state.md
+  openspec_change: openspec/changes/<change-name>/
+  evidence_package: workflow/changes/<CR-ID>/
+  change_file: workflow/changes/<CR-ID>/change.md
+  task_board: openspec/changes/<change-name>/tasks.md
+  acceptance_trace: workflow/changes/<CR-ID>/acceptance.md
+  test_plan: workflow/changes/<CR-ID>/test-plan.md
+  deploy_plan: workflow/changes/<CR-ID>/deploy-plan.md
+  deploy_record: workflow/changes/<CR-ID>/deploy-record.md
+  approval_record: workflow/changes/<CR-ID>/review.md
+
+  stage_statuses:
+    - draft
+    - ready
+    - in_progress
+    - submitted
+    - returned
+    - blocked
+    - passed
+    - delivered
+    - stopped
+
+  run_contract:
+    require_gate_readiness_check_before_pass: true
+    require_task_order_for_code_changes: true
+    require_pre_code_change_readiness_check: true
+    require_test_case_artifact_before_business_code: true
+    require_red_record_before_business_code: true
+    require_green_record_before_task_done: true
+    require_real_green_command_before_task_done: true
+    require_structured_red_green_execution_evidence: true
+    require_test_case_artifact_exists_before_task_done: true
+    require_red_green_commands_reference_test_artifact: true
+    require_red_green_commands_share_test_artifact: true
+    require_acceptance_trace_references_green_evidence: true
+    require_allowed_write_scope: true
+    require_test_plan_for_high_risk_tasks: true
+    require_verification_record: true
+    require_doc_sync_record: true
+    require_agent_run_log: true
+    require_stage_pause_confirmation_before_transition: true
+    require_pause_after_each_dev_task: true
+    require_user_continue_before_next_dev_task: true
+    one_active_writer_per_task: true
+    llm_may_self_advance_stage: false
+    llm_may_self_approve_gate: false
+
+  gate_readiness:
+    script: tools/check-gate-readiness.py
+    failure_behavior: "检查失败时，Agent 不得把关口记录为 passed，也不得推进 workflow/state.md；只能列出缺口、生成缺失草案、请求确认，或记录 returned。"
+    requirement_gate:
+      command: "python tools/check-gate-readiness.py --gate requirement --change <change-name> --change-id <CR-ID>"
+      checks:
+        - workflow_state_current_stage_is_req_gate
+        - workflow_state_current_change_matches
+        - init_gate_passed
+        - triage_submitted_or_ready
+        - change_objective_and_success_criteria_filled
+        - openspec_proposal_generated
+        - openspec_specs_generated_with_requirement_and_scenario
+        - all_open_questions_shown_to_user_with_q_id
+        - blocking_open_questions_answered_or_deferred
+        - non_blocking_open_questions_have_defer_or_non_blocking_record
+        - acceptance_requirements_testable
+        - acceptance_trace_has_requirement_rows
+    design_gate:
+      command: "python tools/check-gate-readiness.py --gate design --change <change-name> --change-id <CR-ID>"
+      checks:
+        - workflow_state_current_stage_is_design_gate
+        - workflow_state_current_change_matches
+        - requirement_gate_passed_in_review
+        - openspec_design_generated
+        - openspec_tasks_generated
+        - openspec_task_rows_ready_or_approved
+        - allowed_write_scope_filled
+        - test_case_artifacts_ready
+        - design_document_sync_recorded
+        - design_docs_synced_or_marked_not_required
+        - acceptance_trace_designed
+      boundary: "设计关口证明 OpenSpec design、OpenSpec tasks、长期事实文档同步、允许写入范围和测试用例产物已准备好。Red 失败记录属于 DEVELOPMENT 内的代码准入，可以暂时 Pending，但业务代码必须等 Red 记录补齐后才能写。"
+    release_gate:
+      command: "python tools/check-gate-readiness.py --gate release --change <change-name> --change-id <CR-ID>"
+      checks:
+        - workflow_state_current_stage_is_release_gate
+        - workflow_state_current_change_matches
+        - design_gate_passed_in_review
+        - acceptance_trace_verified_or_blocked_with_owner
+        - test_report_complete
+        - security_review_complete
+        - deploy_plan_has_steps_rollback_and_monitoring
+        - agent_run_logs_exist
+
+  pre_code_change_conditions:
+    all_required: true
+    failure_behavior: "检查失败时，Agent 只能请求人工确认或补齐 workflow 记录；不得修改业务代码。"
+    current_stage:
+      state_file: workflow/state.md
+      must_equal: DEVELOPMENT
+    active_change:
+      state_file: workflow/state.md
+      workflow_change_must_equal: workflow/changes/<CR-ID>/
+      openspec_change_must_equal: openspec/changes/<change-name>/
+    approvals:
+      file: workflow/changes/<CR-ID>/review.md
+      requirement_gate_must_equal: passed
+      design_gate_must_equal: passed
+    task_board:
+      file: openspec/changes/<change-name>/tasks.md
+      must_exist: true
+      task_status_allowed:
+        - Ready
+        - Approved
+      allowed_write_scope_must_cover_target_file: true
+    test_plan:
+      file: workflow/changes/<CR-ID>/test-plan.md
+      required_for_business_code_changes: true
+      test_case_artifact_required_before_code: true
+      red_failure_record_required_before_code: true
+      green_pass_record_required_before_task_done: true
+      cannot_automate_requires:
+        - reason
+        - manual_verification_owner
+      required_when:
+        - priority_p0
+        - priority_p1
+        - high_risk
+      high_risk_markers:
+        - API
+        - database
+        - permission
+        - security
+        - deploy
+        - production
+        - payment
+        - cross_module
+
+  tdd_policy:
+    scope: business_code_changes
+    sequence:
+      - test_case_artifacts
+      - red_failure_record
+      - code_implementation
+      - green_pass_record
+    prohibit_backfilled_red_records: true
+    before_code_requires:
+      - current_task_has_test_case_artifact
+      - current_task_has_red_failure_record
+    after_code_requires:
+      - current_task_has_green_pass_record
+    cannot_automate_requires:
+      - reason
+      - manual_verification_owner
+    bypass_remediation:
+      evidence_file: workflow/changes/<CR-ID>/test-plan.md
+      evidence_section: TDD Deviations
+      allowed_when:
+        - implementation_already_happened_before_red
+        - pre_implementation_baseline_unavailable
+      required_fields:
+        - task_id
+        - deviation_type
+        - business_code_written
+        - missing_evidence
+        - remediation_verification
+        - user_confirmation
+        - status
+      rule: "已实现后补写的测试只能作为回归测试或补救验证；不得倒填为 Red 失败记录，也不得声称严格 TDD 合规。"
+    failure_behavior: "缺少测试用例产物、Red 记录或人工验证负责人时，Agent 必须停在业务代码修改前。若已经写入业务代码，必须记录 TDD 流程偏差并等待用户确认修正方式，不得事后补 Red 冒充合规。"
+
+  transition_readiness:
+    script: tools/check-transition-readiness.py
+    command: "python tools/check-transition-readiness.py --change-id <CR-ID> --change <change-name> --from-stage <FROM_STAGE> --to-stage <TO_STAGE> --action <ACTION>"
+    checks:
+      - workflow_state_current_stage_matches_from_stage
+      - workflow_state_current_change_matches
+      - workflow_config_allows_action_to_target_stage
+      - approval_or_stage_conclusion_exists_when_required
+      - stage_pause_confirmation_recorded_for_advancing_actions
+    failure_behavior: "检查失败时，不得推进 workflow/state.md；必须按 workflow.config.yaml 选择合法流转，补齐阶段/关口结论，或在 review.md 记录已向用户展示交付物并获得推进确认。"
+
+  stage_pause_confirmation:
+    evidence_file: workflow/changes/<CR-ID>/review.md
+    evidence_section: Stage Pause Confirmations
+    applies_to_actions:
+      - accept
+      - approve
+      - submit
+      - done
+    required_fields:
+      - stage
+      - action
+      - next_stage
+      - deliverables
+      - summary_shown
+      - user_confirmation
+      - recorded_at
+    forbidden_confirmation_values:
+      - PRD 自动入口授权
+    failure_behavior: "缺少阶段暂停确认时，不得写入 submitted、passed、approved、delivered 等推进性结论，也不得推进 workflow/state.md。"
+
+  task_completion_readiness:
+    script: tools/check-task-completion-readiness.py
+    command: "python tools/check-task-completion-readiness.py --change-id <CR-ID> --change <change-name> --task-id <TASK-ID>"
+    checks:
+      - workflow_state_current_stage_is_development
+      - requirement_and_design_gates_passed
+      - openspec_task_exists_and_has_required_fields
+      - test_case_artifact_recorded
+      - test_case_artifact_exists
+      - red_failure_record_recorded
+      - red_record_has_real_command_metadata
+      - red_command_references_test_case_artifact
+      - green_pass_record_recorded
+      - green_command_references_test_case_artifact
+      - red_and_green_commands_share_test_case_artifact
+      - green_command_executes_successfully
+      - acceptance_trace_updated_to_implemented_or_verified
+      - acceptance_trace_references_green_command_or_test_artifact
+      - agent_run_log_exists_for_task
+    real_test_verification:
+      enabled: true
+      test_case_artifact_must_exist: true
+      commands_must_reference_test_artifact: true
+      red_green_must_share_test_artifact: true
+      acceptance_must_reference_green_evidence: true
+      green_command_must_execute: true
+      green_expected_exit_code: 0
+      red_record_requires_real_command: true
+      red_command_rerun: false
+      red_expected_exit_code: non_zero
+      timeout_seconds: 120
+      reject_placeholder_commands: true
+    failure_behavior: "检查失败时，不得把任务标为 Done、Completed 或 Delivered；必须补齐 Red/Green 真实命令记录、Green 命令执行通过记录、验收追踪和 Agent Run Log。"
+
+  development_task_pause:
+    enabled: true
+    applies_to_stage: DEVELOPMENT
+    applies_to_task_id_pattern: "^DEV-.+"
+    task_order_source: openspec_tasks_table_order
+    evidence_file: workflow/changes/<CR-ID>/review.md
+    evidence_section: Development Task Handoffs
+    check_before_starting_next_dev_task:
+      script: tools/check-dev-task-handoff-readiness.py
+      command: "python tools/check-dev-task-handoff-readiness.py --change-id <CR-ID> --change <change-name> --next-task-id <NEXT-DEV-TASK-ID>"
+      required_when:
+        - next_task_id_matches_dev_pattern
+        - previous_dev_task_exists_in_openspec_task_order
+      checks:
+        - previous_dev_task_completed
+        - pause_report_recorded_for_previous_task
+        - user_continue_confirmed_for_next_task
+    completed_task_statuses:
+      - Implemented
+      - Done
+      - Completed
+      - Delivered
+      - 已完成
+    pause_report_statuses:
+      - Reported
+      - Paused
+      - Recorded
+      - 已汇报
+      - 已暂停
+      - 已记录
+    user_continue_statuses:
+      - Confirmed
+      - Continue
+      - Approved
+      - 用户已确认继续
+      - 已确认继续
+      - 继续
+    failure_behavior: "检查失败时，Agent 不得开始下一个 DEV-* 任务；必须停下汇报上一个 DEV-* 任务结果，并等待用户明确继续后，把暂停/继续证据记录到 review.md。"
+
+  openspec_task_required_fields:
+    - task_id
+    - owner_agent
+    - phase
+    - requirement_or_acceptance_ids
+    - allowed_write_scope
+    - verification
+    - test_case_artifacts
+    - rollback_or_revert_plan
+
+  gate_policy:
+    allowed_conclusions:
+      - passed
+      - returned
+      - blocked
+    pass_requires:
+      - gate_readiness_check_passed
+      - required_outputs_exist
+      - approval_record_updated
+      - acceptance_trace_updated
+      - verification_recorded
+      - risks_recorded
+      - owner_and_next_action_set
+    return_requires:
+      - return_to_agent
+      - return_reason
+      - expected_fix
+    blocked_requires:
+      - blocking_condition
+      - human_or_external_owner
+      - next_check_time_or_trigger
+
+  human_confirmation_required_when:
+    - production_risk
+    - destructive_migration
+    - permission_boundary_change
+    - payment_or_billing
+    - public_api_breaking_change
+    - compliance_or_legal_commitment
+    - large_cross_module_refactor
+    - repeated_failure
+    - unclear_owner
+
+  agent_run_log:
+    directory: workflow/changes/<CR-ID>/logs/agent-runs/
+    template: workflow/agent-run-template.md
+    filename_format: "{timestamp}-{agent}-{task_id}.md"
+    required_sections:
+      - task_order
+      - context_read
+      - files_changed
+      - commands_run
+      - verification
+      - test_first_plan
+      - document_sync
+      - risks_and_followups

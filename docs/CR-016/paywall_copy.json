@@ -1,0 +1,53 @@
+{
+  "T1_quota_exhausted": {
+    "modal": {
+      "title": "今日对话额度已用完",
+      "subtitle": "你的冒险旅程正处于关键时刻...",
+      "option_subscribe": "升级订阅 · 无限对话",
+      "option_fragment": "使用碎片购买额外对话",
+      "close": "稍后再说"
+    },
+    "banner": {
+      "text": "今日对话额度已用完，升级订阅解锁无限冒险 →"
+    }
+  },
+  "T2_archive_full": {
+    "banner": {
+      "text": "存档位已满，升级解锁更多存档空间 →"
+    }
+  },
+  "T3_premium_content": {
+    "badge": "Premium 独占",
+    "banner": {
+      "text": "此剧本为 Premium 尊享独占内容 →"
+    }
+  },
+  "T4_trial_exhausted": {
+    "modal": {
+      "title": "试用体验已结束",
+      "subtitle": "你已经体验了精彩剧情，升级解锁全部主线剧本",
+      "option_subscribe": "升级订阅",
+      "close": "稍后再说"
+    }
+  },
+  "T5_gallery": {
+    "toast": "升级 Standard 解锁完整 CG 画廊"
+  },
+  "T6_voice": {
+    "toast": "升级 Standard 解锁角色语音朗读"
+  },
+  "T7_rewind": {
+    "toast": "升级 Standard 解锁剧情回溯功能"
+  },
+  "T8_fragment_mall": {
+    "card": {
+      "title": "Premium 尊享特权",
+      "text": "碎片商城全部商品永久 7 折",
+      "action": "了解详情"
+    }
+  },
+  "tier_comparison": {
+    "highlight": "standard",
+    "columns": ["Free", "Basic $1.99", "Standard $4.99", "Premium $9.99"]
+  }
+}

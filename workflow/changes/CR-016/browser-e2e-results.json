@@ -1,0 +1,86 @@
+{
+  "pages": [
+    {
+      "page": "首页",
+      "path": "/",
+      "status": "PASS",
+      "http_code": 200
+    },
+    {
+      "page": "订阅页面",
+      "path": "/subscription",
+      "status": "PASS",
+      "http_code": 200
+    }
+  ],
+  "apis": [
+    {
+      "api": "订阅状态（旧路径）",
+      "path": "/api/v1/subscription/status",
+      "status": "PASS",
+      "http_code": 200,
+      "response": {
+        "currentPlanId": "free",
+        "remainStamina": 50,
+        "freeCycleStage": "honeymoon",
+        "permissions": {
+          "canAccessAllCharacters": false,
+          "canAccessCGGallery": false,
+          "canUseAdvancedFeatures": false,
+          "canUseFreeChat": true,
+          "canUseMemorySystem": false
+        },
+        "expiresAt": null,
+        "autoRenew": false
+      }
+    },
+    {
+      "api": "对话额度（旧路径）",
+      "path": "/api/v1/dialogue/quota/status",
+      "status": "FAIL",
+      "http_code": 404,
+      "response": null
+    },
+    {
+      "api": "订阅状态（新路径）",
+      "path": "/api/v1/cr016/subscription/status",
+      "status": "PASS",
+      "http_code": 200,
+      "response": {
+        "tier": "free",
+        "status": "none",
+        "expires_at": null,
+        "permissions": {
+          "archive_limit": 1,
+          "script_access": "trial_only",
+          "voice_enabled": false,
+          "rewind_c15": false,
+          "ugc_access": false,
+          "fragment_discount": 0.0,
+          "hidden_options": false,
+          "dialogue_limit": 0
+        },
+        "is_exempt_from_quota": false
+      }
+    },
+    {
+      "api": "对话额度（新路径）",
+      "path": "/api/v1/cr016/dialogue/quota/status",
+      "status": "PASS",
+      "http_code": 200,
+      "response": {
+        "base_quota": 10,
+        "consumed": 0,
+        "fragment_extra": 0,
+        "fragment_consumed": 0,
+        "remaining": 10,
+        "is_exempt": false
+      }
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6
+  }
+}

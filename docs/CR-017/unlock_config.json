@@ -1,0 +1,89 @@
+{
+  "unlock_types": {
+    "cg": {
+      "label": "CG 已解锁",
+      "display": "card",
+      "rarity_supported": true,
+      "rarity_levels": ["R", "SR", "SSR"],
+      "buttons": ["立即查看", "稍后"],
+      "animation": "card_bounce_in"
+    },
+    "achievement": {
+      "label": "成就解锁",
+      "display": "badge",
+      "rarity_supported": false,
+      "buttons": ["确认"],
+      "animation": "badge_rotate_in"
+    },
+    "hidden_story": {
+      "label": "隐藏剧情解锁",
+      "display": "card",
+      "rarity_supported": false,
+      "buttons": ["立即查看", "稍后"],
+      "animation": "card_bounce_in"
+    },
+    "voice": {
+      "label": "角色语音解锁",
+      "display": "card",
+      "rarity_supported": false,
+      "buttons": ["立即试听", "稍后"],
+      "animation": "card_bounce_in"
+    },
+    "exclusive_script": {
+      "label": "限定剧本解锁",
+      "display": "card",
+      "rarity_supported": true,
+      "rarity_levels": ["R", "SR", "SSR"],
+      "buttons": ["开始游玩", "稍后"],
+      "animation": "card_bounce_in"
+    },
+    "reward_float": {
+      "label": "奖励",
+      "display": "float_text",
+      "rarity_supported": false,
+      "buttons": [],
+      "animation": "float_up_fade"
+    },
+    "multi_reward": {
+      "label": "奖励汇总",
+      "display": "summary",
+      "rarity_supported": false,
+      "buttons": ["确认"],
+      "animation": "scale_in"
+    }
+  },
+  "animation_timing": {
+    "background_dim": 200,
+    "card_bounce_in": 400,
+    "icon_appear": 500,
+    "text_fade_in": 600,
+    "button_delay": 800,
+    "close_animation": 300
+  },
+  "interaction_rules": {
+    "modal_centered": true,
+    "close_on_overlay": true,
+    "close_on_esc": true,
+    "close_on_button": true,
+    "skip_supported": true,
+    "one_at_a_time": true,
+    "batch_rewards": true
+  },
+  "rarity_visual": {
+    "R": {
+      "border_color": "#4A90D9",
+      "particle_color": "#4A90D9",
+      "glow_intensity": 0.5
+    },
+    "SR": {
+      "border_color": "#C77DFF",
+      "particle_color": "#C77DFF",
+      "glow_intensity": 0.7
+    },
+    "SSR": {
+      "border_color": "#FFD700",
+      "particle_color": "#FFD700",
+      "glow_intensity": 1.0
+    }
+  }
+}

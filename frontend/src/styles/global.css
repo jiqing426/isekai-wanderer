@@ -1,0 +1,296 @@
+/* Isekai Wanderer — Global Styles */
+/* 移除 Google Fonts 外部引用（国内访问慢），改用系统字体栈 */
+
+:root {
+  --brand-primary: #4F46E5;
+  --brand-secondary: #F472B6;
+  --brand-accent: #fbbf24;
+  --bg-deep: #0f0a1a;
+  --bg-card: rgba(139, 92, 246, 0.06);
+  --text-main: #f1f5f9;
+  --text-muted: #7c6f9b;
+  --text-subtle: #4a4458;
+  --border-color: rgba(167, 139, 250, 0.12);
+  --glass-bg: rgba(15, 10, 26, 0.85);
+  --header-bg: rgba(15, 10, 26, 0.85);
+  --card-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  --page-bg-start: #0f0a1a;
+  --page-bg-end: #1a1625;
+}
+
+html:not(.dark) {
+  --bg-deep: #FFFFFF;
+  --bg-secondary: #f8f9fa;
+  --text-main: #1F2937;
+  --text-muted: #6c757d;
+  --text-subtle: #adb5bd;
+  --bg-card: #F9FAFB;
+  --brand-primary: #4F46E5;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --page-bg-start: #f8f9fa;
+  --page-bg-end: #e9ecef;
+  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --input-bg: #ffffff;
+  --input-text: #1a1a2e;
+  --input-border: rgba(0, 0, 0, 0.15);
+  --nav-hover-bg: rgba(0, 0, 0, 0.06);
+  --nav-active-bg: rgba(79, 70, 229, 0.08);
+  --nav-active-color: #4F46E5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-deep);
+  color: var(--text-main);
+  font-family: 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.4); }
+
+.page-bg {
+  min-height: calc(100vh - 60px);
+  background: linear-gradient(160deg, var(--page-bg-start) 0%, var(--page-bg-end) 100%);
+  position: relative;
+  transition: background 0.3s ease;
+}
+
+.page-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(192, 132, 252, 0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 60%, rgba(249, 168, 212, 0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 30%, rgba(251, 191, 36, 0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 80%, rgba(192, 132, 252, 0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 50% 10%, rgba(249, 168, 212, 0.2) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-bg > * { position: relative; z-index: 1; }
+
+.glass-card {
+  background: rgba(139, 92, 246, 0.06);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(167, 139, 250, 0.12);
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+.glass-card:hover {
+  border-color: rgba(192, 132, 252, 0.25);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.08);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #4F46E5 0%, #818CF8 50%, #FBBF24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 亮色模式：加深渐变色，白底上看得清 */
+html:not(.dark) .gradient-text {
+  background: linear-gradient(135deg, #4338CA 0%, #6D28D9 50%, #D97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* === Fade In Up (scroll-triggered) === */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* Scroll-triggered: start hidden, reveal via IntersectionObserver */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal.delay-1 { transition-delay: 0.1s; }
+.reveal.delay-2 { transition-delay: 0.2s; }
+.reveal.delay-3 { transition-delay: 0.3s; }
+.reveal.delay-4 { transition-delay: 0.4s; }
+
+/* === Fade In Left / Right === */
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-40px);
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal-left.revealed {
+  opacity: 1;
+  transform: translateX(0);
+}
+.reveal-right {
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal-right.revealed {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* === Scale In === */
+.reveal-scale {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.reveal-scale.revealed {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* === Pulse Glow === */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(192, 132, 252, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(192, 132, 252, 0.4); }
+}
+.pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+
+/* === Shimmer === */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(192, 132, 252, 0.1) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* === Floating animation === */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float { animation: float 3s ease-in-out infinite; }
+
+/* === Gradient border animation === */
+@keyframes gradientBorder {
+  0% { border-color: rgba(192, 132, 252, 0.3); }
+  50% { border-color: rgba(249, 168, 212, 0.3); }
+  100% { border-color: rgba(192, 132, 252, 0.3); }
+}
+.gradient-border { animation: gradientBorder 3s ease-in-out infinite; }
+
+/* Logo 使用思源宋体 */
+.logo-text {
+  font-family: 'Source Han Serif SC', 'Songti SC', 'STSong', Georgia, 'Times New Roman', serif;
+}
+
+/* === Auth card theme-aware (CEO-UI-1/4) === */
+html:not(.dark) .auth-card {
+  background: var(--glass-bg, rgba(255,255,255,0.8));
+  border-color: var(--border-color, rgba(0,0,0,0.08));
+  box-shadow: var(--card-shadow, 0 4px 24px rgba(0,0,0,0.06));
+}
+html:not(.dark) .auth-header p,
+html:not(.dark) .auth-footer,
+html:not(.dark) .form-row {
+  color: var(--text-muted, #6c757d);
+}
+html:not(.dark) .divider-line { background: var(--border-color, rgba(0,0,0,0.08)); }
+html:not(.dark) .divider-row { color: var(--text-subtle, #adb5bd); }
+html:not(.dark) .auth-footer a { color: var(--brand-primary, #4F46E5); }
+
+/* Light mode input fixes (CEO-UI-4) */
+html:not(.dark) :deep(.n-input) {
+  --n-color: #ffffff !important;
+  --n-text-color: #1a1a2e !important;
+  --n-border-color: rgba(0,0,0,0.15) !important;
+  --n-border-hover: #4F46E5 !important;
+  --n-border-focus: #4F46E5 !important;
+}
+
+/* Glass card light mode */
+html:not(.dark) .glass-card {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.1);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+html:not(.dark) .glass-card:hover {
+  border-color: rgba(79,70,229,0.2);
+  box-shadow: 0 8px 32px rgba(79,70,229,0.1);
+}
+/* Light mode page-bg decorative dots should be subtle */
+html:not(.dark) .page-bg::before {
+  opacity: 0.3;
+}
+
+/* === BUG-012: Button contrast fix for light mode === */
+/* 亮色模式：按钮文字跟随主题深色；暗色模式：白色。
+   Naive UI theme.ts 已经通过 n-config-provider 注入了正确的颜色，
+   这里只做兜底，不再用 !important 覆盖，避免覆盖主题系统。 */
+
+/* Primary buttons: text follows theme (dark mode white, light mode black) */
+html.dark .n-button--primary-type,
+html.dark .n-button--primary-type .n-button__content {
+  color: #ffffff !important;
+}
+html:not(.dark) .n-button--primary-type,
+html:not(.dark) .n-button--primary-type .n-button__content {
+  color: #000000 !important;
+}
+
+/* Light mode: non-primary buttons get dark text */
+html:not(.dark) .n-button--secondary-type .n-button__content,
+html:not(.dark) .n-button--text-type .n-button__content,
+html:not(.dark) .n-button--quaternary-type .n-button__content,
+html:not(.dark) .n-button--ghost-type .n-button__content,
+html:not(.dark) .n-button--default-type .n-button__content {
+  color: #374151;
+}
+
+/* Dark mode: non-primary buttons get light text */
+html.dark .n-button--secondary-type .n-button__content,
+html.dark .n-button--text-type .n-button__content,
+html.dark .n-button--quaternary-type .n-button__content,
+html.dark .n-button--ghost-type .n-button__content,
+html.dark .n-button--default-type .n-button__content {
+  color: #f1f5f9;
+}
+
+/* === Button hover micro-interactions === */
+.btn-hover-lift {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.2);
+}
+.btn-hover-lift:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.15);
+}
+
+/* === Card tilt on hover === */
+.card-tilt {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-tilt:hover {
+  transform: translateY(-6px) rotateX(2deg);
+  box-shadow: 0 16px 48px rgba(139, 92, 246, 0.15);
+}

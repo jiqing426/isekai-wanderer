@@ -1,0 +1,643 @@
+/* ========================================
+   mobile.css — CR-004 移动端适配
+   所有规则均在 @media (max-width: 767px) 内
+   PC 端（≥1024px）零影响
+   ======================================== */
+
+/* ========================================
+   Section 1: Global Resets & Base Styles
+   ======================================== */
+@media (max-width: 767px) {
+  html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* AppHeader 移动端适配 */
+  .app-header {
+    height: 56px;
+  }
+
+  .header-inner {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  /* 隐藏导航链接，保留 Logo 和工具按钮 */
+  .header-nav {
+    display: none !important;
+  }
+
+  .logo-text {
+    font-size: 14px;
+  }
+
+  .tool-label {
+    display: none;
+  }
+
+  .page-bg {
+    padding: 12px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 全局单列布局工具类 */
+  .mobile-full-width {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .mobile-single-column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* ========================================
+   Section 2: Naive UI Component Overrides
+   ======================================== */
+@media (max-width: 767px) {
+  /* 按钮最小触摸目标 */
+  .n-button {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* 输入框高度 */
+  .n-input {
+    min-height: 44px !important;
+  }
+
+  /* 卡片全宽 */
+  .n-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 弹窗转底部抽屉 */
+  .n-modal {
+    align-items: flex-end !important;
+  }
+
+  .n-modal .n-card {
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  /* 全宽下拉 */
+  .n-select {
+    width: 100% !important;
+  }
+
+  /* Tab 全宽 */
+  .n-tab {
+    flex: 1 !important;
+  }
+}
+
+/* ========================================
+   Section 3: TabBar Styles
+   ======================================== */
+@media (max-width: 767px) {
+  .mobile-tabbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--glass-bg, rgba(15, 10, 26, 0.85));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color, rgba(167, 139, 250, 0.12));
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tabbar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    color: var(--text-muted, #7c6f9b);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    padding: 4px 0;
+  }
+
+  .tabbar-item.active {
+    color: var(--brand-primary, #4F46E5);
+  }
+
+  .tab-icon {
+    font-size: 20px;
+    margin-bottom: 2px;
+    line-height: 1;
+  }
+
+  .tab-label {
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 500;
+  }
+}
+
+/* PC 端隐藏 TabBar */
+@media (min-width: 1024px) {
+  .mobile-tabbar {
+    display: none !important;
+  }
+}
+
+/* ========================================
+   Section 4: LandingView Mobile Styles
+   ======================================== */
+@media (max-width: 767px) {
+  .landing-page {
+    overflow-x: hidden;
+  }
+
+  .hero-section {
+    padding: 60px 16px 32px;
+  }
+
+  .hero-content {
+    max-width: 100%;
+    padding: 0 4px;
+  }
+
+  .hero-title {
+    font-size: clamp(24px, 7vw, 36px);
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .hero-actions {
+    flex-direction: row;
+    gap: 12px;
+    margin-bottom: 32px;
+    justify-content: center;
+  }
+
+  .hero-actions .n-button {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .hero-stats {
+    gap: 16px;
+  }
+
+  .stat-number {
+    font-size: 22px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .hero-badge {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+
+  /* Features Section */
+  .features-section {
+    padding: 48px 16px;
+  }
+
+  .section-title {
+    font-size: 24px;
+  }
+
+  .section-desc {
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px;
+  }
+
+  .feature-card {
+    padding: 24px 16px;
+  }
+
+  .feature-icon {
+    font-size: 32px;
+  }
+
+  .feature-title {
+    font-size: 15px;
+  }
+
+  .feature-desc {
+    font-size: 13px;
+  }
+
+  /* How It Works */
+  .how-section {
+    padding: 48px 16px;
+  }
+
+  .step-item {
+    gap: 12px;
+  }
+
+  .step-number {
+    font-size: 36px;
+    min-width: 48px;
+  }
+
+  .step-title {
+    font-size: 16px;
+  }
+
+  .step-desc {
+    font-size: 13px;
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 40px 16px 60px;
+  }
+
+  .cta-card {
+    padding: 32px 20px;
+    max-width: 100%;
+  }
+
+  .cta-title {
+    font-size: 22px;
+  }
+
+  .cta-desc {
+    font-size: 13px;
+  }
+
+  .cta-register-btn .n-button,
+  .cta-register-btn.n-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Landing Footer */
+  .landing-footer {
+    padding: 20px 16px;
+  }
+
+  /* Orb 缩小避免溢出 */
+  .orb-1 { width: 200px; height: 200px; }
+  .orb-2 { width: 150px; height: 150px; }
+  .orb-3 { width: 100px; height: 100px; }
+}
+
+/* ========================================
+   Section 5: HomeView Mobile Styles
+   ======================================== */
+@media (max-width: 767px) {
+  .home-page {
+    padding: 16px 12px calc(72px + env(safe-area-inset-bottom, 0px));
+    max-width: 100%;
+  }
+
+  /* Hero Banner: 单列紧凑 */
+  .hero-banner {
+    flex-direction: column;
+    padding: 12px;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .hero-banner .hero-content {
+    width: 100%;
+  }
+
+  .hero-banner .hero-title {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+
+  .hero-banner .hero-subtitle {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .hero-banner .hero-desc {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .hero-banner .hero-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hero-banner .hero-actions .n-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .hero-banner .hero-stats {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-around;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(167, 139, 250, 0.1);
+  }
+
+  .hero-banner .stat-num {
+    font-size: 20px;
+  }
+
+  .hero-banner .stat-label {
+    font-size: 11px;
+  }
+
+  /* 快捷入口: 2x2 grid */
+  .quick-nav {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .quick-card {
+    padding: 14px 10px;
+  }
+
+  .quick-icon {
+    font-size: 24px;
+  }
+
+  .quick-label {
+    font-size: 12px;
+  }
+
+  /* 好感度轮播图 */
+  .affection-grid.mobile-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .affection-grid.mobile-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .affection-grid.mobile-carousel .carousel-item {
+    flex: 0 0 85%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  /* 轮播指示器 */
+  .carousel-indicators {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(167, 139, 250, 0.3);
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .carousel-dot.active {
+    background: var(--brand-primary, #4F46E5);
+  }
+
+  /* 分类筛选: 横向滚动 */
+  .genre-filter {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .genre-chip {
+    flex-shrink: 0;
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+
+  /* 剧本列表轮播图 */
+  .script-grid.mobile-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 14px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .script-grid.mobile-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .script-grid.mobile-carousel .carousel-item {
+    flex: 0 0 80%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .script-card {
+    max-width: 100%;
+  }
+
+  .script-title {
+    font-size: 15px;
+  }
+
+  .script-desc {
+    font-size: 12px;
+  }
+
+  /* Section header */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .section-header h2 {
+    font-size: 17px;
+  }
+
+  /* Check-in modal 适配 */
+  .checkin-modal {
+    padding: 8px 0;
+  }
+
+  .checkin-grid {
+    gap: 4px;
+  }
+
+  .checkin-cell {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* ========================================
+   Section 6: DiscoverView Mobile Styles
+   ======================================== */
+@media (max-width: 767px) {
+  .discover-page {
+    padding: 16px 12px calc(72px + env(safe-area-inset-bottom, 0px));
+    max-width: 100%;
+  }
+
+  .discover-header h1 {
+    font-size: 20px;
+  }
+
+  /* 热门剧本轮播图 */
+  .trending-scroll.mobile-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .trending-scroll.mobile-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .trending-scroll.mobile-carousel .carousel-item {
+    flex: 0 0 80%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  /* 推荐剧本轮播图 */
+  .script-grid.mobile-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 14px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .script-grid.mobile-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .script-grid.mobile-carousel .carousel-item {
+    flex: 0 0 80%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .category-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .category-chip {
+    flex-shrink: 0;
+  }
+}
+
+/* ========================================
+   Section 7: CharacterListView Mobile Styles
+   ======================================== */
+@media (max-width: 767px) {
+  .character-list-page {
+    padding: 16px 12px calc(72px + env(safe-area-inset-bottom, 0px));
+    max-width: 100%;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  .filter-bar .n-select {
+    width: 100% !important;
+  }
+
+  /* 角色网格轮播图 */
+  .character-grid.mobile-carousel {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+
+  .character-grid.mobile-carousel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .character-grid.mobile-carousel .carousel-item {
+    flex: 0 0 70%;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .char-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+
+  .char-name {
+    font-size: 14px;
+  }
+
+  .char-desc {
+    font-size: 11px;
+  }
+}
+
+/* ========================================
+   Section 8: iOS Safe Area
+   ======================================== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 767px) {
+    .mobile-tabbar {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .page-bg {
+      padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    }
+
+    .home-page {
+      padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    }
+  }
+}

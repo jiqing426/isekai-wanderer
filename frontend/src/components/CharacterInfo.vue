@@ -1,0 +1,113 @@
+<template>
+  <div class="character-info">
+    <div class="avatar-placeholder">
+      <img v-if="avatarUrl" :src="avatarUrl" :alt="characterName" class="avatar-img" />
+      <span v-else class="avatar-initial">{{ characterName?.[0] || '?' }}</span>
+    </div>
+    <div class="info-text">
+      <div class="char-name">{{ characterName || '未知角色' }}</div>
+      <div v-if="characterTitle" class="char-title">{{ characterTitle }}</div>
+      <div v-if="characterAge || characterBirthday" class="char-meta">
+        <span v-if="characterAge">{{ characterAge }}岁</span>
+        <span v-if="characterBirthday">· {{ characterBirthday }}</span>
+      </div>
+      <div v-if="characterLikes && characterLikes.length > 0" class="char-likes">
+        <span v-for="like in characterLikes.slice(0, 3)" :key="like" class="like-tag">{{ like }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+withDefaults(defineProps<{
+  characterId?: string;
+  characterName: string;
+  characterTitle?: string;
+  avatarUrl?: string;
+  characterAge?: number | string;
+  characterBirthday?: string;
+  characterLikes?: string[];
+}>(), {
+  characterName: '未知角色',
+  characterLikes: () => [],
+});
+</script>
+
+<style scoped>
+.character-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #818CF8, #C084FC);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initial {
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.char-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.char-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.char-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.char-likes {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.like-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(167, 139, 250, 0.15);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+</style>

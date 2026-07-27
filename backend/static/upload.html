@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片上传 - Isekai Wanderer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8eeff;
+        }
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .upload-text {
+            color: #666;
+            font-size: 16px;
+        }
+        .upload-hint {
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        input[type="file"] { display: none; }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .result.success { background: #d4edda; color: #155724; display: block; }
+        .result.error { background: #f8d7da; color: #721c24; display: block; }
+        .result-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .result-item strong { color: #333; }
+        .result-item code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .file-list {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .file-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .file-info {
+            flex: 1;
+            font-size: 13px;
+        }
+        .file-name { color: #333; font-weight: 500; }
+        .file-size { color: #999; font-size: 12px; }
+        .category-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        .category-scripts-hall { background: #e3f2fd; color: #1976d2; }
+        .category-scripts-covers { background: #f3e5f5; color: #7b1fa2; }
+        .category-characters-avatars { background: #e8f5e9; color: #388e3c; }
+        .category-shards { background: #fff3e0; color: #f57c00; }
+        .category-others { background: #f5f5f5; color: #616161; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 图片上传</h1>
+        <p class="subtitle">支持 JPG、PNG、GIF、WebP 格式，单文件最大 10MB</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">点击选择文件或拖拽到此处</div>
+            <div class="upload-hint">系统会根据文件名自动分类</div>
+            <input type="file" id="fileInput" multiple accept="image/*">
+        </div>
+        
+        <div class="file-list" id="fileList"></div>
+        
+        <button class="btn" id="uploadBtn" disabled>上传图片</button>
+        
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const result = document.getElementById('result');
+        
+        let selectedFiles = [];
+        
+        // 点击上传区域
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        // 拖拽事件
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+        
+        // 处理文件
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFiles();
+            uploadBtn.disabled = selectedFiles.length === 0;
+        }
+        
+        // 显示文件列表
+        function displayFiles() {
+            fileList.innerHTML = selectedFiles.map(file => {
+                const size = (file.size / 1024 / 1024).toFixed(2);
+                const category = getCategory(file.name);
+                const categoryClass = `category-${category.replace('/', '-')}`;
+                const categoryName = {
+                    'scripts/hall': '剧本大厅',
+                    'scripts/covers': '剧本封面',
+                    'characters/avatars': '角色头像',
+                    'shards': '碎片商城',
+                    'others': '其他'
+                }[category] || '其他';
+                
+                return `
+                    <div class="file-item">
+                        <img src="${URL.createObjectURL(file)}" alt="${file.name}">
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${size} MB</div>
+                        </div>
+                        <span class="category-tag ${categoryClass}">${categoryName}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 根据文件名判断分类
+        function getCategory(filename) {
+            const lower = filename.toLowerCase();
+            if (lower.includes('剧本大厅') || lower.includes('大厅') || lower.includes('hall') || lower.includes('discover')) {
+                return 'scripts/hall';
+            }
+            if (lower.includes('封面') || lower.includes('cover') || lower.includes('script')) {
+                return 'scripts/covers';
+            }
+            if (lower.includes('头像') || lower.includes('avatar') || lower.includes('character')) {
+                return 'characters/avatars';
+            }
+            if (lower.includes('碎片') || lower.includes('fragment') || lower.includes('shard') || lower.includes('商城')) {
+                return 'shards';
+            }
+            return 'others';
+        }
+        
+        // 上传按钮
+        uploadBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '上传中...';
+            result.className = 'result';
+            result.innerHTML = '';
+            
+            const results = [];
+            
+            for (const file of selectedFiles) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/api/v1/upload/image', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        results.push({
+                            success: true,
+                            filename: file.name,
+                            url: data.url,
+                            category: data.category
+                        });
+                    } else {
+                        results.push({
+                            success: false,
+                            filename: file.name,
+                            error: data.detail || '上传失败'
+                        });
+                    }
+                } catch (error) {
+                    results.push({
+                        success: false,
+                        filename: file.name,
+                        error: error.message
+                    });
+                }
+            }
+            
+            // 显示结果
+            const successCount = results.filter(r => r.success).length;
+            const errorCount = results.filter(r => !r.success).length;
+            
+            let html = `<strong>上传完成：${successCount} 成功，${errorCount} 失败</strong>`;
+            
+            results.forEach(r => {
+                if (r.success) {
+                    html += `
+                        <div class="result-item">
+                            <strong>✓ ${r.filename}</strong><br>
+                            URL: <code>${r.url}</code><br>
+                            分类: ${r.category}
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="result-item">
+                            <strong>✗ ${r.filename}</strong><br>
+                            错误: ${r.error}
+                        </div>
+                    `;
+                }
+            });
+            
+            result.className = 'result success';
+            result.innerHTML = html;
+            
+            uploadBtn.textContent = '上传图片';
+            uploadBtn.disabled = false;
+            
+            // 清空选择
+            selectedFiles = [];
+            fileInput.value = '';
+            fileList.innerHTML = '';
+        });
+    </script>
+</body>
+</html>

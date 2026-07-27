@@ -1,0 +1,96 @@
+communication:
+  owner_agent: hr
+
+  required_bus:
+    provider: msg
+    mechanism: sessions_send
+    require_ack: true
+    ack_timeout_seconds: 120
+    retries: 2
+
+  visibility_channel:
+    provider: feishu
+    mode: group_chat
+    require_ack: true
+    ack_timeout_seconds: 60
+    retries: 1
+    best_effort: true
+    secret_policy: "use local env or ignored runtime config; never commit real credentials"
+
+  policy:
+    all_cross_agent_messages_must_use_delivery_ledger: true
+    msg_required_for_delivery: true
+    cluster_connectivity_self_test_required: true
+    required_agent_ack_failure_blocks_prd_intake: true
+    no_oral_ack_without_msg_delivery: true
+    feishu_should_be_attempted_for_group_visibility: true
+    feishu_failure_must_not_hide_msg_delivery: true
+    hr_must_be_notified_on_delivery_failure: true
+    stage_required_role_msg_delivery_failure_blocks_stage: true
+    every_startup_role_ack_required_for_cluster_ready: true
+
+  delivery_ledger:
+    template: workflow/communication-ledger-template.md
+    runtime_path: workflow/changes/<CR-ID>/communication-ledger.md
+    required_fields:
+      - message_id
+      - from_agent
+      - to_agent
+      - purpose
+      - msg_channel
+      - msg_status
+      - feishu_channel
+      - feishu_status
+      - ack_status
+      - attempts
+      - created_at
+      - last_error
+      - next_action
+
+  connectivity_self_test:
+    owner_agent: hr
+    run_after_cluster_creation: true
+    test_message_purpose: cluster_connectivity_self_test
+    ack_only: true
+    ack_timeout_seconds: 15
+    dispatch_mode: parallel_when_supported
+    fallback_dispatch_mode: sequential_short_timeout
+    message_template: "cluster_connectivity_self_test"
+    expected_ack_template: "ACK cluster_connectivity_self_test <role>"
+    forbidden_response_content:
+      - explanation
+      - plan
+      - file_inspection
+      - rule_restatement
+      - multi_line_report
+    required_targets:
+      source: workflow/cluster.config.yaml|connectivity_test_targets
+      owner_agent_excluded: true
+      coverage_rule: "connectivity_test_targets must include every startup_order role except owner_agent; required_agents must still include every startup_order role"
+    send_via: msg
+    mechanism: sessions_send
+    require_ack_from_each_connectivity_target: true
+    ack_status_required: acked_msg
+    health_sync_required: true
+    health_ready_status: ready
+    health_not_ready_status: not_ready
+    prd_intake_allowed_when_ready: true
+    failure_status: blocked
+    failure_rule: "any connectivity test target without MSG ack means cluster_status=not_ready and PRD intake is forbidden"
+    success_rule: "all roles listed in connectivity_test_targets replied with ACK cluster_connectivity_self_test <role> and are acked_msg means HR must update cluster-health.json: cluster_status=ready, prd_intake_allowed=true, connectivity_self_test_status=passed"
+    feishu_visibility_attempt_required: true
+    evidence:
+      - runtime/delivery-ledger/cluster-connectivity.md
+      - runtime/health/cluster-health.json
+
+  statuses:
+    - queued
+    - sent_msg
+    - acked_msg
+    - msg_failed
+    - sent_feishu
+    - acked_feishu
+    - feishu_failed
+    - failed_all
+    - deferred_non_blocking
+    - blocked

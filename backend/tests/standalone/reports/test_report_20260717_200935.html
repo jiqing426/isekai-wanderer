@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Backend API Test Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .summary { background: #f0f0f0; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .passed { color: #22c55e; font-weight: bold; }
+        .failed { color: #ef4444; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f5f5f5; }
+        .test-passed { background: #f0fdf4; }
+        .test-failed { background: #fef2f2; }
+        .details { font-size: 0.9em; color: #666; margin-top: 5px; }
+        .error { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>Backend API Test Report</h1>
+    
+    <div class="summary">
+        <h2>Summary</h2>
+        <p><strong>Test Suite:</strong> Backend API Tests</p>
+        <p><strong>Total Tests:</strong> 12</p>
+        <p><strong>Passed:</strong> <span class="passed">10</span></p>
+        <p><strong>Failed:</strong> <span class="failed">2</span></p>
+        <p><strong>Start Time:</strong> 2026-07-17 20:09:35.278403</p>
+        <p><strong>End Time:</strong> 2026-07-17 20:09:35.975883</p>
+        <p><strong>Duration:</strong> 0.70s</p>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Test Name</th>
+                <th>Status</th>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Status Code</th>
+                <th>Time (ms)</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+
+            <tr class="test-passed">
+                <td>Root Health Check</td>
+                <td class="passed">✓ PASSED</td>
+                <td>GET</td>
+                <td>/health</td>
+                <td>200</td>
+                <td>4.21</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>V1 Health Check</td>
+                <td class="passed">✓ PASSED</td>
+                <td>GET</td>
+                <td>/api/v1/health</td>
+                <td>200</td>
+                <td>1.76</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>User Registration</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/auth/register</td>
+                <td>201</td>
+                <td>339.51</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>User Login</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/auth/login</td>
+                <td>200</td>
+                <td>261.94</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-failed">
+                <td>Protected Endpoint Without Auth</td>
+                <td class="failed">✗ FAILED</td>
+                <td>GET</td>
+                <td>/api/v1/scripts</td>
+                <td>200</td>
+                <td>6.62</td>
+                <td>
+                    <span class="error">Expected status 401, got 200</span>
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>List Scripts</td>
+                <td class="passed">✓ PASSED</td>
+                <td>GET</td>
+                <td>/api/v1/scripts</td>
+                <td>200</td>
+                <td>3.77</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>Start Game</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/game/start</td>
+                <td>200</td>
+                <td>14.24</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>Get Dialogue</td>
+                <td class="passed">✓ PASSED</td>
+                <td>GET</td>
+                <td>/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/dialogue</td>
+                <td>200</td>
+                <td>8.70</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-failed">
+                <td>Submit Choice</td>
+                <td class="failed">✗ FAILED</td>
+                <td>POST</td>
+                <td>/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice</td>
+                <td>200</td>
+                <td>22.98</td>
+                <td>
+                    <span class="error">Validation failed</span>
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>Progress Through Story</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice</td>
+                <td>200</td>
+                <td>14.63</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>Invalid Script ID</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/game/start</td>
+                <td>404</td>
+                <td>3.77</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+            <tr class="test-passed">
+                <td>Invalid Choice ID</td>
+                <td class="passed">✓ PASSED</td>
+                <td>POST</td>
+                <td>/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice</td>
+                <td>400</td>
+                <td>7.86</td>
+                <td>
+                    
+                </td>
+            </tr>
+
+        </tbody>
+    </table>
+</body>
+</html>

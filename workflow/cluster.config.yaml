@@ -1,0 +1,147 @@
+cluster:
+  id: "<project-code>"
+  project_root: "/root/<project-code>"
+  cluster_root: "/root/.openclaw/workspace/main/openclaw-clusters/main"
+  owner_agent: hr
+  workflow_owner: pl
+  bootstrap_mode: hr-first
+  startup_contract: "verify existing agent session; bind_workspace; force-sync workspace AGENTS.md/SOUL.md from skills/<role>/AGENTS.md + SKILL.md for all required agents including inherent hr/ceo; send MSG/sessions_send(agentId=<project_code>-<short_name>) startup message to project roles; wait for ack; write delivery ledger; attempt Feishu group visibility; do not sessions_spawn role subagents"
+  hard_gate: "cluster connectivity self-test must pass before PRD intake or project workflow"
+
+  # 启动顺序（固有角色 hr/ceo 不在此列，不随项目创建）
+  startup_order:
+    - pl
+    - pm
+    - sa
+    - qa
+    - security
+    - ops
+    - be
+    - fe
+    - admin
+    - ai
+
+  # 固有角色（不随项目创建，一个公司就一个）
+  inherent_agents:
+    - hr
+    - ceo
+
+  required_agents:
+    - hr
+    - ceo
+    - pl
+    - pm
+    - sa
+    - qa
+    - security
+    - ops
+    - be
+    - fe
+    - admin
+    - ai
+
+  connectivity_test_targets:
+    - pl
+    - pm
+    - sa
+    - qa
+    - security
+    - ops
+    - be
+    - fe
+    - admin
+    - ai
+
+  aliases:
+    hr: hr
+    pl: pl
+    pm: pm
+    sa: sa
+    qa: qa
+    security: security
+    ops: op
+    be: be
+    fe: fe
+    admin: admin
+    ai: ai
+
+  role_to_template_dir:
+    hr: hr
+    pl: pl
+    pm: pm
+    sa: architect
+    qa: qa
+    security: security
+    ops: ops
+    be: backend
+    fe: frontend
+    admin: admin
+    ai: ai-engineer
+
+  agents:
+    hr:
+      role_spec: skills/hr/ROLE.md
+      skill: skills/hr/SKILL.md
+      required: true
+      starts_cluster: true
+
+    ceo:
+      role_spec: skills/ceo/ROLE.md
+      skill: skills/ceo/SKILL.md
+      required: true
+      inherent: true
+
+    pl:
+      role_spec: skills/pl/ROLE.md
+      skill: skills/pl/SKILL.md
+      required: true
+
+    pm:
+      role_spec: skills/pm/ROLE.md
+      skill: skills/pm/SKILL.md
+      required: true
+
+    sa:
+      role_spec: skills/architect/ROLE.md
+      skill: skills/architect/SKILL.md
+      required: true
+
+    qa:
+      role_spec: skills/qa/ROLE.md
+      skill: skills/qa/SKILL.md
+      required: true
+
+    security:
+      role_spec: skills/security/ROLE.md
+      skill: skills/security/SKILL.md
+      required: true
+
+    ops:
+      role_spec: skills/ops/ROLE.md
+      skill: skills/ops/SKILL.md
+      required: true
+
+    be:
+      role_spec: skills/backend/ROLE.md
+      skill: skills/backend/SKILL.md
+      required: true
+
+    fe:
+      role_spec: skills/frontend/ROLE.md
+      skill: skills/frontend/SKILL.md
+      required: true
+
+    admin:
+      role_spec: skills/admin/ROLE.md
+      skill: skills/admin/SKILL.md
+      required: true
+
+    ai:
+      role_spec: skills/ai-engineer/ROLE.md
+      skill: skills/ai-engineer/SKILL.md
+      required: true
+
+  generated_outputs:
+    delivery_ledger_dir: /root/.openclaw/workspace/main/openclaw-clusters/main/runtime/delivery-ledger
+    health_dir: /root/.openclaw/workspace/main/openclaw-clusters/main/runtime/health
+    openclaw_command_plan: /root/.openclaw/workspace/main/openclaw-clusters/main/runtime/openclaw-agent-plan.md

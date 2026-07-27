@@ -1,0 +1,73 @@
+{
+  "tiers": {
+    "free": {
+      "price_usd": 0,
+      "label": "Free 免费档",
+      "dialogue": "dynamic_gradient",
+      "archive_limit": 1,
+      "script_access": "trial_only",
+      "voice_enabled": false,
+      "rewind_c15": false,
+      "ugc_access": false,
+      "fragment_discount": 0,
+      "hidden_options": false
+    },
+    "basic": {
+      "price_usd": 1.99,
+      "label": "Basic 基础档",
+      "dialogue": 30,
+      "archive_limit": 5,
+      "script_access": "all_normal",
+      "voice_enabled": false,
+      "rewind_c15": false,
+      "ugc_access": false,
+      "fragment_discount": 0,
+      "hidden_options": false
+    },
+    "standard": {
+      "price_usd": 4.99,
+      "label": "Standard 标准档",
+      "dialogue": -1,
+      "archive_limit": -1,
+      "script_access": "all_normal",
+      "voice_enabled": true,
+      "rewind_c15": true,
+      "ugc_access": false,
+      "fragment_discount": 0,
+      "hidden_options": true,
+      "trial_days": 7
+    },
+    "premium": {
+      "price_usd": 9.99,
+      "label": "Premium 尊享档",
+      "dialogue": -1,
+      "archive_limit": -1,
+      "script_access": "all_including_exclusive",
+      "voice_enabled": true,
+      "rewind_c15": true,
+      "ugc_access": true,
+      "fragment_discount": 0.7,
+      "hidden_options": true
+    }
+  },
+  "free_gradient_rules": {
+    "honeymoon_days": 3,
+    "honeymoon_quota": 10,
+    "growth_days": 7,
+    "growth_quota": 5,
+    "regular_quota": 3,
+    "returnee_min_absent_days": 7,
+    "returnee_quota": 5,
+    "returnee_duration_days": 3
+  },
+  "quota_reset_utc_hour": 0,
+  "paywall_rules": {
+    "daily_modal_max": 2,
+    "honeymoon_modal_forbidden": true,
+    "subscriber_guidance_disabled": true
+  },
+  "consumption_rules": {
+    "free_triggers": ["opening_line", "converge_node", "reading", "rewind"],
+    "cost_one_trigger": "user_choice_or_input + ai_reply_complete"
+  }
+}

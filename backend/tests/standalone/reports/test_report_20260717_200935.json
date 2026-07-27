@@ -1,0 +1,297 @@
+{
+  "suite_name": "Backend API Tests",
+  "total_tests": 12,
+  "passed": 10,
+  "failed": 2,
+  "start_time": "2026-07-17T20:09:35.278403",
+  "end_time": "2026-07-17T20:09:35.975883",
+  "results": [
+    {
+      "name": "Root Health Check",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 4.21452522277832,
+      "request_method": "GET",
+      "request_url": "/health",
+      "request_body": null,
+      "response_body": {
+        "status": "ok"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.278575"
+    },
+    {
+      "name": "V1 Health Check",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 1.7604827880859375,
+      "request_method": "GET",
+      "request_url": "/api/v1/health",
+      "request_body": null,
+      "response_body": {
+        "status": "ok",
+        "version": "1.0.0"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.282986"
+    },
+    {
+      "name": "User Registration",
+      "passed": true,
+      "status_code": 201,
+      "response_time_ms": 339.51449394226074,
+      "request_method": "POST",
+      "request_url": "/api/v1/auth/register",
+      "request_body": {
+        "email": "test_1784290175@example.com",
+        "password": "***",
+        "display_name": "Test User"
+      },
+      "response_body": {
+        "id": "8c9beb2b-5c24-4de2-bf56-433271037507",
+        "email": "test_1784290175@example.com",
+        "display_name": "Test User",
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzliZWIyYi01YzI0LTRkZTItYmY1Ni00MzMyNzEwMzc1MDciLCJleHAiOjE3ODQyOTEwNzUsInR5cGUiOiJhY2Nlc3MifQ.JURpJ6oPhJyu8lZY0qBVXQkey98JH7ucX4r_2DhjOhY",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzliZWIyYi01YzI0LTRkZTItYmY1Ni00MzMyNzEwMzc1MDciLCJleHAiOjE3ODQ4OTQ5NzUsInR5cGUiOiJyZWZyZXNoIn0.Y4bnr6SIW3a0NufaCyWYdmgg7f4wwQF34jDYA63wr4g",
+        "token_type": "bearer"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.284913"
+    },
+    {
+      "name": "User Login",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 261.93809509277344,
+      "request_method": "POST",
+      "request_url": "/api/v1/auth/login",
+      "request_body": {
+        "email": "test_1784290175@example.com",
+        "password": "***"
+      },
+      "response_body": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzliZWIyYi01YzI0LTRkZTItYmY1Ni00MzMyNzEwMzc1MDciLCJleHAiOjE3ODQyOTEwNzUsInR5cGUiOiJhY2Nlc3MifQ.JURpJ6oPhJyu8lZY0qBVXQkey98JH7ucX4r_2DhjOhY",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YzliZWIyYi01YzI0LTRkZTItYmY1Ni00MzMyNzEwMzc1MDciLCJleHAiOjE3ODQ4OTQ5NzUsInR5cGUiOiJyZWZyZXNoIn0.Y4bnr6SIW3a0NufaCyWYdmgg7f4wwQF34jDYA63wr4g",
+        "token_type": "bearer"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.624683"
+    },
+    {
+      "name": "Protected Endpoint Without Auth",
+      "passed": false,
+      "status_code": 200,
+      "response_time_ms": 6.615400314331055,
+      "request_method": "GET",
+      "request_url": "/api/v1/scripts",
+      "request_body": null,
+      "response_body": {
+        "scripts": [
+          {
+            "id": "66666666-6666-6666-6666-666666666666",
+            "slug": "star-moon-fate",
+            "title": "星月奇缘",
+            "description": "在神秘的月夜下，你与天才天文学家沈星澜相遇。星辰与月光的交织，开启了一段奇幻的缘分...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/star-moon-fate.jpg"
+          },
+          {
+            "id": "a1111111-1111-1111-1111-111111111111",
+            "slug": "cherry-blossom-romance",
+            "title": "樱花恋曲",
+            "description": "在樱花盛开的季节，你与温柔的文学教授藤原雪相遇。古典文学与现代情感的碰撞，开启了一段诗意的恋情...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/cherry-blossom-romance.jpg"
+          },
+          {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "slug": "starry-vow",
+            "title": "星辰之约",
+            "description": "在星光璀璨的夜晚，你与温柔的占星师林辰相遇。命运的齿轮开始转动，你们的故事即将展开...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/starry-vow.jpg"
+          }
+        ]
+      },
+      "error": "Expected status 401, got 200",
+      "timestamp": "2026-07-17T20:09:35.886840"
+    },
+    {
+      "name": "List Scripts",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 3.7720203399658203,
+      "request_method": "GET",
+      "request_url": "/api/v1/scripts",
+      "request_body": null,
+      "response_body": {
+        "scripts": [
+          {
+            "id": "66666666-6666-6666-6666-666666666666",
+            "slug": "star-moon-fate",
+            "title": "星月奇缘",
+            "description": "在神秘的月夜下，你与天才天文学家沈星澜相遇。星辰与月光的交织，开启了一段奇幻的缘分...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/star-moon-fate.jpg"
+          },
+          {
+            "id": "a1111111-1111-1111-1111-111111111111",
+            "slug": "cherry-blossom-romance",
+            "title": "樱花恋曲",
+            "description": "在樱花盛开的季节，你与温柔的文学教授藤原雪相遇。古典文学与现代情感的碰撞，开启了一段诗意的恋情...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/cherry-blossom-romance.jpg"
+          },
+          {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "slug": "starry-vow",
+            "title": "星辰之约",
+            "description": "在星光璀璨的夜晚，你与温柔的占星师林辰相遇。命运的齿轮开始转动，你们的故事即将展开...",
+            "genre": "romance",
+            "cover_image_url": "/assets/covers/starry-vow.jpg"
+          }
+        ]
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.893617"
+    },
+    {
+      "name": "Start Game",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 14.235258102416992,
+      "request_method": "POST",
+      "request_url": "/api/v1/game/start",
+      "request_body": {
+        "script_id": "66666666-6666-6666-6666-666666666666"
+      },
+      "response_body": {
+        "session_id": "53e984e0-15f4-4492-8e00-48c7ddb8e500",
+        "node_id": "99999999-9999-9999-9999-999999999991",
+        "message": "Game started"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.897600"
+    },
+    {
+      "name": "Get Dialogue",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 8.696556091308594,
+      "request_method": "GET",
+      "request_url": "/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/dialogue",
+      "request_body": null,
+      "response_body": {
+        "type": "dialogue",
+        "node_type": "preset",
+        "node_id": "99999999-9999-9999-9999-999999999991",
+        "text": "你也是来看月相的吗？今晚的月亮正好是上弦月，适合观测潮汐变化。我是沈星澜，天文台的研究员。你看起来...不像是天文学爱好者。",
+        "emotion": "curious",
+        "scene": "opening",
+        "character_id": "77777777-7777-7777-7777-777777777777",
+        "choices": [
+          {
+            "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "text": "虽然不是爱好者，但我对星空很好奇！能给我讲讲月相吗？",
+            "affection_delta": 3
+          },
+          {
+            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "text": "我只是路过，对天文学没什么兴趣。",
+            "affection_delta": -2
+          }
+        ]
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.911993"
+    },
+    {
+      "name": "Submit Choice",
+      "passed": false,
+      "status_code": 200,
+      "response_time_ms": 22.97830581665039,
+      "request_method": "POST",
+      "request_url": "/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice",
+      "request_body": {
+        "choice_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      },
+      "response_body": {
+        "session_id": "53e984e0-15f4-4492-8e00-48c7ddb8e500",
+        "is_ended": false,
+        "next_node_id": "99999999-9999-9999-9999-999999999992",
+        "affection_change": {
+          "character_id": "77777777-7777-7777-7777-777777777777",
+          "delta": 3,
+          "old_value": 0,
+          "new_value": 3,
+          "old_level": "acquaintance",
+          "new_level": "acquaintance",
+          "level_changed": false
+        }
+      },
+      "error": "Validation failed",
+      "timestamp": "2026-07-17T20:09:35.920876"
+    },
+    {
+      "name": "Progress Through Story",
+      "passed": true,
+      "status_code": 200,
+      "response_time_ms": 14.628171920776367,
+      "request_method": "POST",
+      "request_url": "/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice",
+      "request_body": {
+        "choice_id": "cccccccc-cccc-cccc-cccc-cccccccccccc"
+      },
+      "response_body": {
+        "session_id": "53e984e0-15f4-4492-8e00-48c7ddb8e500",
+        "is_ended": true,
+        "next_node_id": "99999999-9999-9999-9999-999999999994",
+        "affection_change": {
+          "character_id": "77777777-7777-7777-7777-777777777777",
+          "delta": 5,
+          "old_value": 3,
+          "new_value": 8,
+          "old_level": "acquaintance",
+          "new_level": "acquaintance",
+          "level_changed": false
+        }
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.949239"
+    },
+    {
+      "name": "Invalid Script ID",
+      "passed": true,
+      "status_code": 404,
+      "response_time_ms": 3.7670135498046875,
+      "request_method": "POST",
+      "request_url": "/api/v1/game/start",
+      "request_body": {
+        "script_id": "00000000-0000-0000-0000-000000000000"
+      },
+      "response_body": {
+        "error_code": "SCRIPT_NO_ROUTES",
+        "message": "Script has no routes"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.963999"
+    },
+    {
+      "name": "Invalid Choice ID",
+      "passed": true,
+      "status_code": 400,
+      "response_time_ms": 7.863521575927734,
+      "request_method": "POST",
+      "request_url": "/api/v1/game/53e984e0-15f4-4492-8e00-48c7ddb8e500/choice",
+      "request_body": {
+        "choice_id": "00000000-0000-0000-0000-000000000000"
+      },
+      "response_body": {
+        "error_code": "GAME_SESSION_ENDED",
+        "message": "Game session has already ended"
+      },
+      "error": null,
+      "timestamp": "2026-07-17T20:09:35.967896"
+    }
+  ]
+}

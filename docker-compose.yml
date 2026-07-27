@@ -1,0 +1,98 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-isekai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-isekai_password}
+      POSTGRES_DB: ${POSTGRES_DB:-isekai}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isekai} -d ${POSTGRES_DB:-isekai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: bash -c "pip install email-validator && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-isekai}:${POSTGRES_PASSWORD:-isekai_password}@db:5432/${POSTGRES_DB:-isekai}
+      REDIS_URL: redis://redis:6379/0
+      DISABLE_MOCK: "1"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/static:/app/static
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    profiles:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+    command: npx vite --port 8081 --host 0.0.0.0
+    env_file:
+      - .env
+    ports:
+      - "${FRONTEND_PORT:-8081}:8081"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8081/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      - app
+
+  admin:
+    build:
+      context: ./admin
+    env_file:
+      - .env
+    ports:
+      - "${ADMIN_PORT:-3100}:3100"
+    depends_on:
+      - backend
+    profiles:
+      - app
+
+volumes:
+  postgres-data:
+  redis-data:

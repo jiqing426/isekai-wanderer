@@ -1,0 +1,103 @@
+agents:
+  ceo:
+    alias: ceo
+    role: CEO
+    role_spec: skills/ceo/ROLE.md
+    skill: skills/ceo/SKILL.md
+    stages: [INTAKE, INIT]
+    can_approve: [INIT]
+    agent_id_template: "ceo"
+
+  hr:
+    alias: hr
+    role: HR
+    role_spec: skills/hr/ROLE.md
+    skill: skills/hr/SKILL.md
+    stages: []
+    agent_id_template: "hr"
+
+  pl:
+    alias: pl
+    role: Project Lead
+    role_spec: skills/pl/ROLE.md
+    skill: skills/pl/SKILL.md
+    stages: [INTAKE, TRIAGE, REQ_GATE, DESIGN_GATE, DEVELOPMENT, INTEGRATION, RELEASE_GATE, FEEDBACK]
+    can_approve: [TRIAGE, REQ_GATE, DESIGN_GATE, INTEGRATION, RELEASE_GATE, FEEDBACK]
+    agent_id_template: "<project_code>-pl"
+
+  pm:
+    alias: pm
+    role: Product Manager
+    role_spec: skills/pm/ROLE.md
+    skill: skills/pm/SKILL.md
+    stages: [REQUIREMENT, REQ_GATE]
+    can_approve: [REQ_GATE]
+    agent_id_template: "<project_code>-pm"
+
+  architect:
+    alias: sa
+    role: Architect
+    role_spec: skills/architect/ROLE.md
+    skill: skills/architect/SKILL.md
+    stages: [DESIGN, DESIGN_GATE, INTEGRATION]
+    can_approve: [DESIGN_GATE]
+    agent_id_template: "<project_code>-sa"
+
+  frontend:
+    alias: fe
+    role: Frontend
+    role_spec: skills/frontend/ROLE.md
+    skill: skills/frontend/SKILL.md
+    stages: [DEVELOPMENT]
+    agent_id_template: "<project_code>-fe"
+
+  backend:
+    alias: be
+    role: Backend
+    role_spec: skills/backend/ROLE.md
+    skill: skills/backend/SKILL.md
+    stages: [DEVELOPMENT]
+    agent_id_template: "<project_code>-be"
+
+  admin:
+    alias: admin
+    role: Admin
+    role_spec: skills/admin/ROLE.md
+    skill: skills/admin/SKILL.md
+    stages: [DEVELOPMENT]
+    agent_id_template: "<project_code>-admin"
+
+  ai:
+    alias: ai
+    role: AI Engineer
+    role_spec: skills/ai-engineer/ROLE.md
+    skill: skills/ai-engineer/SKILL.md
+    stages: [DEVELOPMENT, INTEGRATION]
+    agent_id_template: "<project_code>-ai"
+
+  qa:
+    alias: qa
+    role: QA
+    role_spec: skills/qa/ROLE.md
+    skill: skills/qa/SKILL.md
+    stages: [DESIGN, DESIGN_GATE, QA]
+    can_approve: [QA]
+    agent_id_template: "<project_code>-qa"
+
+  security:
+    alias: security
+    role: Security
+    role_spec: skills/security/ROLE.md
+    skill: skills/security/SKILL.md
+    stages: [SECURITY, RELEASE_GATE]
+    can_approve: [RELEASE_GATE]
+    agent_id_template: "<project_code>-security"
+
+  ops:
+    alias: op
+    role: Ops
+    role_spec: skills/ops/ROLE.md
+    skill: skills/ops/SKILL.md
+    stages: [RELEASE_GATE, DEPLOY]
+    can_approve: [RELEASE_GATE]
+    agent_id_template: "<project_code>-op"

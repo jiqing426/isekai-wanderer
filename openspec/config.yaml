@@ -1,0 +1,31 @@
+# 本模板的 OpenSpec 项目配置。
+schema: spec-driven
+
+context: |
+  本项目使用 OpenSpec 作为规格主源，使用 workflow/ 作为治理和执行证据层。
+  每个正式需求都进入 openspec/changes/ 下的独立 change 目录。
+
+rules:
+  proposal:
+    - 每个正式需求或行为变化请求使用一个独立 OpenSpec change。
+    - 写清为什么做、变更内容、不做范围、成功标准、风险和待澄清问题。
+    - 进入 REQ_GATE ready 前，必须在聊天里主动展示所有 Q 编号、待确认项和关键假设，并在待澄清问题表记录展示状态。
+    - 如果存在阻塞型待澄清问题，必须先询问用户，再生成设计或任务。
+    - 模板占位可以保留 "待确认"；真实 change 进入 REQ_GATE 前，任何 "待确认" 都必须改成明确结论，或写入待澄清问题并用 Q-001 这类编号引用。
+    - 不要把假设写成已确认事实。
+  specs:
+    - Requirement 使用 "### Requirement:" 标题。
+    - 每个 Requirement 至少包含一个 "#### Scenario:"，并写明 Given/When/Then 或等价的可测试步骤。
+    - 未解决假设必须写入待澄清问题；正文里的 "待确认" 必须引用对应 Q 编号，并在进入 REQ_GATE ready 前记录展示状态。
+    - P0/P1 需求必须映射到 workflow/changes/<CR-ID>/acceptance.md。
+  design:
+    - 所有 Q 编号已向用户展示，且阻塞型澄清问题已回答或明确暂缓后，才能进入设计。
+    - 技术选择写在 design/docs，不写进 PRD。
+    - 记录 API、数据、安全、部署和兼容性影响。
+    - design.md 必须维护文档同步表，覆盖 docs/architecture、docs/api、docs/database、docs/security 和 docs/decisions 的同步状态。
+    - 长期工程事实必须拆分到对应 docs 主事实源；无影响时在文档同步表标记 Not Required / 无需同步，并写明原因。
+  tasks:
+    - 任务保持小颗粒度，并按依赖顺序排列。
+    - 任务必须关联 Requirement 或验收编号。
+    - 在 tasks.md 中记录负责人 Agent、允许写入范围、验证方式和回滚说明。
+    - Red/Green 记录、测试报告、安全审查、部署记录、审批和 Agent 日志都保留在 workflow/。

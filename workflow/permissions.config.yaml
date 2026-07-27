@@ -1,0 +1,237 @@
+permissions:
+  global_workspace_rule:
+    canonical_project_root_file: PROJECT_WORKSPACE.md
+    role_workspace_is_runtime_shell_only: true
+    project_artifacts_must_be_under_canonical_project_root: true
+    forbidden_in_role_workspace:
+      - workflow/**
+      - openspec/**
+      - docs/**
+      - tools/**
+      - skills/**
+      - backend/**
+      - frontend/**
+      - admin/**
+      - tests/**
+      - PROJECT.md
+      - .env*
+    violation: "stop; report to PL; recreate or move artifact under canonical project root"
+
+  ceo:
+    read:
+      - PROJECT.md
+      - workflow/**
+      - docs/status/**
+    write:
+      - workflow/state.md
+      - workflow/changes/*/review.md
+      - workflow/changes/*/logs/agent-runs/**
+
+  hr:
+    read:
+      - PROJECT.md
+      - workflow/**
+      - skills/**
+    write:
+      - workflow/agents.config.yaml
+      - workflow/permissions.config.yaml
+      - workflow/changes/*/review.md
+      - workflow/changes/*/logs/agent-runs/**
+
+  pl:
+    read:
+      - PROJECT.md
+      - workflow/**
+      - openspec/**
+      - docs/**
+      - backend/**
+      - frontend/**
+      - admin/**
+      - tests/**
+    write:
+      - workflow/state.md
+      - workflow/changes/*/change.md
+      - workflow/changes/*/review.md
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/logs/agent-runs/**
+      - openspec/changes/*/tasks.md
+      - openspec/specs/**
+      - openspec/changes/archive/**
+
+  pm:
+    read:
+      - PROJECT.md
+      - openspec/**
+      - workflow/**
+      - docs/prd/**
+      - docs/status/**
+      - docs/testing/**
+      - docs/security/**
+      - docs/toolchain/**
+      - workflow/changes/*/change.md
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/review.md
+      - workflow/changes/*/logs/agent-runs/**
+    write:
+      - PROJECT.md
+      - openspec/changes/*/proposal.md
+      - openspec/changes/*/specs/**
+      - docs/prd/**
+      - docs/status/**
+      - docs/testing/**
+      - docs/security/**
+      - docs/toolchain/**
+      - workflow/changes/*/change.md
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/review.md
+      - workflow/changes/*/logs/agent-runs/**
+    cannot_write:
+      - docs/architecture/**
+      - docs/api/**
+      - docs/database/**
+
+  architect:
+    read:
+      - PROJECT.md
+      - openspec/**
+      - workflow/**
+      - docs/**
+    write:
+      - openspec/changes/*/design.md
+      - openspec/changes/*/tasks.md
+      - docs/architecture/**
+      - docs/api/**
+      - docs/database/**
+      - docs/security/**
+      - docs/decisions/**
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/review.md
+      - workflow/changes/*/logs/agent-runs/**
+    cannot_write:
+      - docs/prd/**
+
+  frontend:
+    read:
+      - PROJECT.md
+      - docs/prd/**
+      - docs/architecture/**
+      - docs/api/**
+      - docs/testing/**
+      - openspec/**
+      - frontend/**
+    write:
+      - frontend/**
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/test-plan.md
+      - workflow/changes/*/logs/agent-runs/**
+
+  backend:
+    read:
+      - PROJECT.md
+      - docs/prd/**
+      - docs/architecture/**
+      - docs/api/**
+      - docs/database/**
+      - docs/security/**
+      - openspec/**
+      - backend/**
+    write:
+      - backend/**
+      - docs/api/**
+      - docs/database/**
+      - docs/security/**
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/test-plan.md
+      - workflow/changes/*/logs/agent-runs/**
+
+  admin:
+    read:
+      - PROJECT.md
+      - docs/prd/**
+      - docs/architecture/**
+      - docs/api/**
+      - docs/security/**
+      - docs/testing/**
+      - openspec/**
+      - admin/**
+      - workflow/**
+    write:
+      - admin/**
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/test-plan.md
+      - workflow/changes/*/logs/agent-runs/**
+      - docs/security/**
+      - docs/testing/**
+
+  ai:
+    read:
+      - PROJECT.md
+      - docs/**
+      - backend/**
+      - frontend/**
+      - admin/**
+      - tools/**
+      - workflow/**
+      - openspec/**
+    write:
+      - tools/**
+      - docs/ai/**
+      - docs/toolchain/**
+      - docs/security/**
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/test-plan.md
+      - workflow/changes/*/logs/agent-runs/**
+
+  qa:
+    read:
+      - PROJECT.md
+      - docs/**
+      - backend/**
+      - frontend/**
+      - admin/**
+      - tests/**
+      - workflow/**
+      - openspec/**
+    write:
+      - tests/**
+      - workflow/changes/*/test-plan.md
+      - workflow/changes/*/test-report.md
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/logs/agent-runs/**
+      - docs/testing/**
+
+  security:
+    read:
+      - PROJECT.md
+      - docs/**
+      - backend/**
+      - frontend/**
+      - admin/**
+      - deploy/**
+      - docker-compose.yml
+      - .env.example
+      - workflow/**
+      - openspec/**
+    write:
+      - workflow/changes/*/security-review.md
+      - workflow/changes/*/acceptance.md
+      - workflow/changes/*/logs/agent-runs/**
+      - docs/security/**
+
+  ops:
+    read:
+      - PROJECT.md
+      - docs/operations/**
+      - docs/testing/**
+      - docs/security/**
+      - deploy/**
+      - docker-compose.yml
+      - .env.example
+      - workflow/**
+      - openspec/**
+    write:
+      - deploy/**
+      - workflow/changes/*/deploy-plan.md
+      - workflow/changes/*/deploy-record.md
+      - workflow/changes/*/logs/agent-runs/**
+      - docs/operations/**

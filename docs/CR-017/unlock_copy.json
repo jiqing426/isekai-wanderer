@@ -1,0 +1,29 @@
+{
+  "cg_unlock": {
+    "title": "CG 已解锁",
+    "view_button": "立即查看",
+    "later_button": "稍后",
+    "rarity_labels": {
+      "R": "普通",
+      "SR": "稀有",
+      "SSR": "传说"
+    }
+  },
+  "achievement_unlock": {
+    "title": "成就解锁",
+    "confirm_button": "确认",
+    "reward_label": "奖励"
+  },
+  "reward_float": {
+    "format": "+{amount} {type}",
+    "types": {
+      "fragment": "碎片",
+      "exp": "经验",
+      "gold": "金币"
+    }
+  },
+  "multi_reward": {
+    "title": "获得奖励",
+    "confirm_button": "确认"
+  }
+}

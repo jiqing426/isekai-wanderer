@@ -139,11 +139,11 @@ function formatTime(iso: string): string {
 }
 
 function continueGame(save: SaveItem) {
-  router.push(`/game?session_id=${save.session_id}`);
+  router.push(`/game?session=${save.session_id}`);
 }
 
 function restartGame(save: SaveItem) {
-  router.push(`/game?script_id=${save.script_id}&restart=true`);
+  router.push(`/game?script=${save.script_id}&restart=true`);
 }
 
 function startRename(save: SaveItem) {
@@ -193,7 +193,11 @@ function toggleSnapshotTimeline(save: SaveItem) {
 }
 
 function handleFork(newSessionId: string) {
-  router.push(`/game?session_id=${newSessionId}`);
+  // 从 saves 列表中找到对应的 script_id
+  const save = saves.value.find(s => s.session_id === newSessionId);
+  if (save) {
+    router.push(`/game?script=${save.script_id}`);
+  }
 }
 
 async function loadSaves() {

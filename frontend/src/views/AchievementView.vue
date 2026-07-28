@@ -24,29 +24,37 @@
             v-for="(ach, i) in achievements"
             :key="ach.id"
             class="ach-card glass-card fade-in-up"
-            :class="{ locked: !ach.unlocked, claimed: ach.claimed }"
+            :class="{ locked: !ach.isUnlocked, claimed: ach.isClaimed }"
             :style="{ animationDelay: `${i * 0.05}s` }"
           >
-            <div class="ach-icon" :class="{ 'locked-icon': !ach.unlocked }">
-              {{ ach.unlocked ? ach.icon : '🔒' }}
+            <div class="ach-icon" :class="{ 'locked-icon': !ach.isUnlocked }">
+              {{ ach.isUnlocked ? ach.icon : '🔒' }}
             </div>
             <div class="ach-body">
               <div class="ach-name">{{ ach.name }}</div>
               <div class="ach-desc">{{ ach.description }}</div>
-              <div v-if="ach.condition && !ach.unlocked" class="ach-condition">
-                <span class="condition-value">{{ conditionLabel(ach.condition) }}</span>
+              <div v-if="ach.condition" class="ach-condition">
+                <span class="condition-value">{{ conditionLabel(ach.condition, ach.progress) }}</span>
+              </div>
+              <div v-if="ach.condition" class="ach-progress">
+                <div class="progress-bar">
+                  <div 
+                    class="progress-fill" 
+                    :style="{ width: `${progressPercentage(ach)}%` }"
+                  ></div>
+                </div>
               </div>
               <div v-if="ach.reward" class="ach-reward">
                 {{ rewardLabel(ach.reward) }}
               </div>
-              <div v-if="ach.unlocked" class="ach-time">
-                {{ formatDate(ach.unlocked_at) }}
+              <div v-if="ach.isUnlocked" class="ach-time">
+                {{ formatDate(ach.unlockedAt) }}
               </div>
             </div>
-            <div class="ach-action" v-if="ach.unlocked && !ach.claimed">
+            <div class="ach-action" v-if="ach.isUnlocked && !ach.isClaimed">
               <n-button size="small" type="primary" @click="claimAchievement(ach)">{{ $t('achievement.claim') }}</n-button>
             </div>
-            <n-tag v-if="ach.claimed" size="small" type="success" :bordered="false">{{ $t('achievement.claimed') }}</n-tag>
+            <n-tag v-if="ach.isClaimed" size="small" type="success" :bordered="false">{{ $t('achievement.claimed') }}</n-tag>
           </div>
         </div>
       </n-spin>
@@ -59,7 +67,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useMessage } from 'naive-ui';
 import { useHead } from '@vueuse/head';
 import { useI18n } from 'vue-i18n';
-import { gameApi } from '@/api/game';
+import { gameApi, type Achievement } from '@/api/game';
 
 const { t } = useI18n();
 
@@ -71,45 +79,28 @@ useHead({
 const message = useMessage();
 const loading = ref(false);
 
-interface AchievementReward {
-  type: string;
-  amount: number;
-  claimed: boolean;
-}
+type AchievementCondition = NonNullable<Achievement['condition']>;
+type AchievementProgress = NonNullable<Achievement['progress']>;
+type AchievementReward = NonNullable<Achievement['reward']>;
 
-interface AchievementCondition {
-  type: string;
-  target?: number;
-  current?: number;
-}
-
-interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  unlocked: boolean;
-  unlocked_at: string | null;
-  claimed: boolean;
-  condition?: AchievementCondition | string;
-  reward?: AchievementReward | string;
-}
-
-function parseJsonField<T>(field: T | string | undefined): T | null {
-  if (!field) return null;
-  if (typeof field === 'string') {
-    try { return JSON.parse(field) as T; } catch { return null; }
-  }
-  return field as T;
-}
-
-function conditionLabel(condition: AchievementCondition | string | undefined): string {
-  const parsed = parseJsonField<AchievementCondition>(condition);
-  if (!parsed) return '';
+function conditionLabel(condition: AchievementCondition | undefined, progress: AchievementProgress | undefined): string {
+  if (!condition) return '';
   const typeMap: Record<string, string> = {
+    'dialogue_count': '对话次数',
+    'completed_scripts': '完成剧本',
+    'affection': '好感度',
+    'cg_count': '收集 CG',
+    'gifts_sent': '赠送礼物',
+    'choice_count': '做出选择',
+    'streak': '连续登录',
+    'friends_count': '添加好友',
+    'branches_explored': '探索分支',
+    'characters_unlocked': '解锁角色',
+    'all_good_endings': '达成所有好结局',
+    'all_achievements_unlocked': '解锁所有成就',
+    // Legacy keys
     'dialogue': '对话次数',
     'choice': '做出选择',
-    'affection': '好感度',
     'ending': '解锁结局',
     'script': '完成剧本',
     'checkin': '签到',
@@ -117,15 +108,14 @@ function conditionLabel(condition: AchievementCondition | string | undefined): s
     'fragments': '碎片收集',
     'cg': '收集 CG',
   };
-  const label = typeMap[parsed.type] || parsed.type;
-  const current = parsed.current ?? 0;
-  const target = parsed.target ?? '?';
+  const label = typeMap[condition.type] || condition.type;
+  const current = progress?.current ?? condition.current ?? 0;
+  const target = progress?.target ?? condition.target ?? condition.value ?? 0;
   return `${label}：${current} / ${target}`;
 }
 
-function rewardLabel(reward: AchievementReward | string | undefined): string {
-  const parsed = parseJsonField<AchievementReward>(reward);
-  if (!parsed) return '';
+function rewardLabel(reward: AchievementReward | undefined): string {
+  if (!reward) return '';
   const typeMap: Record<string, string> = {
     'fragments': '碎片',
     'fragment': '碎片',
@@ -133,12 +123,21 @@ function rewardLabel(reward: AchievementReward | string | undefined): string {
     'exp': '经验',
     'dialogue': '对话次数',
   };
-  const label = typeMap[parsed.type] || parsed.type;
-  return `🎁 ${parsed.amount} ${label}`;
+  const label = typeMap[reward.type] || reward.type;
+  return `🎁 ${reward.amount} ${label}`;
+}
+
+function progressPercentage(ach: Achievement): number {
+  const progress = ach.progress;
+  const condition = ach.condition;
+  const current = progress?.current ?? condition?.current ?? 0;
+  const target = progress?.target ?? condition?.target ?? condition?.value ?? 1;
+  if (target <= 0) return 0;
+  return Math.min(100, Math.round((current / target) * 100));
 }
 
 const achievements = ref<Achievement[]>([]);
-const unlockedCount = computed(() => achievements.value.filter(a => a.unlocked).length);
+const unlockedCount = computed(() => achievements.value.filter(a => a.isUnlocked).length);
 
 function formatDate(iso: string | null): string {
   if (!iso) return '未知时间';
@@ -150,7 +149,8 @@ function formatDate(iso: string | null): string {
 async function claimAchievement(ach: Achievement) {
   try {
     await gameApi.claimAchievement(ach.id);
-    ach.claimed = true;
+    ach.isClaimed = true;
+    ach.claimedAt = new Date().toISOString();
     message.success(t('achievement.claimSuccess', { name: ach.name }));
   } catch (err) {
     message.error(t('achievement.claimFailed'));
@@ -224,6 +224,25 @@ onMounted(() => {
 .condition-value {
   color: var(--brand-primary);
   font-weight: 600;
+}
+
+.ach-progress {
+  margin-top: 8px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #f472b6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 
 </style>

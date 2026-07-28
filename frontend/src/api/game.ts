@@ -91,13 +91,25 @@ export interface Achievement {
   name: string;
   description: string;
   icon: string;
-  unlocked: boolean;
-  unlocked_at: string | null;
-  claimed: boolean;
+  rarity?: string;
+  isUnlocked: boolean;
+  isClaimed: boolean;
+  unlockedAt: string | null;
+  claimedAt: string | null;
   condition?: {
     type: string;
+    value?: number;
     target?: number;
     current?: number;
+  };
+  progress?: {
+    current: number;
+    target: number;
+    percentage?: number;
+  };
+  reward?: {
+    type: string;
+    amount: number;
   };
 }
 
@@ -193,8 +205,10 @@ export interface GiftItem {
   id: string;
   name: string;
   cost: number;
+  price?: number; // 后端可能返回 price
   affection_bonus: number;
   description: string;
+  icon_url?: string;
 }
 
 // ── CR3-015/016/017: Save & Snapshot & Ending types ──
@@ -592,5 +606,48 @@ export const gameApi = {
     total: number;
   }> {
     return api.get(`/game/${sessionId}/gift-history`);
+  },
+
+  // ── CR-019: Dialogue History Storage API ──
+
+  storeDialogue(sessionId: string, data: {
+    role: 'user' | 'assistant';
+    content: string;
+    character_id?: string;
+    character_name?: string;
+    emotion?: string;
+  }): Promise<{
+    id: string;
+    session_id: string;
+    role: string;
+    content: string;
+    character_id?: string;
+    character_name?: string;
+    emotion?: string;
+    created_at: string;
+  }> {
+    return api.post(`/game/${sessionId}/dialogue`, data);
+  },
+
+  getDialogues(sessionId: string, params?: { limit?: number; offset?: number }): Promise<{
+    dialogues: Array<{
+      id: string;
+      session_id: string;
+      role: string;
+      content: string;
+      character_id?: string;
+      character_name?: string;
+      emotion?: string;
+      created_at: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return api.get(`/game/${sessionId}/dialogues${qs ? `?${qs}` : ''}`);
   },
 };

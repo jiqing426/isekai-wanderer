@@ -65,11 +65,9 @@
             <AffectionDisplay
               :character-id="gameStatus?.character_id || game.currentDialogue?.character_id"
               :value="gameStatus?.affection_value ?? currentAffection"
-              :level="gameStatus?.affection_level || affectionLevel"
             />
             <n-button @click="openGiftModal" class="action-btn">🎁 送礼</n-button>
             <n-button @click="goToFreeChat" class="action-btn">💬 自由对话</n-button>
-            <n-button @click="handleManualSave" class="action-btn">💾 手动存档</n-button>
             <n-button @click="viewGiftHistory" class="action-btn">📋 送礼记录</n-button>
           </aside>
 
@@ -85,8 +83,15 @@
             <ChoicePanel
               v-if="game.hasChoices"
               :choices="choiceOptions"
+              :loading="game.loading"
               @select="handleChoice"
             />
+            <!-- 好感度动效 -->
+            <transition name="fade">
+              <div v-if="showAffectionAnimation" class="affection-animation" :class="affectionDelta > 0 ? 'positive' : 'negative'">
+                {{ affectionDelta > 0 ? '+' : '' }}{{ affectionDelta }} 好感度
+              </div>
+            </transition>
             <!-- 剧本对话输入框 -->
             <FreeChatInput
               v-if="!game.isEnded"
@@ -119,53 +124,18 @@
       <!-- 历史对话抽屉 -->
       <HistoryDrawer
         :visible="showHistory"
-        :dialogue-history="dialogueHistory"
+        :session-id="game.currentSession?.id"
         @close="closeHistory"
       />
 
       <!-- FE-O5: 送礼弹窗 -->
-      <n-modal
-        v-model:show="showGiftModal"
-        preset="card"
-        title="🎁 送礼"
-        :style="{ width: '400px' }"
-      >
-        <div v-if="giftLoading" style="text-align: center; padding: 20px;">
-          <n-spin size="medium" />
-          <p style="margin-top: 10px; color: var(--text-muted);">加载礼物列表...</p>
-        </div>
-        <div v-else-if="giftList.length === 0" style="text-align: center; padding: 20px;">
-          <n-empty description="暂无可用礼物" />
-        </div>
-        <div v-else class="gift-list">
-          <div
-            v-for="gift in giftList"
-            :key="gift.id"
-            class="gift-item"
-            :class="{ selected: selectedGift?.id === gift.id }"
-            @click="selectedGift = gift"
-          >
-            <span class="gift-icon">{{ gift.icon || '🎁' }}</span>
-            <div class="gift-info">
-              <span class="gift-name">{{ gift.name }}</span>
-              <span class="gift-cost">💎 {{ gift.cost }} 碎片</span>
-            </div>
-            <span class="gift-affection">+{{ gift.affection_bonus }} 好感</span>
-          </div>
-        </div>
-        <template #footer>
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
-            <n-button @click="showGiftModal = false">取消</n-button>
-            <n-button
-              type="primary"
-              :disabled="!selectedGift || giftLoading"
-              @click="confirmSendGift"
-            >
-              确认送礼
-            </n-button>
-          </div>
-        </template>
-      </n-modal>
+      <GiftModal
+        v-model="showGiftModal"
+        :target-name="characterDisplayName"
+        :target-id="game.currentDialogue?.character_id || ''"
+        :session-id="game.currentSession?.id"
+        @gift-sent="onGiftSent"
+      />
 
       <!-- FE-O5: 送礼记录弹窗 -->
       <n-modal
@@ -205,6 +175,16 @@
 
       <!-- CR-016: Paywall 统一管理 -->
       <PaywallManager ref="paywallManagerRef" />
+
+      <!-- 成就解锁动画 -->
+      <div v-if="showAchievementUnlock" class="achievement-unlock-overlay" @click.self="closeAchievementUnlock">
+        <AchievementUnlockCard
+          :title="currentUnlockAchievement?.title || ''"
+          :description="currentUnlockAchievement?.description"
+          :reward="currentUnlockAchievement?.reward"
+          @confirm="closeAchievementUnlock"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -216,9 +196,10 @@ import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useGameStore } from '@/stores/game';
 import { useAffectionStore } from '@/stores/affection';
-import { chatApi } from '@/api/chat';
+// import { chatApi } from '@/api/chat';
 import { saveApi } from '@/api/saves';
 import { gameApi } from '@/api/game';
+import GiftModal from '@/components/GiftModal.vue';
 
 // New components
 import StoryPanel from '@/components/StoryPanel.vue';
@@ -230,6 +211,7 @@ import ChoicePanel from '@/components/ChoicePanel.vue';
 import NotificationPrompt from '@/components/NotificationPrompt.vue';
 import HistoryDrawer from '@/components/HistoryDrawer.vue';
 import PaywallManager from '@/components/paywall/PaywallManager.vue';
+import AchievementUnlockCard from '@/components/unlock/AchievementUnlockCard.vue';
 import { useSubscriptionStore } from '@/stores/subscription';
 import type { PaywallTrigger } from '@/types/subscription';
 
@@ -247,6 +229,37 @@ const phase = ref<'loading' | 'playing' | 'error'>('loading');
 const errorMsg = ref('');
 const showFreeChat = ref(false);
 const typewriterSpeed = ref(1);
+
+// 好感度动效
+const showAffectionAnimation = ref(false);
+const affectionDelta = ref(0);
+
+// 成就解锁动画
+const showAchievementUnlock = ref(false);
+const currentUnlockAchievement = ref<any>(null);
+let achievementAutoCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+function closeAchievementUnlock() {
+  showAchievementUnlock.value = false;
+  currentUnlockAchievement.value = null;
+  if (achievementAutoCloseTimer) {
+    clearTimeout(achievementAutoCloseTimer);
+    achievementAutoCloseTimer = null;
+  }
+}
+
+function showAchievementUnlockAnimation(achievement: any) {
+  currentUnlockAchievement.value = achievement;
+  showAchievementUnlock.value = true;
+  
+  // 3秒后自动关闭
+  if (achievementAutoCloseTimer) {
+    clearTimeout(achievementAutoCloseTimer);
+  }
+  achievementAutoCloseTimer = setTimeout(() => {
+    closeAchievementUnlock();
+  }, 3000);
+}
 
 // 历史对话
 const showHistory = ref(false);
@@ -409,13 +422,6 @@ const currentAffection = computed(() => {
   return aff?.value || 0;
 });
 
-const affectionLevel = computed(() => {
-  const charId = game.currentDialogue?.character_id;
-  if (!charId) return '相识';
-  const aff = affectionStore.getAffection(charId);
-  return aff?.level || '相识';
-});
-
 const characterTitle = computed(() => {
   return game.currentDialogue?.character_title || '';
 });
@@ -497,20 +503,67 @@ async function handleChoice(choiceId: string) {
     });
   }
   
+  // 检查当前额度是否足够（如果只剩1次，这次用完就没了）
+  const quotaBefore = subscriptionStore.dialogueQuota?.remaining || 0;
+  const willExhaustQuota = quotaBefore <= 1 && !subscriptionStore.isSubscriber;
+  
   const result = await game.submitChoice(choiceId);
   
+  // 如果发生错误，提前返回
+  if (result?.error) {
+    return;
+  }
+
   // CR-016: 如果额度用完，不触发好感度动效
   if (result?.quotaExhausted) {
     // 额度不足，跳过好感度更新
     return;
   }
   
-  await affectionStore.loadAffections();
+  // CR-019: 存储对话历史到数据库
+  if (game.currentSession && game.currentDialogue?.text) {
+    try {
+      await gameApi.storeDialogue(game.currentSession.id, {
+        role: 'assistant',
+        content: game.currentDialogue.text,
+        character_id: game.currentDialogue.character_id,
+        character_name: characterDisplayName.value,
+        emotion: game.currentDialogue.emotion,
+      });
+    } catch (err) {
+      console.error('Failed to store dialogue:', err);
+    }
+  }
+  
+  // 刷新好感度和对话额度
+  await Promise.all([
+    affectionStore.loadAffections(),
+    subscriptionStore.fetchDialogueQuota(),
+    loadGameStatus()
+  ]);
+
+  // 只有额度没有用完时才显示好感度动效
+  if (!willExhaustQuota && choice?.affection_delta) {
+    showAffectionAnimation.value = true;
+    affectionDelta.value = choice.affection_delta;
+    setTimeout(() => {
+      showAffectionAnimation.value = false;
+    }, 1500);
+  }
 
   // CR-016: 检查后端是否返回 paywall 触发指令
   const dialogue = game.currentDialogue as any;
   if (dialogue?.paywall) {
     triggerPaywall(dialogue.paywall);
+  }
+
+  // 成就解锁动画
+  if (result?.new_achievements && result.new_achievements.length > 0) {
+    for (const achievement of result.new_achievements) {
+      showAchievementUnlockAnimation(achievement);
+      // 如果有多个成就，依次显示（间隔 3.5 秒）
+      await new Promise(resolve => setTimeout(resolve, 3500));
+    }
   }
 }
 
@@ -541,18 +594,60 @@ function closeHistory() {
 
 // Handle free chat message
 async function handleFreeChat(msg: string) {
-  const characterId = game.currentDialogue?.character_id;
-  if (!characterId) return;
-  try {
-    const response = await chatApi.sendFreeChat({
-      character_id: characterId,
-      message: msg,
-      script_id: game.currentScript?.id,
-      session_id: game.currentSession?.id, // CR-018 T-002 fix: include session_id
-    });
-    message.success(response.reply);
-  } catch (err) {
-    message.error('自由对话失败');
+  // 记录自定义输入到历史
+  dialogueHistory.value.push({
+    type: 'choice',
+    text: msg,
+    timestamp: Date.now(),
+    affectionDelta: 0, // 自定义输入的好感度变化由后端计算
+  });
+  
+  // CR-019: 存储用户输入到数据库
+  if (game.currentSession) {
+    try {
+      await gameApi.storeDialogue(game.currentSession.id, {
+        role: 'user',
+        content: msg,
+        character_id: game.currentDialogue?.character_id,
+        character_name: characterDisplayName.value,
+      });
+    } catch (err) {
+      console.error('Failed to store user dialogue:', err);
+    }
+  }
+  
+  // 使用 submitCustomInput 推进剧情（和选择一样）
+  const result = await game.submitCustomInput(msg);
+  
+  // CR-019: 存储 AI 回复到数据库
+  if (game.currentSession && game.currentDialogue?.text) {
+    try {
+      await gameApi.storeDialogue(game.currentSession.id, {
+        role: 'assistant',
+        content: game.currentDialogue.text,
+        character_id: game.currentDialogue.character_id,
+        character_name: characterDisplayName.value,
+        emotion: game.currentDialogue.emotion,
+      });
+    } catch (err) {
+      console.error('Failed to store AI dialogue:', err);
+    }
+  }
+  
+  // 刷新好感度和对话额度
+  await Promise.all([
+    affectionStore.loadAffections(),
+    subscriptionStore.fetchDialogueQuota(),
+    loadGameStatus()
+  ]);
+  
+  // 成就解锁动画
+  if (result?.new_achievements && result.new_achievements.length > 0) {
+    for (const achievement of result.new_achievements) {
+      showAchievementUnlockAnimation(achievement);
+      // 如果有多个成就，依次显示（间隔 3.5 秒）
+      await new Promise(resolve => setTimeout(resolve, 3500));
+    }
   }
 }
 
@@ -564,6 +659,7 @@ const giftHistoryLoading = ref(false);
 const giftList = ref<Array<{ id: string; name: string; icon?: string; cost: number; affection_bonus: number }>>([]);
 const giftHistory = ref<Array<{ id: string; gift_name: string; character_name: string; affection_delta: number }>>([]);
 const selectedGift = ref<{ id: string; name: string; icon?: string; cost: number; affection_bonus: number } | null>(null);
+const shardBalance = ref(0);
 
 // Open gift modal
 async function openGiftModal() {
@@ -577,9 +673,20 @@ async function openGiftModal() {
   selectedGift.value = null;
   
   try {
-    const giftData = await gameApi.getGiftCatalog();
+    // 并行加载礼物列表和碎片余额
+    const [giftData, balanceData] = await Promise.all([
+      gameApi.getGiftCatalog(),
+      gameApi.getShardBalance()
+    ]);
     if (giftData && giftData.gifts) {
-      giftList.value = giftData.gifts;
+      // 字段映射：后端返回 price，前端用 cost
+      giftList.value = giftData.gifts.map((g: any) => ({
+        ...g,
+        cost: g.cost ?? g.price ?? 0,
+      }));
+    }
+    if (balanceData && typeof balanceData.balance === 'number') {
+      shardBalance.value = balanceData.balance;
     }
   } catch (err) {
     console.error('加载礼物列表失败:', err);
@@ -589,28 +696,10 @@ async function openGiftModal() {
   }
 }
 
-// Confirm send gift
-async function confirmSendGift() {
-  if (!selectedGift.value || !game.currentSession || !game.currentDialogue?.character_id) {
-    return;
-  }
-  
-  try {
-    const result = await gameApi.sendGameGift(
-      game.currentSession.id,
-      game.currentDialogue.character_id,
-      selectedGift.value.id,
-      1
-    );
-    
-    message.success(result.message || `成功送出 ${selectedGift.value.name}！`);
-    showGiftModal.value = false;
-    // 刷新好感度
-    await affectionStore.loadAffections();
-  } catch (err) {
-    console.error('送礼失败:', err);
-    message.error(err instanceof Error ? err.message : '送礼失败');
-  }
+// Gift sent callback
+async function onGiftSent() {
+  // 刷新好感度
+  await affectionStore.loadAffections();
 }
 
 // View gift history
@@ -793,6 +882,29 @@ onMounted(async () => {
 }
 
 /* FE-O5: Gift modal styles */
+.shard-balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: rgba(var(--brand-primary-rgb), 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.2);
+}
+
+.balance-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.balance-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--brand-primary);
+}
+
 .gift-list {
   display: flex;
   flex-direction: column;
@@ -1021,5 +1133,89 @@ onMounted(async () => {
 .lifecycle-tag.returnee {
   background: rgba(251, 191, 36, 0.15);
   color: #fbbf24;
+}
+
+/* 好感度动效 */
+.affection-animation {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 800;
+  padding: 20px 40px;
+  border-radius: 16px;
+  z-index: 9999;
+  pointer-events: none;
+  animation: affectionPop 1.5s ease-out;
+}
+
+.affection-animation.positive {
+  background: rgba(134, 239, 172, 0.9);
+  color: #065f46;
+  box-shadow: 0 8px 32px rgba(134, 239, 172, 0.5);
+}
+
+.affection-animation.negative {
+  background: rgba(252, 165, 165, 0.9);
+  color: #991b1b;
+  box-shadow: 0 8px 32px rgba(252, 165, 165, 0.5);
+}
+
+@keyframes affectionPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  40% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+}
+
+/* 成就解锁动画覆盖层 */
+.achievement-unlock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  animation: overlayFadeIn 300ms ease forwards;
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

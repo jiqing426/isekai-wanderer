@@ -136,18 +136,16 @@ defineExpose({
   isLoading
 });
 
-watch(() => props.text, (newText, oldText) => {
+watch(() => props.text, (newText) => {
   if (newText && newText !== displayedText.value) {
-    // 显示loading状态
-    if (!oldText || oldText === '') {
-      isLoading.value = true;
-      setTimeout(() => {
-        isLoading.value = false;
-        typeWriter(newText);
-      }, 500);
-    } else {
+    // 每次文本变化都显示loading状态
+    isLoading.value = true;
+    displayedText.value = ''; // 清空旧文本
+    
+    setTimeout(() => {
+      isLoading.value = false;
       typeWriter(newText);
-    }
+    }, 600);
   }
 }, { immediate: true });
 

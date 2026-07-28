@@ -36,25 +36,38 @@ class CommentCreate(BaseModel):
 async def list_posts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    tab: str = Query("latest", regex="^(recommend|latest|hot|mine)$"),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all posts with pagination."""
+    """List all posts with pagination and tab-based sorting."""
     offset = (page - 1) * page_size
     
+    # Base query
+    base_query = select(Post).where(Post.is_deleted == False)
+    
+    # Apply tab-specific filters and ordering
+    if tab == "mine":
+        if not user_id:
+            return {"posts": [], "total": 0, "page": page, "page_size": page_size, "has_more": False}
+        base_query = base_query.where(Post.user_id == UUID(user_id))
+        order_by = desc(Post.created_at)
+    elif tab == "hot":
+        # Hot posts: order by views_count + like_count * 10 + comment_count * 5
+        order_by = desc(Post.views_count + Post.like_count * 10 + Post.comment_count * 5)
+    elif tab == "recommend":
+        # Recommend: order by like_count (most liked)
+        order_by = desc(Post.like_count)
+    else:  # latest
+        order_by = desc(Post.created_at)
+    
     # Get total count
-    count_stmt = select(func.count()).select_from(Post).where(Post.is_deleted == False)
+    count_stmt = select(func.count()).select_from(base_query.subquery())
     total_result = await db.execute(count_stmt)
     total = total_result.scalar()
     
     # Get posts with author info
-    stmt = (
-        select(Post)
-        .where(Post.is_deleted == False)
-        .order_by(desc(Post.created_at))
-        .offset(offset)
-        .limit(page_size)
-    )
+    stmt = base_query.order_by(order_by).offset(offset).limit(page_size)
     result = await db.execute(stmt)
     posts = result.scalars().all()
     

@@ -66,6 +66,14 @@
             </div>
           </div>
           <p class="confirm-desc">"{{ selectedGift.description }}"</p>
+          <div class="confirm-balance">
+            <span>当前碎片</span>
+            <span class="balance-value">💎 {{ shardBalance ?? '-' }}</span>
+          </div>
+          <div class="confirm-after">
+            <span>赠送后剩余</span>
+            <span class="balance-value">💎 {{ shardBalance !== null && selectedGift ? shardBalance - selectedGift.cost : '-' }}</span>
+          </div>
           <div class="confirm-target">
             赠送给 <strong>{{ characterName }}</strong>
           </div>
@@ -336,10 +344,33 @@ onMounted(loadData);
   font-style: italic;
   margin: 0 0 16px;
 }
+.confirm-balance,
+.confirm-after {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-muted);
+  background: rgba(251, 191, 36, 0.05);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.balance-value {
+  font-weight: 700;
+  color: #fbbf24;
+}
+.confirm-after {
+  background: rgba(192, 132, 252, 0.05);
+}
+.confirm-after .balance-value {
+  color: var(--brand-primary);
+}
 .confirm-target {
   font-size: 14px;
   color: var(--text-main);
   margin-bottom: 20px;
+  margin-top: 8px;
 }
 .confirm-actions { display: flex; flex-direction: column; gap: 10px; }
 

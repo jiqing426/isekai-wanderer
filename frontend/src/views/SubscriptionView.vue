@@ -37,9 +37,10 @@
         <div class="fragment-header">
           <span class="fragment-icon">✨</span>
           <span class="fragment-title">碎片购买额外对话</span>
+          <span class="fragment-balance">💎 {{ shardBalance }}</span>
         </div>
         <p class="fragment-desc">使用碎片临时补充对话额度，3 碎片 = 1 次额外对话</p>
-        <n-button type="primary" size="small" @click="showFragmentPurchase = true">
+        <n-button type="primary" size="small" @click="openFragmentPurchase">
           立即购买
         </n-button>
       </div>
@@ -157,6 +158,7 @@
           <div class="modal-icon">✨</div>
           <h3 class="modal-title">碎片购买额外对话</h3>
           <p class="modal-desc">3 碎片 = 1 次额外对话</p>
+          <div class="modal-balance">当前碎片余额：<span class="balance-value">💎 {{ shardBalance }}</span></div>
           <div class="amount-selector">
             <n-input-number v-model:value="fragmentAmount" :min="1" :max="99" placeholder="购买次数" />
             <div class="cost-display">
@@ -181,6 +183,7 @@ import { useRouter } from 'vue-router';
 import { useScrollReveal } from '@/composables/useScrollReveal';
 import { useSubscriptionStore } from '@/stores/subscription';
 import { cancelSubscription, purchaseFragmentQuota } from '@/api/subscription';
+import { gameApi } from '@/api/game';
 import { useMessage } from 'naive-ui';
 import SubscriptionPlans from '@/components/SubscriptionPlans.vue';
 import TierComparison from '@/components/paywall/TierComparison.vue';
@@ -195,6 +198,21 @@ const showCancelConfirm = ref(false);
 const showFragmentPurchase = ref(false);
 const fragmentAmount = ref(1);
 const purchasing = ref(false);
+const shardBalance = ref(0);
+
+async function loadShardBalance() {
+  try {
+    const data = await gameApi.getShardBalance();
+    shardBalance.value = data.balance;
+  } catch {
+    // ignore
+  }
+}
+
+function openFragmentPurchase() {
+  showFragmentPurchase.value = true;
+  loadShardBalance();
+}
 
 const tierNameMap: Record<string, string> = {
   free: '免费版',
@@ -244,6 +262,7 @@ async function handleFragmentPurchase() {
 onMounted(async () => {
   await subscriptionStore.fetchSubscriptionStatus();
   await subscriptionStore.fetchDialogueQuota();
+  await loadShardBalance();
 });
 
 // 功能对比数据

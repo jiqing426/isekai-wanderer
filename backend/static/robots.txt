@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /game
+Disallow: /settings
+Disallow: /subscription
+Disallow: /gallery
+Disallow: /community
+
+Sitemap: https://isekai-wanderer.example.com/sitemap.xml

@@ -476,7 +476,7 @@ async function handleCheckin() {
 
 function continueGame() {
   if (latestSave.value) {
-    router.push(`/game/${latestSave.value.session_id}`);
+    router.push(`/game?session=${latestSave.value.session_id}`);
   }
 }
 

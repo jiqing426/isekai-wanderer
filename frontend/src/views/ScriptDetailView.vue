@@ -189,9 +189,9 @@ async function loadScript() {
       description: response.description,
       cover: response.cover_image_url,
       author: '未知作者', // 后端未提供 author 字段
-      completionRate: 0,
-      unlockedNodes: 0,
-      totalNodes: 0,
+      completionRate: response.completionRate || 0,
+      unlockedNodes: response.unlockedNodes || 0,
+      totalNodes: response.totalNodes || 0,
     };
     
     // FE-FEAT-023: 更新统计数据

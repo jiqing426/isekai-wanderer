@@ -72,9 +72,13 @@ export interface GameSession {
 }
 
 export const useGameStore = defineStore('game', () => {
+  // 从 localStorage 恢复会话信息
+  const savedSession = localStorage.getItem('game_session');
+  const savedScript = localStorage.getItem('game_script');
+  
   const scripts = ref<Script[]>([]);
-  const currentScript = ref<Script | null>(null);
-  const currentSession = ref<GameSession | null>(null);
+  const currentScript = ref<Script | null>(savedScript ? JSON.parse(savedScript) : null);
+  const currentSession = ref<GameSession | null>(savedSession ? JSON.parse(savedSession) : null);
   const currentDialogue = ref<DialogueResponse | null>(null);
   const pendingChoices = ref<ChoiceResponse[]>([]);
   const choiceHistory = ref<{ choice_id: string; node_id: string }[]>([]);
@@ -104,6 +108,19 @@ export const useGameStore = defineStore('game', () => {
   async function startGame(scriptId: string) {
     loading.value = true;
     try {
+      // 检查是否有已保存的会话
+      const savedSession = localStorage.getItem('game_session');
+      if (savedSession) {
+        const session = JSON.parse(savedSession);
+        if (session.script_id === scriptId && session.status === 'active') {
+          // 恢复已有会话
+          currentSession.value = session;
+          currentScript.value = scripts.value.find((s) => s.id === scriptId) || null;
+          await fetchDialogue();
+          return;
+        }
+      }
+      
       const resp = await api.post<GameStartResponse>('/game/start', {
         script_id: scriptId,
       });
@@ -114,6 +131,12 @@ export const useGameStore = defineStore('game', () => {
         status: 'active',
       };
       currentScript.value = scripts.value.find((s) => s.id === scriptId) || null;
+      
+      // 保存到 localStorage
+      localStorage.setItem('game_session', JSON.stringify(currentSession.value));
+      if (currentScript.value) {
+        localStorage.setItem('game_script', JSON.stringify(currentScript.value));
+      }
 
       // Fetch initial dialogue
       await fetchDialogue();
@@ -159,7 +182,7 @@ export const useGameStore = defineStore('game', () => {
         node_id: currentSession.value.current_node_id,
       });
 
-      const resp = await api.post<ChoiceSubmitResponse & { error?: string; message?: string; remaining_quota?: number }>(`/game/${currentSession.value.id}/choice`, {
+      const resp = await api.post<ChoiceSubmitResponse & { error?: string; message?: string; remaining_quota?: number; new_achievements?: any[] }>(`/game/${currentSession.value.id}/choice`, {
         choice_id: choiceId,
       });
 
@@ -170,6 +193,9 @@ export const useGameStore = defineStore('game', () => {
       }
 
       currentSession.value.current_node_id = resp.next_node_id;
+      
+      // 更新 localStorage
+      localStorage.setItem('game_session', JSON.stringify(currentSession.value));
 
       // 记录好感度变化，让 UI 可以响应
       const affectionDelta = resp.affection_change?.delta;
@@ -188,9 +214,10 @@ export const useGameStore = defineStore('game', () => {
         await fetchDialogue();
       }
 
-      return { affectionDelta };
+      return { affectionDelta, new_achievements: (resp as any).new_achievements || [] };
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to submit choice';
+      return { error: true };
     } finally {
       loading.value = false;
     }
@@ -201,22 +228,33 @@ export const useGameStore = defineStore('game', () => {
     if (!currentSession.value) return;
     loading.value = true;
     try {
-      const resp = await api.post<DialogueResponse & { choices?: ChoiceResponse[]; is_custom?: boolean }>(
+      const resp = await api.post<DialogueResponse & { choices?: ChoiceResponse[]; is_custom?: boolean; new_achievements?: any[] }>(
         `/game/${currentSession.value.id}/custom-input`,
         { text },
       );
-      currentDialogue.value = resp;
-      if (resp.node_id) {
-        currentSession.value.current_node_id = resp.node_id;
+      
+      // 更新对话内容（后端返回 text 字段）
+      if (resp.text) {
+        currentDialogue.value = {
+          ...currentDialogue.value!,
+          text: resp.text,
+          emotion: resp.emotion || currentDialogue.value?.emotion,
+          character_id: resp.character_id || currentDialogue.value?.character_id,
+        };
       }
-      if (resp.choices) {
+      
+      // 更新选择按钮（后端返回 choices 数组）
+      if (resp.choices && resp.choices.length > 0) {
         pendingChoices.value = resp.choices;
       }
-      if ((resp as any).character_id) {
+      
+      if (resp.character_id) {
         // cache name if present
       }
+      return { new_achievements: (resp as any).new_achievements || [] };
     } catch (err) {
       error.value = err instanceof Error ? err.message : '发送失败';
+      return { error: true };
     } finally {
       loading.value = false;
     }
@@ -229,6 +267,10 @@ export const useGameStore = defineStore('game', () => {
     pendingChoices.value = [];
     choiceHistory.value = [];
     error.value = null;
+    
+    // 清除 localStorage
+    localStorage.removeItem('game_session');
+    localStorage.removeItem('game_script');
   }
 
   const currentNode = computed(() => {

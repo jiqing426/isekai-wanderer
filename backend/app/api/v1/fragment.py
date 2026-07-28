@@ -239,18 +239,23 @@ async def get_transactions(
     result = await db.execute(query)
     transactions = result.scalars().all()
     
-    # 交易类型中文映射
+    # 交易类型中文映射（支持精确匹配和前缀匹配）
     reason_labels = {
         'daily_checkin': '每日签到',
         'streak_milestone': '连续签到奖励',
         'gift_send': '送礼支出',
         'gift_receive': '收到礼物',
+        'gift': '送礼支出',
         'dialogue_quota_purchase': '碎片兑换对话',
         'shop_purchase': '商城购买',
         'refund': '退款',
         'admin_adjustment': '管理员调整',
         'system_reward': '系统奖励',
         'achievement_reward': '成就奖励',
+        'achievement_unlock': '成就解锁奖励',
+        'recharge': '充值',
+        'purchase': '碎片购买',
+        'qa_test_topup': '测试充值',
     }
     
     # Build response with description mapping
@@ -284,6 +289,12 @@ async def get_transactions(
         elif tx.reason == "fragment_purchase":
             description = "碎片购买"
             reason_label = "碎片购买"
+        else:
+            # 前缀匹配：提取冒号前的 key，查找映射
+            reason_key = tx.reason.split(':')[0] if ':' in tx.reason else tx.reason
+            if reason_key in reason_labels:
+                description = reason_labels[reason_key]
+                reason_label = reason_labels[reason_key]
         
         transactions_response.append({
             "id": str(tx.id),

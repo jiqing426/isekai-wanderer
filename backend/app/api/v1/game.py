@@ -1,5 +1,6 @@
 """Game session API endpoints including SSE streaming dialogue."""
 
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -154,6 +155,33 @@ async def start_game(
             f"Route {route_id} has no starting node (parent_id IS NULL)"
         )
     
+    # 检查是否已有活跃会话（支持进度恢复）
+    from sqlalchemy import select
+    from app.models.game import GameSession
+    
+    stmt = (
+        select(GameSession)
+        .where(
+            GameSession.user_id == UUID(user_id),
+            GameSession.script_id == script_uuid,
+            GameSession.status == 'active'
+        )
+        .order_by(GameSession.started_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    existing_session = result.scalar_one_or_none()
+    
+    if existing_session:
+        # 恢复已有会话
+        logger.info(f"[game/start] Resuming existing session: {existing_session.id}")
+        return {
+            "session_id": str(existing_session.id),
+            "node_id": str(existing_session.current_node_id),
+            "message": "Game resumed",
+            "resumed": True
+        }
+    
     # Create session
     session = GameSession(
         user_id=UUID(user_id),
@@ -170,6 +198,7 @@ async def start_game(
         "session_id": str(session.id),
         "node_id": str(starting_node.id),
         "message": "Game started",
+        "resumed": False
     }
 
 
@@ -272,6 +301,36 @@ async def get_dialogue(
     result["remaining_quota"] = quota_status["remaining"]
     result["quota_deducted"] = False  # No deduction for reading
     result["paywall_trigger"] = None  # No paywall for reading
+    
+    # 添加章节信息（从当前节点所属 route 获取）
+    if current_node:
+        # 获取当前节点所属 route
+        from sqlalchemy import select
+        from app.models.script import Route
+        route_stmt = select(Route).where(Route.id == current_node.route_id)
+        route_result = await db.execute(route_stmt)
+        route = route_result.scalar_one_or_none()
+        if route:
+            result["chapter"] = route.title
+            result["chapter_id"] = str(route.id)
+    
+    # 添加进度信息
+    session = state.get("session")
+    if session:
+        # 获取剧本总节点数
+        from sqlalchemy import func
+        total_stmt = select(func.count(Node.id)).join(Route).where(Route.script_id == session.script_id)
+        total_result = await db.execute(total_stmt)
+        total_nodes = total_result.scalar() or 0
+        
+        # 获取已探索节点数
+        explored_nodes = len(session.choice_history) if session.choice_history else 0
+        
+        # 计算进度百分比
+        progress_percentage = (explored_nodes / total_nodes * 100) if total_nodes > 0 else 0
+        result["progress"] = round(progress_percentage, 2)
+        result["total_nodes"] = total_nodes
+        result["explored_nodes"] = explored_nodes
     
     return result
 
@@ -443,6 +502,125 @@ async def submit_choice(
             # 收敛检查失败，跳过
             pass
     
+    # Achievement trigger logic
+    new_achievements = []
+    try:
+        from app.models.gallery import Achievement
+        from app.api.v1.achievements import ACHIEVEMENT_CATALOG
+        
+        # ACH-001: First dialogue completion
+        # Check if this is the first dialogue for this user
+        dialogue_count_result = await db.execute(
+            select(func.count()).select_from(GameSession).where(
+                GameSession.user_id == UUID(user_id)
+            )
+        )
+        dialogue_count = dialogue_count_result.scalar() or 0
+        
+        if dialogue_count == 1:  # First dialogue
+            ach_001_check = await db.execute(
+                select(Achievement).where(
+                    Achievement.user_id == UUID(user_id),
+                    Achievement.achievement_id == "ACH-001"
+                )
+            )
+            if not ach_001_check.scalar_one_or_none():
+                # Unlock ACH-001
+                new_ach = Achievement(
+                    user_id=UUID(user_id),
+                    achievement_id="ACH-001",
+                    title=ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    description=ACHIEVEMENT_CATALOG["ACH-001"]["description"],
+                    icon_url=ACHIEVEMENT_CATALOG["ACH-001"]["icon"],
+                    unlocked_at=datetime.utcnow()
+                )
+                db.add(new_ach)
+                await db.flush()
+                new_achievements.append({
+                    "id": "ACH-001",
+                    "name": ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    "description": ACHIEVEMENT_CATALOG["ACH-001"]["description"]
+                })
+        
+        # ACH-002: Affection reaches 60
+        if game_session and character_id:
+            from app.services.narrative.affection_service import AffectionService
+            affection_service = AffectionService(db)
+            affection = await affection_service.get_affection(
+                UUID(user_id),
+                UUID(character_id)
+            )
+            if affection and affection.value >= 60:
+                ach_002_check = await db.execute(
+                    select(Achievement).where(
+                        Achievement.user_id == UUID(user_id),
+                        Achievement.achievement_id == "ACH-002"
+                    )
+                )
+                if not ach_002_check.scalar_one_or_none():
+                    # Unlock ACH-002
+                    new_ach = Achievement(
+                        user_id=UUID(user_id),
+                        achievement_id="ACH-002",
+                        title=ACHIEVEMENT_CATALOG["ACH-002"]["name"],
+                        description=ACHIEVEMENT_CATALOG["ACH-002"]["description"],
+                        icon_url=ACHIEVEMENT_CATALOG["ACH-002"]["icon"],
+                        unlocked_at=datetime.utcnow()
+                    )
+                    db.add(new_ach)
+                    await db.flush()
+                    new_achievements.append({
+                        "id": "ACH-002",
+                        "name": ACHIEVEMENT_CATALOG["ACH-002"]["name"],
+                        "description": ACHIEVEMENT_CATALOG["ACH-002"]["description"]
+                    })
+        
+        # ACH-003: Complete 3 scripts
+        # Count completed scripts (sessions with status='completed')
+        completed_scripts_result = await db.execute(
+            select(func.count(func.distinct(GameSession.script_id))).where(
+                GameSession.user_id == UUID(user_id),
+                GameSession.status == 'completed'
+            )
+        )
+        completed_scripts = completed_scripts_result.scalar() or 0
+        
+        if completed_scripts >= 3:
+            ach_003_check = await db.execute(
+                select(Achievement).where(
+                    Achievement.user_id == UUID(user_id),
+                    Achievement.achievement_id == "ACH-003"
+                )
+            )
+            if not ach_003_check.scalar_one_or_none():
+                # Unlock ACH-003
+                new_ach = Achievement(
+                    user_id=UUID(user_id),
+                    achievement_id="ACH-003",
+                    title=ACHIEVEMENT_CATALOG["ACH-003"]["name"],
+                    description=ACHIEVEMENT_CATALOG["ACH-003"]["description"],
+                    icon_url=ACHIEVEMENT_CATALOG["ACH-003"]["icon"],
+                    unlocked_at=datetime.utcnow()
+                )
+                db.add(new_ach)
+                await db.flush()
+                new_achievements.append({
+                    "id": "ACH-003",
+                    "name": ACHIEVEMENT_CATALOG["ACH-003"]["name"],
+                    "description": ACHIEVEMENT_CATALOG["ACH-003"]["description"]
+                })
+        
+        await db.commit()
+    except Exception as e:
+        # Achievement check failed, don't block the response
+        import logging
+        logging.error(f"Achievement check failed: {e}")
+        await db.rollback()
+    
+    # Add new achievements to result
+    if new_achievements:
+        result["new_achievements"] = new_achievements
+    
     return result
 
 
@@ -516,11 +694,56 @@ async def free_chat(
     if "error" in response:
         raise AppException("FREE_CHAT_ERROR", 400, response["error"])
 
+    # Achievement trigger logic (same as submit_choice and custom-input)
+    new_achievements = []
+    try:
+        from app.models.gallery import Achievement
+        from app.api.v1.achievements import ACHIEVEMENT_CATALOG
+        
+        # ACH-001: First dialogue completion
+        dialogue_count_result = await db.execute(
+            select(func.count()).select_from(GameSession).where(
+                GameSession.user_id == UUID(user_id)
+            )
+        )
+        dialogue_count = dialogue_count_result.scalar() or 0
+        
+        if dialogue_count >= 1:
+            ach_001_check = await db.execute(
+                select(Achievement).where(
+                    Achievement.user_id == UUID(user_id),
+                    Achievement.achievement_id == "ACH-001"
+                )
+            )
+            if not ach_001_check.scalar_one_or_none():
+                new_ach = Achievement(
+                    user_id=UUID(user_id),
+                    achievement_id="ACH-001",
+                    title=ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    description=ACHIEVEMENT_CATALOG["ACH-001"]["description"],
+                    icon_url=ACHIEVEMENT_CATALOG["ACH-001"]["icon"],
+                    unlocked_at=datetime.utcnow()
+                )
+                db.add(new_ach)
+                await db.flush()
+                new_achievements.append({
+                    "id": "ACH-001",
+                    "name": ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    "description": ACHIEVEMENT_CATALOG["ACH-001"]["description"]
+                })
+        
+        await db.commit()
+    except Exception as e:
+        import logging
+        logging.error(f"Achievement check failed in free-chat: {e}")
+        await db.rollback()
+
     return {
         "session_id": session_id,
         "reply": response.get("reply", ""),
         "emotion": response.get("emotion", "neutral"),
         "character_id": response.get("character_id"),
+        "new_achievements": new_achievements,
     }
 
 
@@ -573,66 +796,95 @@ async def submit_custom_input(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    DEV-BE-002: 玩家自由输入（走陪伴Agent）。
+    DEV-BE-002: 玩家自由输入推进剧情。
     
-    使用陪伴Agent而非剧情Agent，不推进剧情。
+    使用 narrative_engine 生成角色回应，并返回选项让剧情继续。
     """
     if not request.text.strip():
         raise AppException("EMPTY_INPUT", 400, "输入不能为空")
 
     await _verify_session_ownership(UUID(session_id), user_id, db)
 
-    # DEV-BE-002: Use companion agent instead of narrative engine
-    from app.services.free_chat_service import free_chat_service
-    from app.models.game import GameSession
-    from sqlalchemy import select
+    # CR-016: Check quota before processing (user action = deduct quota)
+    from app.services.quota_service import QuotaService
+    from app.services.paywall_service import PaywallService
+    quota_service = QuotaService(db)
     
-    # Get session to find character context
-    session_result = await db.execute(
-        select(GameSession).where(GameSession.id == UUID(session_id))
+    quota_status = await quota_service.get_user_quota_status(UUID(user_id))
+    quota_exhausted = quota_status["remaining"] == 0 and not quota_status["is_exempt"]
+    
+    if quota_exhausted:
+        trigger_result = await paywall_service.check_trigger(UUID(user_id), "T1_quota")
+        return {
+            "error": "quota_exhausted",
+            "message": "对话额度已用完",
+            "remaining_quota": 0,
+            "paywall_trigger": trigger_result,
+        }
+
+    # Use narrative_engine to process custom input and get response with choices
+    engine = NarrativeEngine(db)
+    result = await engine.process_custom_input(
+        session_id=UUID(session_id),
+        user_id=UUID(user_id),
+        user_text=request.text.strip(),
     )
-    game_session = session_result.scalar_one_or_none()
     
-    # Get character_id from metadata or query database
-    character_id = game_session.metadata.get("character_id") if game_session and game_session.metadata else None
+    # CR-016: Consume quota after successful custom input
+    if not quota_status["is_exempt"]:
+        await quota_service.consume_quota(UUID(user_id))
     
-    if not character_id and game_session:
-        # Query database for main character of this script
-        from app.models.script import Character
-        char_result = await db.execute(
-            select(Character)
-            .where(
-                Character.script_id == game_session.script_id,
-                Character.is_main == True
-            )
-            .limit(1)
-        )
-        main_char = char_result.scalar_one_or_none()
+    # Get updated quota status
+    updated_quota_status = await quota_service.get_user_quota_status(UUID(user_id))
+    result["remaining_quota"] = updated_quota_status["remaining"]
+    
+    # Achievement trigger logic (same as submit_choice)
+    new_achievements = []
+    try:
+        from app.models.gallery import Achievement
+        from app.api.v1.achievements import ACHIEVEMENT_CATALOG
+        from app.models.game import GameSession
         
-        if main_char:
-            character_id = str(main_char.id)
-        else:
-            # Fallback: get first character of the script
-            char_result = await db.execute(
-                select(Character)
-                .where(Character.script_id == game_session.script_id)
-                .limit(1)
+        # ACH-001: First dialogue completion
+        dialogue_count_result = await db.execute(
+            select(func.count()).select_from(GameSession).where(
+                GameSession.user_id == UUID(user_id)
             )
-            first_char = char_result.scalar_one_or_none()
-            character_id = str(first_char.id) if first_char else "default"
-    character_id = str(game_session.route_id) if game_session else "default"
-    script_id = str(game_session.script_id) if game_session else None
+        )
+        dialogue_count = dialogue_count_result.scalar() or 0
+        
+        if dialogue_count >= 1:
+            ach_001_check = await db.execute(
+                select(Achievement).where(
+                    Achievement.user_id == UUID(user_id),
+                    Achievement.achievement_id == "ACH-001"
+                )
+            )
+            if not ach_001_check.scalar_one_or_none():
+                new_ach = Achievement(
+                    user_id=UUID(user_id),
+                    achievement_id="ACH-001",
+                    title=ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    description=ACHIEVEMENT_CATALOG["ACH-001"]["description"],
+                    icon_url=ACHIEVEMENT_CATALOG["ACH-001"]["icon"],
+                    unlocked_at=datetime.utcnow()
+                )
+                db.add(new_ach)
+                await db.flush()
+                new_achievements.append({
+                    "id": "ACH-001",
+                    "name": ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                    "description": ACHIEVEMENT_CATALOG["ACH-001"]["description"]
+                })
+        
+        await db.commit()
+    except Exception as e:
+        import logging
+        logging.error(f"Achievement check failed in custom-input: {e}")
+        await db.rollback()
     
-    result = await free_chat_service.send_message(
-        user_id=user_id,
-        character_id=character_id,
-        message=request.text.strip(),
-        script_id=script_id,
-        session_id=session_id,
-    )
-    
-    # Add flag to indicate this doesn't advance plot
-    result["advances_plot"] = False
+    # Add new_achievements to result
+    result["new_achievements"] = new_achievements
     
     return result
 
@@ -1038,13 +1290,23 @@ async def store_dialogue(
     if not session:
         raise AppException("SESSION_NOT_FOUND", 404, "Game session not found")
     
+    # Validate character_id exists in characters table (foreign key constraint)
+    valid_character_id = None
+    if request.character_id:
+        from app.models.script import Character
+        char_result = await db.execute(
+            select(Character).where(Character.id == UUID(request.character_id))
+        )
+        if char_result.scalar_one_or_none():
+            valid_character_id = UUID(request.character_id)
+    
     # Create dialogue record
     dialogue = DialogueHistory(
         session_id=UUID(session_id),
         user_id=UUID(user_id),
         role=request.role,
         content=request.content,
-        character_id=UUID(request.character_id) if request.character_id else None,
+        character_id=valid_character_id,
         character_name=request.character_name,
         emotion=request.emotion,
     )

@@ -113,7 +113,6 @@
               <div class="script-meta">
                 <span class="script-rating">
                   <span class="stars">{{ renderStars(script.rating) }}</span>
-                  <span class="rating-num">{{ script.rating.toFixed(1) }}</span>
                 </span>
                 <span class="script-routes">{{ script.routes }} 条路线</span>
               </div>

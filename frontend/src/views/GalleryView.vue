@@ -88,45 +88,54 @@
               <!-- 成就统计 -->
               <div v-if="achievements.length > 0" class="achievement-stats">
                 <div class="stat-item">
-                  <div class="stat-value">{{ achievements.filter(a => a.is_unlocked).length }}</div>
-                  <div class="stat-label">已解锁</div>
+                  <div class="stat-value">{{ achievements.filter(a => a.isUnlocked).length }}</div>
+                  <div class="stat-label">{{ $t('gallery.unlocked') }}</div>
                 </div>
                 <div class="stat-item">
                   <div class="stat-value">{{ achievements.length }}</div>
-                  <div class="stat-label">总成就</div>
+                  <div class="stat-label">{{ $t('gallery.achievements') }}</div>
                 </div>
                 <div class="stat-item">
-                  <div class="stat-value">{{ Math.round(achievements.filter(a => a.is_unlocked).length / achievements.length * 100) }}%</div>
-                  <div class="stat-label">完成度</div>
+                  <div class="stat-value">{{ Math.round(achievements.filter(a => a.isUnlocked).length / achievements.length * 100) }}%</div>
+                  <div class="stat-label">{{ $t('gallery.achieved') }}</div>
                 </div>
               </div>
               
               <!-- 成就卡片网格 -->
               <div class="achievement-grid">
                 <div v-for="ach in achievements" :key="ach.id" class="achievement-card glass-card"
-                  :class="{ 'ach-unlocked': ach.is_unlocked, 'ach-locked': !ach.is_unlocked }">
+                  :class="{ 'ach-unlocked': ach.isUnlocked, 'ach-locked': !ach.isUnlocked, 'ach-claimed': ach.isClaimed }">
                   <div class="ach-header">
-                    <div class="ach-icon">{{ ach.is_unlocked ? '🏆' : '🔒' }}</div>
-                    <div v-if="ach.reward && ach.reward.amount" class="ach-reward">💎 {{ ach.reward.amount }}</div>
+                    <div class="ach-icon">{{ ach.isUnlocked ? ach.icon : '🔒' }}</div>
+                    <div v-if="ach.reward" class="ach-reward">{{ parseReward(ach.reward) }}</div>
                   </div>
                   <div class="ach-body">
-                    <div class="ach-name">{{ ach.name || ach.id.slice(0, 8) }}</div>
-                    <div class="ach-desc">{{ ach.description || '' }}</div>
+                    <div class="ach-name">{{ ach.name }}</div>
+                    <div class="ach-desc">{{ ach.description }}</div>
                     <!-- 进度条 -->
-                    <div v-if="ach.progress && ach.progress.percentage !== undefined" class="ach-progress">
-                      <n-progress 
-                        type="line" 
-                        :percentage="ach.progress.percentage" 
-                        :height="4" 
-                        :show-indicator="false"
-                        :color="ach.is_unlocked ? '#86efac' : '#a78bfa'"
-                        rail-color="rgba(167,139,250,0.1)"
-                      />
-                      <div class="progress-text">{{ ach.progress.current }}/{{ ach.progress.target }}</div>
+                    <div v-if="showProgress(ach)" class="ach-progress">
+                      <div class="progress-text">{{ formatCondition(ach) }}</div>
+                      <div class="progress-bar">
+                        <div class="progress-fill" :style="{ width: `${getProgressPercentage(ach)}%` }"></div>
+                      </div>
                     </div>
-                    <div v-if="ach.unlocked_at" class="ach-date">
+                    <div v-if="ach.unlockedAt" class="ach-date">
                       <span class="date-icon">📅</span>
-                      {{ formatDate(ach.unlocked_at) }}
+                      {{ formatDate(ach.unlockedAt) }}
+                    </div>
+                    <!-- 领取按钮 -->
+                    <div v-if="ach.isUnlocked && !ach.isClaimed" class="ach-claim-section">
+                      <n-button 
+                        type="primary" 
+                        size="small"
+                        :loading="claimingId === ach.id"
+                        @click="claimAchievement(ach)"
+                      >
+                        {{ $t('achievement.claim') }}
+                      </n-button>
+                    </div>
+                    <div v-else-if="ach.isClaimed" class="ach-claimed-badge">
+                      ✓ {{ $t('achievement.claimed') }}
                     </div>
                   </div>
                 </div>
@@ -154,10 +163,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { api } from '@/api/http';
 
+const route = useRoute();
 const { t } = useI18n();
 
 interface Collection { id: string; name: string; description?: string; items_count: number; items_unlocked: number; cover_url: string; }
@@ -165,16 +176,19 @@ interface CGItem { id: string; collection_id: string; title: string; thumbnail_u
 interface Character { character_id: string; character_name?: string; value: number; }
 interface Achievement { 
   id: string; 
-  name?: string; 
-  description?: string; 
-  is_unlocked: boolean; 
-  unlocked_at?: string;
-  reward?: { type: string; amount: number; claimed: boolean };
-  progress?: { current: number; target: number; percentage: number };
+  name: string; 
+  description: string;
+  icon: string;
+  isUnlocked: boolean; 
+  unlockedAt: string | null;
+  isClaimed: boolean;
+  condition?: { type: string; target?: number; current?: number; value?: number } | string;
+  progress?: { current: number; target: number; percentage?: number };
+  reward?: { type: string; amount: number } | string;
 }
 
 const message = useMessage();
-const activeTab = ref('cgs');
+const activeTab = ref((route.query.tab as string) || 'cgs');
 const showCGModal = ref(false);
 const selectedCG = ref<CGItem | null>(null);
 const collections = ref<Collection[]>([]);
@@ -186,10 +200,85 @@ const achievements = ref<Achievement[]>([]);
 const loadingCollections = ref(false);
 const loadingAffections = ref(false);
 const loadingAchievements = ref(false);
+const claimingId = ref<string | null>(null);
 
 function getInitial(name: string): string { return name.charAt(0).toUpperCase(); }
-function formatDate(iso: string): string { return new Date(iso).toLocaleDateString(); }
+function formatDate(iso: string | null): string { 
+  if (!iso) return '未知时间';
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '未知时间';
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
 function previewCG(cg: CGItem) { selectedCG.value = cg; showCGModal.value = true; }
+
+function showProgress(ach: Achievement): boolean {
+  if (ach.isUnlocked) return false;
+  return !!(ach.condition || ach.progress);
+}
+
+function parseConditionObj(ach: Achievement): any {
+  if (!ach.condition) return null;
+  return typeof ach.condition === 'string' ? JSON.parse(ach.condition) : ach.condition;
+}
+
+function formatCondition(ach: Achievement): string {
+  const cond = parseConditionObj(ach);
+  if (!cond) return '';
+  const typeMap: Record<string, string> = {
+    'dialogue_count': '对话次数',
+    'completed_scripts': '完成剧本',
+    'affection': '好感度',
+    'cg_count': '收集 CG',
+    'gifts_sent': '赠送礼物',
+    'choice_count': '做出选择',
+    'streak': '连续登录',
+    'friends_count': '添加好友',
+    'branches_explored': '探索分支',
+    'characters_unlocked': '解锁角色',
+    'all_good_endings': '达成所有好结局',
+    'all_achievements_unlocked': '解锁所有成就',
+    'dialogue': '对话次数',
+    'choice': '做出选择',
+    'ending': '解锁结局',
+    'script': '完成剧本',
+    'checkin': '签到',
+    'gift': '赠送礼物',
+    'fragments': '碎片收集',
+    'cg': '收集 CG',
+  };
+  const label = typeMap[cond.type] || cond.type;
+  const current = ach.progress?.current ?? cond.current ?? 0;
+  const target = ach.progress?.target ?? cond.target ?? cond.value ?? '?';
+  return `${label}：${current} / ${target}`;
+}
+
+function getProgressPercentage(ach: Achievement): number {
+  // Prefer progress field from API
+  if (ach.progress) {
+    const { current, target } = ach.progress;
+    if (!target || target <= 0) return 0;
+    return Math.min(100, Math.round((current / target) * 100));
+  }
+  const cond = parseConditionObj(ach);
+  if (!cond) return 0;
+  const current = cond.current ?? 0;
+  const target = cond.target ?? cond.value ?? 1;
+  if (!target || target <= 0) return 0;
+  return Math.min(100, Math.round((current / target) * 100));
+}
+
+function parseReward(reward: any): string {
+  if (!reward) return '';
+  const parsed = typeof reward === 'string' ? JSON.parse(reward) : reward;
+  const typeMap: Record<string, string> = {
+    'fragments': '碎片',
+    'fragment': '碎片',
+    'gold': '金币',
+    'exp': '经验',
+  };
+  const label = typeMap[parsed.type] || parsed.type;
+  return `🎁 ${parsed.amount} ${label}`;
+}
 
 async function openCollection(col: Collection) {
   activeCollection.value = col;
@@ -237,10 +326,23 @@ async function loadCharacters() {
 async function loadAchievements() {
   loadingAchievements.value = true;
   try {
-    const r = await api.get<{ achievements: Achievement[] }>('/users/me/achievements');
+    const r = await api.get<{ achievements: Achievement[] }>('/achievements');
     achievements.value = r.achievements || [];
   } catch { message.error(t('common.error')); }
   finally { loadingAchievements.value = false; }
+}
+
+async function claimAchievement(ach: Achievement) {
+  claimingId.value = ach.id;
+  try {
+    await api.post('/achievements/claim', { achievement_id: ach.id });
+    ach.isClaimed = true;
+    message.success(`领取成功：${ach.name}`);
+  } catch (err: any) {
+    message.error(err?.message || '领取失败');
+  } finally {
+    claimingId.value = null;
+  }
 }
 
 onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
@@ -347,15 +449,26 @@ onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
 .ach-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--text-main); }
 .ach-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
 .ach-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-top: 8px;
   margin-bottom: 8px;
 }
 .ach-progress .progress-text {
   font-size: 11px;
   color: var(--text-muted);
-  min-width: 32px;
+  margin-bottom: 4px;
+}
+.ach-progress .progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ach-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #f472b6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 .ach-date {
   display: flex;
@@ -366,6 +479,21 @@ onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
   margin-top: 8px;
 }
 .date-icon { font-size: 12px; }
+
+/* 成就领取 */
+.ach-claim-section {
+  margin-top: 12px;
+}
+.ach-claimed-badge {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #86efac;
+  background: rgba(134, 239, 172, 0.1);
+  padding: 4px 10px;
+  border-radius: 8px;
+  display: inline-block;
+}
 
 /* CG 详情弹框 */
 .cg-detail-image { width: 100%; border-radius: 12px; overflow: hidden; margin-bottom: 12px; }

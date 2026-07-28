@@ -160,7 +160,7 @@ import { useMessage, NModal, NForm, NFormItem } from 'naive-ui';
 import { useHead } from '@vueuse/head';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
-import { getPosts, searchPosts, getComments, createComment, deleteComment } from '@/api/community';
+import { getPosts, searchPosts, getComments, createComment, deleteComment, getPostDetail } from '@/api/community';
 import type { Post, PostTab } from '@/types/community';
 import SearchBar from '@/components/SearchBar.vue';
 import PostCard from '@/components/PostCard.vue';
@@ -343,8 +343,24 @@ function handleImageClick(post: Post, index: number) {
   console.log('Image clicked:', post.images[index]);
 }
 
-function handleSelectPost(post: Post) {
-  selectedPost.value = post;
+async function handleSelectPost(post: Post) {
+  try {
+    // 调用详情 API 增加浏览量
+    const detail = await getPostDetail(post.id);
+    selectedPost.value = {
+      ...post,
+      ...detail,
+      stats: {
+        views: detail.views_count || 0,
+        comments: detail.comment_count || 0,
+        likes: detail.like_count || 0
+      }
+    };
+  } catch (error) {
+    console.error('加载帖子详情失败:', error);
+    // 即使失败也显示帖子，但不增加浏览量
+    selectedPost.value = post;
+  }
 }
 
 async function loadComments() {

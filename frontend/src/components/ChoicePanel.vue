@@ -1,7 +1,11 @@
 <template>
   <div class="choice-panel">
     <div class="choice-label">做出你的选择</div>
-    <div class="choice-list">
+    <div v-if="loading" class="choice-loading">
+      <div class="loading-spinner"></div>
+      <span>思考中...</span>
+    </div>
+    <div v-else class="choice-list">
       <div
         v-for="(choice, i) in choices"
         :key="choice.id"
@@ -43,13 +47,6 @@
         <div class="choice-arrow" v-if="!choice.locked">→</div>
       </div>
     </div>
-    
-    <!-- 好感度变化动画 -->
-    <transition name="fade">
-      <div v-if="showAffectionAnimation" class="affection-animation" :class="affectionDelta > 0 ? 'positive' : 'negative'">
-        {{ affectionDelta > 0 ? '+' : '' }}{{ affectionDelta }} 好感度
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -68,27 +65,19 @@ interface Choice {
   hint?: string;
 }
 
-defineProps<{ choices: Choice[] }>();
+defineProps<{ 
+  choices: Choice[];
+  loading?: boolean;
+}>();
 const emit = defineEmits<{ select: [id: string] }>();
 
 const selectedId = ref<string | null>(null);
 const submitting = ref(false);
-const showAffectionAnimation = ref(false);
-const affectionDelta = ref(0);
 
 async function handleSelect(choice: Choice) {
   if (submitting.value || choice.locked) return;
   selectedId.value = choice.id;
   submitting.value = true;
-  
-  // 显示好感度变化动画
-  if (choice.affection_delta) {
-    affectionDelta.value = choice.affection_delta;
-    showAffectionAnimation.value = true;
-    setTimeout(() => {
-      showAffectionAnimation.value = false;
-    }, 1500);
-  }
   
   try {
     emit('select', choice.id);
@@ -120,6 +109,29 @@ watch(selectedId, (newId) => {
   margin-bottom: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.choice-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(192, 132, 252, 0.2);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .choice-list {

@@ -228,13 +228,13 @@ async def list_achievements(
     unlocked_result = await db.execute(
         select(Achievement).where(Achievement.user_id == uid)
     )
-    unlocked = {a.achievement_id: a for a in unlocked_result.scalars().all()}
+    unlocked = {a.achievement_id.upper(): a for a in unlocked_result.scalars().all()}
 
     # Get user's claimed achievements
     claimed_result = await db.execute(
         select(UserAchievementClaim).where(UserAchievementClaim.user_id == uid)
     )
-    claimed = {c.achievement_id: c for c in claimed_result.scalars().all()}
+    claimed = {c.achievement_id.upper(): c for c in claimed_result.scalars().all()}
 
     items = []
     for ach_id, defn in ACHIEVEMENT_CATALOG.items():
@@ -292,7 +292,7 @@ async def trigger_achievement(
     Called by game engine when condition is met, or manually for testing.
     """
     uid = uuid.UUID(user_id)
-    ach_id = request.achievement_id
+    ach_id = request.achievement_id.upper()  # 转换为大写以匹配 CATALOG
 
     if ach_id not in ACHIEVEMENT_CATALOG:
         raise AppException(
@@ -319,7 +319,7 @@ async def trigger_achievement(
     achievement = Achievement(
         user_id=uid,
         achievement_id=ach_id,
-        title=defn["title"],
+        title=defn["name"],
         description=defn["description"],
         icon_url=defn["icon"],
     )
@@ -329,7 +329,7 @@ async def trigger_achievement(
 
     return {
         "achievement_id": ach_id,
-        "title": defn["title"],
+        "title": defn["name"],
         "description": defn["description"],
         "icon": defn["icon"],
         "unlocked_at": achievement.unlocked_at.isoformat(),
@@ -353,7 +353,7 @@ async def claim_achievement(
     Returns 400 if not unlocked, 409 if already claimed.
     """
     uid = uuid.UUID(user_id)
-    ach_id = request.achievement_id
+    ach_id = request.achievement_id.upper()  # 转换为大写以匹配 CATALOG
 
     if ach_id not in ACHIEVEMENT_CATALOG:
         raise AppException(
@@ -369,7 +369,7 @@ async def claim_achievement(
             Achievement.achievement_id == ach_id,
         )
     )
-    if not unlocked.scalar_one_or_none():
+    if not unlocked.scalars().first():
         raise AppException(
             ErrorCode.ACHIEVEMENT_NOT_UNLOCKED,
             400,
@@ -383,7 +383,7 @@ async def claim_achievement(
             UserAchievementClaim.achievement_id == ach_id,
         )
     )
-    if claimed.scalar_one_or_none():
+    if claimed.scalars().first():
         raise AppException(
             ErrorCode.ACHIEVEMENT_ALREADY_CLAIMED,
             409,

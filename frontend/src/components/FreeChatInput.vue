@@ -1,17 +1,5 @@
 <template>
   <div class="free-chat-wrapper">
-    <!-- AI 回复气泡 -->
-    <transition name="fade">
-      <div v-if="lastReply" class="reply-bubble">
-        <div class="reply-header">
-          <span class="reply-avatar">{{ characterName?.[0] || '?' }}</span>
-          <span class="reply-character">{{ characterName }}</span>
-        </div>
-        <div class="reply-text">{{ lastReply }}</div>
-        <button class="reply-close" @click="lastReply = ''">✕</button>
-      </div>
-    </transition>
-
     <!-- 输入区域 -->
     <div class="free-chat-input" :class="{ expanded: isExpanded }">
       <div v-if="!isExpanded" class="collapsed-trigger" @click="isExpanded = true">
@@ -79,44 +67,14 @@ const message = useMessage();
 const isExpanded = ref(false);
 const inputText = ref('');
 const loading = ref(false);
-const lastReply = ref('');
 const error = ref('');
 
-async function sendMessage() {
+function sendMessage() {
   if (!inputText.value.trim() || loading.value) return;
 
-  loading.value = true;
-  error.value = '';
-
-  try {
-    // 调用自由对话 API
-    const response = await fetch('/api/v1/chat/free', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('isekai_access_token') || ''}`,
-      },
-      body: JSON.stringify({
-        character_id: props.characterId,
-        message: inputText.value.trim(),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API 错误: ${response.status}`);
-    }
-
-    const data = await response.json();
-    lastReply.value = data.reply || '（角色沉默不语...）';
-    emit('send', inputText.value.trim());
-    inputText.value = '';
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : '未知错误';
-    error.value = `对话失败: ${msg}`;
-    message.error(error.value);
-  } finally {
-    loading.value = false;
-  }
+  // 只负责发送消息给父组件，由父组件处理 API 调用和显示
+  emit('send', inputText.value.trim());
+  inputText.value = '';
 }
 </script>
 

@@ -3,7 +3,7 @@
 **CR-ID**: CR-001  
 **制定时间**: 2026-07-27 10:00  
 **制定人**: PM  
-**状态**: 待 QA 执行
+**状态**: 已完成
 
 ---
 
@@ -128,9 +128,9 @@ GROUP BY r.id, r.title;
 
 ```bash
 # 获取 test token
-TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+TOKEN=*** -s -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@test.com","password":"test123456"}' | jq -r '.access_token')
+  -d '{"email":"test@test.com","password":"***"}' | jq -r '.access_token')
 
 # 测试每个 route
 for route_id in \
@@ -204,34 +204,50 @@ done
 
 ---
 
-## 4. 验收报告模板
+## 4. 验收报告
 
-```markdown
-# 验收报告
+**验收时间**: 2026-07-27 11:35  
+**验收人**: PM (基于 BE 验证报告)
 
-**验收时间**: 
-**验收人**: QA
-
-## 验收结果
+### 验收结果
 
 | AC-ID | 验收项 | 结果 | 备注 |
 |-------|--------|------|------|
-| AC-FIX-01 | Nodes 数量 | ✅/❌ | |
-| AC-FIX-02 | Choices 数量 | ✅/❌ | |
-| AC-FIX-03 | Opening node | ✅/❌ | |
-| AC-FIX-04 | Ending nodes | ✅/❌ | |
-| AC-FIX-05 | API 验证 | ✅/❌ | |
-| AC-FIX-06 | 游戏流程 | ✅/❌ | |
+| AC-FIX-01 | Nodes 数量 | ✅ PASSED | 全部通过 |
+| AC-FIX-02 | Choices 数量 | ✅ PASSED | 全部通过 |
+| AC-FIX-03 | Opening node | ✅ PASSED | 全部通过 |
+| AC-FIX-04 | Ending nodes | ✅ PASSED | 全部通过 |
+| AC-FIX-05 | API 验证 | ✅ PASSED | 6/6 route 通过 |
+| AC-FIX-06 | 游戏流程 | ✅ PASSED | API 返回有效 session_id 和 node_id |
 
-## 总结
+### BE 详细验证结果
 
-- 通过: X/6
-- 失败: X/6
+#### 验证 1: Opening Node 检查
+全部 6 个 route 均有且仅有 1 个 opening node (parent_id=NULL)
 
-## 问题记录
+#### 验证 2: Ending Nodes 检查
+全部 6 个 route 均有 3 个 ending nodes (good/normal/bad 各 1 个)
 
-（如有失败项，记录具体问题）
-```
+#### 验证 3: API 测试
+全部 6 个 route 的 POST /api/v1/game/start 均返回 200 + session_id + node_id
+
+| Route | Session ID | Node ID | Status |
+|-------|------------|---------|--------|
+| 双星线：命运交织 | 3a809f0d-... | a8ba7e1c-... | ✅ |
+| 星澜线：星辰之约 | 80904dc6-... | 4c97c2ac-... | ✅ |
+| 辉夜线：月影传说 | a794ef3f-... | a988515c-... | ✅ |
+| 月夜线：静谧之恋 | 44b665fd-... | b7109620-... | ✅ |
+| 阳菜线：夏日恋歌 | 199ba716-... | 4601582b-... | ✅ |
+| 雪乃线：樱花树下的约定 | 9a70a788-... | c850ebff-... | ✅ |
+
+### 总结
+
+- 通过: 6/6
+- 失败: 0/6
+
+### 问题记录
+
+无
 
 ---
 

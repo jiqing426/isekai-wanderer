@@ -162,7 +162,7 @@
               </n-button>
             </div>
 
-            <div class="guide-card" @click="$router.push('/achievements')">
+            <div class="guide-card" @click="$router.push('/gallery?tab=achievements')">
               <div class="guide-icon">🏆</div>
               <div class="guide-info">
                 <h3>{{ $t('fragment.achievements') }}</h3>

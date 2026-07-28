@@ -27,25 +27,39 @@ REASON_LABELS = {
     "streak_milestone": "连续签到奖励",
     "gift_send": "送礼支出",
     "gift_receive": "收到礼物",
+    "gift": "送礼支出",
     "dialogue_quota_purchase": "碎片兑换对话",
     "shop_purchase": "商城购买",
+    "shop_exchange": "碎片兑换商品",
     "refund": "退款",
     "admin_adjustment": "管理员调整",
     "system_reward": "系统奖励",
     "achievement_reward": "成就奖励",
+    "achievement_unlock": "成就解锁奖励",
+    "achievement_claim": "成就奖励",
+    "recharge": "充值",
+    "purchase": "碎片购买",
+    "qa_test_topup": "测试充值",
 }
 
 
 def _get_reason_label(reason: str) -> str:
     """将交易类型映射为中文标签"""
-    # 精确匹配
+    # 1. 精确匹配
     if reason in REASON_LABELS:
         return REASON_LABELS[reason]
-    # 前缀匹配（如 streak_milestone_day_3）
+    
+    # 2. 提取基础类型（去除 : 后的参数）
+    base_type = reason.split(":")[0] if ":" in reason else reason
+    if base_type in REASON_LABELS:
+        return REASON_LABELS[base_type]
+    
+    # 3. 前缀匹配（如 streak_milestone_day_3）
     for key, label in REASON_LABELS.items():
         if reason.startswith(key):
             return label
-    # 默认返回原始值
+    
+    # 4. 默认返回原始值
     return reason
 
 

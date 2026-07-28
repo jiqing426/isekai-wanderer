@@ -193,75 +193,13 @@
 
     <!-- ═══ 礼物弹框 ═══ -->
     <!-- 礼物选择 -->
-    <n-modal v-model:show="showGiftModal" preset="card" style="max-width: 480px" :bordered="false" :title="'🎁 赠送礼物给 ' + (character?.name || '')">
-      <div class="gift-modal-body">
-        <div class="gift-balance-row">
-          <span class="gift-balance-label">我的碎片</span>
-          <span class="gift-balance-value">💎 {{ shardBalance }}</span>
-        </div>
-        <n-spin :show="giftsLoading">
-          <div class="gift-grid" v-if="gifts.length > 0">
-            <div
-              v-for="gift in gifts"
-              :key="gift.id"
-              class="gift-card"
-              :class="{ selected: selectedGift?.id === gift.id, disabled: gift.cost > shardBalance }"
-              @click="selectGift(gift)"
-            >
-              <span class="gift-icon">{{ giftIcon(gift.id) }}</span>
-              <div class="gift-name">{{ gift.name }}</div>
-              <div class="gift-meta">
-                <span class="gift-cost">💎 {{ gift.cost }}</span>
-                <span class="gift-bonus" :class="{ high: gift.affection_bonus >= 10 }">💕 +{{ gift.affection_bonus }}</span>
-              </div>
-            </div>
-          </div>
-          <n-empty v-else-if="!giftsLoading" description="暂无礼物" />
-        </n-spin>
-      </div>
-    </n-modal>
-
-    <!-- 确认赠送 -->
-    <n-modal v-model:show="showConfirm" :mask-closable="false" style="width: 520px; max-width: 92vw" :bordered="false">
-      <div class="confirm-card glass-card" v-if="selectedGift">
-        <div class="confirm-icon">{{ giftIcon(selectedGift.id) }}</div>
-        <h3 class="confirm-title">确认赠送</h3>
-        <div class="confirm-name">{{ selectedGift.name }}</div>
-        <div class="confirm-meta">
-          <span>💎 {{ selectedGift.cost }} 碎片</span>
-          <span class="bonus">💕 +{{ selectedGift.affection_bonus }} 好感</span>
-        </div>
-        <p class="confirm-desc">"{{ selectedGift.description }}"</p>
-        <div class="confirm-target">赠送给 <strong>{{ character?.name }}</strong></div>
-        <div class="confirm-actions">
-          <n-button @click="showConfirm = false" secondary>取消</n-button>
-          <n-button type="primary" @click="confirmSend" :loading="giftSending">🎁 确认赠送</n-button>
-        </div>
-      </div>
-    </n-modal>
-
-    <!-- 赠送结果 -->
-    <n-modal v-model:show="showResult" style="max-width: 360px" :bordered="false">
-      <div class="result-card glass-card" v-if="sendResult">
-        <div class="result-icon">🎉</div>
-        <h3 class="result-title">赠送成功！</h3>
-        <div class="result-stats">
-          <div class="result-stat">
-            <span class="result-label">好感度变化</span>
-            <span class="result-value up">💕 +{{ sendResult.affection_gained }}</span>
-          </div>
-          <div class="result-stat">
-            <span class="result-label">当前好感度</span>
-            <span class="result-value">{{ sendResult.new_affection_value }}</span>
-          </div>
-          <div class="result-stat">
-            <span class="result-label">剩余碎片</span>
-            <span class="result-value">💎 {{ sendResult.remaining_shards }}</span>
-          </div>
-        </div>
-        <n-button type="primary" @click="showResult = false" block>好的</n-button>
-      </div>
-    </n-modal>
+    <!-- 统一送礼组件 -->
+    <GiftModal
+      v-model="showGiftModal"
+      :target-name="character?.name || '角色'"
+      :target-id="characterId"
+      @gift-sent="onGiftSent"
+    />
   </div>
 </template>
 
@@ -272,8 +210,9 @@ import { useMessage } from 'naive-ui';
 import { useHead } from '@vueuse/head';
 import { useI18n } from 'vue-i18n';
 import { gameApi } from '@/api/game';
-import type { CharacterDetail, GiftItem } from '@/api/game';
+import type { CharacterDetail } from '@/api/game';
 import AffectionMeter from '@/components/AffectionMeter.vue';
+import GiftModal from '@/components/GiftModal.vue';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -283,6 +222,7 @@ const message = useMessage();
 const character = ref<CharacterDetail | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
+const characterId = route.params.characterId as string;
 
 // 表情切换 (暂时隐藏)
 // const currentEmotion = ref<string>('normal');
@@ -389,14 +329,6 @@ function showUpgradePrompt() {
 
 // ── 礼物相关 ──
 const showGiftModal = ref(false);
-const showConfirm = ref(false);
-const showResult = ref(false);
-const gifts = ref<GiftItem[]>([]);
-const giftsLoading = ref(false);
-const selectedGift = ref<GiftItem | null>(null);
-const giftSending = ref(false);
-const shardBalance = ref(0);
-const sendResult = ref<{ new_affection_value: number; affection_gained: number; remaining_shards: number } | null>(null);
 
 const personalityMap: Record<string, () => string> = {
   gentle: () => t('character.gentle'),
@@ -509,60 +441,12 @@ function nameInitial(name: string): string {
 //   }
 // }
 
-function giftIcon(giftId: string): string {
-  const icons: Record<string, string> = {
-    'gift-001': '💐', 'gift-002': '🍪', 'gift-003': '✨',
-    'gift-004': '📚', 'gift-005': '🔮',
-  };
-  return icons[giftId] || '🎁';
-}
-
-async function openGiftModal() {
+function openGiftModal() {
   showGiftModal.value = true;
-  giftsLoading.value = true;
-  try {
-    const [giftResp, balanceResp] = await Promise.all([
-      gameApi.getGiftCatalog(),
-      gameApi.getShardBalance(),
-    ]);
-    gifts.value = giftResp.gifts;
-    shardBalance.value = balanceResp.balance;
-  } catch {
-    message.error('加载礼物列表失败');
-  } finally {
-    giftsLoading.value = false;
-  }
 }
 
-function selectGift(gift: GiftItem) {
-  if (gift.cost > shardBalance.value) {
-    message.warning('碎片不足，无法赠送此礼物');
-    return;
-  }
-  selectedGift.value = gift;
-  showGiftModal.value = false;
-  showConfirm.value = true;
-}
-
-async function confirmSend() {
-  if (!selectedGift.value || !character.value) return;
-  giftSending.value = true;
-  try {
-    const result = await gameApi.sendGift(character.value.id, selectedGift.value.id);
-    sendResult.value = result;
-    shardBalance.value = result.remaining_shards;
-    // 更新好感度显示
-    if (character.value.affection) {
-      character.value.affection.value = result.new_affection_value;
-    }
-    showConfirm.value = false;
-    showResult.value = true;
-    message.success(`成功赠送「${selectedGift.value.name}」！`);
-  } catch (err) {
-    message.error(err instanceof Error ? err.message : '赠送失败');
-  } finally {
-    giftSending.value = false;
-  }
+function onGiftSent() {
+  // 好感度由 GiftModal 回调刷新，这里可以做额外处理
 }
 
 async function loadCharacter() {

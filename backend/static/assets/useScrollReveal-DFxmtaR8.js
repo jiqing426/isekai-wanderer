@@ -1,0 +1,2 @@
+import{h as c,I as s}from"./vendor-vue-CA_lRpnf.js";function o(t){let e=null;c(()=>{const l=(t==null?void 0:t.value)??document;e=new IntersectionObserver(a=>{a.forEach(n=>{n.isIntersecting&&(n.target.classList.add("revealed"),e==null||e.unobserve(n.target))})},{threshold:.12,rootMargin:"0px 0px -40px 0px"}),l.querySelectorAll(".reveal, .reveal-left, .reveal-right, .reveal-scale").forEach(a=>e==null?void 0:e.observe(a))}),s(()=>{e==null||e.disconnect()})}export{o as u};
+//# sourceMappingURL=useScrollReveal-DFxmtaR8.js.map

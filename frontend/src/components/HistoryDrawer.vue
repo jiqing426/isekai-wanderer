@@ -13,7 +13,10 @@
 
           <!-- 对话历史列表 -->
           <div class="drawer-content">
-            <div v-if="dialogueHistory.length === 0" class="empty-state">
+            <div v-if="loading && dialogueHistory.length === 0" class="loading-state">
+              <n-spin size="medium" />
+            </div>
+            <div v-else-if="dialogueHistory.length === 0" class="empty-state">
               <p>暂无对话历史</p>
             </div>
             <div v-else class="history-timeline">
@@ -41,6 +44,12 @@
                   </div>
                 </div>
               </div>
+              <!-- 加载更多按钮 -->
+              <div v-if="hasMore" class="load-more">
+                <n-button @click="loadMore" :loading="loading" size="small">
+                  加载更多
+                </n-button>
+              </div>
             </div>
           </div>
         </div>
@@ -50,7 +59,9 @@
 </template>
 
 <script setup lang="ts">
-import { NButton } from 'naive-ui';
+import { ref, watch } from 'vue';
+import { NButton, NSpin } from 'naive-ui';
+import { gameApi } from '@/api/game';
 
 interface DialogueHistoryItem {
   type: 'dialogue' | 'choice' | 'system';
@@ -62,14 +73,20 @@ interface DialogueHistoryItem {
 
 interface Props {
   visible: boolean;
-  dialogueHistory: DialogueHistoryItem[];
+  sessionId?: string;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
 }>();
+
+const dialogueHistory = ref<DialogueHistoryItem[]>([]);
+const loading = ref(false);
+const hasMore = ref(false);
+const pageSize = 20;
+let currentPage = 0;
 
 function close() {
   emit('close');
@@ -85,6 +102,54 @@ function formatTime(timestamp: number): string {
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 }
+
+async function loadHistory(reset = false) {
+  if (!props.sessionId) return;
+  
+  if (reset) {
+    dialogueHistory.value = [];
+    currentPage = 0;
+    hasMore.value = false;
+  }
+  
+  loading.value = true;
+  try {
+    const offset = currentPage * pageSize;
+    const response = await gameApi.getDialogues(props.sessionId, {
+      limit: pageSize,
+      offset,
+    });
+    
+    const newItems: DialogueHistoryItem[] = response.dialogues.map(d => ({
+      type: d.role === 'user' ? 'choice' : 'dialogue',
+      characterName: d.character_name || 'AI',
+      text: d.content,
+      timestamp: new Date(d.created_at).getTime(),
+    }));
+    
+    // 新数据插入到开头（最新的在前面）
+    dialogueHistory.value = [...newItems.reverse(), ...dialogueHistory.value];
+    
+    // 判断是否还有更多
+    hasMore.value = response.dialogues.length === pageSize;
+    currentPage++;
+  } catch (err) {
+    console.error('Failed to load dialogue history:', err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function loadMore() {
+  loadHistory(false);
+}
+
+// 监听 visible 变化，打开时加载历史
+watch(() => props.visible, (newVal) => {
+  if (newVal) {
+    loadHistory(true);
+  }
+});
 </script>
 
 <style scoped>

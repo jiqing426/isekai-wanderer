@@ -130,6 +130,7 @@ const userInitial = computed(() => {
 const navTabs = computed(() => [
   { path: '/discover', icon: '📚', label: t('nav.scripts'), requiresAuth: false },
   { path: '/characters', icon: '👥', label: t('nav.characters'), requiresAuth: true },
+  { path: '/character-chat', icon: '💬', label: '角色聊天', requiresAuth: true },
   { path: '/gallery', icon: '🖼️', label: t('nav.gallery'), requiresAuth: true },
   { path: '/fragment', icon: '💠', label: t('nav.fragment'), requiresAuth: true },
   { path: '/subscribe', icon: '⭐', label: t('nav.subscription'), requiresAuth: true },

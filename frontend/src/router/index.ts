@@ -123,6 +123,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/FreeChatView.vue'),
     meta: { requiresAuth: true },
   },
+  // CR-021: Character chat
+  {
+    path: '/character-chat',
+    name: 'CharacterChat',
+    component: () => import('@/views/CharacterChatView.vue'),
+    meta: { requiresAuth: true },
+  },
   // AC-045: Script detail (public browse, auth needed to play)
   {
     path: '/scripts/:scriptId',

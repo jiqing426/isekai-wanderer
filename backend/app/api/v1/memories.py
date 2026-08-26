@@ -6,7 +6,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -127,6 +127,25 @@ async def list_memories(
     result = await db.execute(stmt)
     memories = result.scalars().all()
     
+    # BUG-029-012: 批量查询角色名称
+    character_ids = list(set(m.character_id for m in memories if m.character_id))
+    char_map = {}
+    if character_ids:
+        from app.models.script import Character
+        char_result = await db.execute(
+            select(Character).where(Character.id.in_(character_ids))
+        )
+        char_map = {c.id: c.name for c in char_result.scalars().all()}
+    
+    # BUG-029-007: 返回总记录数（而非当前页数量）
+    count_stmt = select(func.count()).select_from(CharacterMemory).where(CharacterMemory.user_id == UUID(user_id))
+    if session_id:
+        count_stmt = count_stmt.where(CharacterMemory.source_session_id == session_uuid)
+    if character_id:
+        count_stmt = count_stmt.where(CharacterMemory.character_id == character_uuid)
+    total_result = await db.execute(count_stmt)
+    total_count = total_result.scalar() or 0
+    
     return {
         "memories": [
             {
@@ -134,12 +153,13 @@ async def list_memories(
                 "content": m.memory_text,
                 "source": m.source,
                 "character_id": str(m.character_id) if m.character_id else None,
+                "character_name": char_map.get(m.character_id, "未知角色") if m.character_id else None,
                 "session_id": str(m.source_session_id) if m.source_session_id else None,
                 "created_at": m.created_at.isoformat(),
             }
             for m in memories
         ],
-        "total": len(memories),
+        "total": total_count,
     }
 
 

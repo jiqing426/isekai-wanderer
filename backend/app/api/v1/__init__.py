@@ -49,6 +49,8 @@ from app.api.v1.cr016_subscription import router as cr016_subscription_router
 from app.api.v1.cr016_dialogue import router as cr016_dialogue_router
 from app.api.v1.cr016_paywall import router as cr016_paywall_router
 from app.api.v1.cr017_unlock import router as cr017_unlock_router
+from app.api.v1.lorebook import router as lorebook_router
+from app.api.v1.scene_configs import router as scene_configs_router
 
 api_router.include_router(user_router)
 api_router.include_router(daily_router)
@@ -87,3 +89,5 @@ api_router.include_router(cr016_subscription_router)
 api_router.include_router(cr016_dialogue_router)
 api_router.include_router(cr016_paywall_router)
 api_router.include_router(cr017_unlock_router)
+api_router.include_router(lorebook_router)
+api_router.include_router(scene_configs_router)

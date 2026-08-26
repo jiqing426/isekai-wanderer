@@ -194,8 +194,13 @@ async function confirmSend() {
       // 角色详情中送礼
       result = await gameApi.sendGift(props.targetId, selectedGift.value.id);
     }
-    sendResult.value = result as any;
-    shardBalance.value = (result as any).remaining_shards ?? shardBalance.value - selectedGift.value.cost;
+    // CR-032 T-032-FE-004: 统一字段名映射（后端返回 affection_delta/new_affection/remaining_fragments）
+    sendResult.value = {
+      affection_gained: (result as any).affection_delta ?? (result as any).affection_gained ?? 0,
+      new_affection_value: (result as any).new_affection ?? (result as any).new_affection_value ?? 0,
+      remaining_shards: (result as any).remaining_fragments ?? (result as any).remaining_shards ?? shardBalance.value - selectedGift.value.cost,
+    };
+    shardBalance.value = sendResult.value.remaining_shards;
     showConfirm.value = false;
     showResult.value = true;
     message.success(`成功赠送「${selectedGift.value.name}」！`);

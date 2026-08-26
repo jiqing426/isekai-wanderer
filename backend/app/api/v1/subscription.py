@@ -408,3 +408,21 @@ async def run_subscription_expiry_check(db: AsyncSession) -> int:
 
     await db.commit()
     return downgraded
+
+
+async def run_monthly_fragment_grant(db: AsyncSession) -> int:
+    """
+    Cron job: Grant monthly fragments to active subscribers.
+    
+    Call this daily to check and grant fragments for subscriptions
+    that are due for their monthly grant.
+    
+    Returns:
+        Number of users granted fragments.
+    """
+    from app.services.subscription_service import SubscriptionService
+    
+    service = SubscriptionService(db)
+    granted_count = await service.process_monthly_grants()
+    
+    return granted_count

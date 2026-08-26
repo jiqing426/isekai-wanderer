@@ -118,6 +118,9 @@ class QuotaService:
     async def _get_or_create_quota(self, user_id: uuid.UUID, today: date, for_update: bool = False) -> DialogueQuota:
         """Get today's quota record or create one.
         
+        CR-032 fix: Carry over unused fragment_extra from yesterday.
+        Fragment-purchased quota should NOT be reset daily.
+        
         Args:
             user_id: User UUID
             today: Date to get quota for
@@ -136,17 +139,35 @@ class QuotaService:
         quota = result.scalar_one_or_none()
         if not quota:
             base_quota = await self.get_daily_base_quota(user_id)
+            
+            # CR-032: Carry over unused fragment_extra from yesterday
+            yesterday = today - timedelta(days=1)
+            carry_over = 0
+            y_stmt = select(DialogueQuota).where(
+                and_(
+                    DialogueQuota.user_id == user_id,
+                    DialogueQuota.date == yesterday,
+                )
+            )
+            y_result = await self.db.execute(y_stmt)
+            y_quota = y_result.scalar_one_or_none()
+            if y_quota:
+                unused = y_quota.fragment_extra - y_quota.fragment_consumed
+                carry_over = max(0, unused)
+            
             # For subscribed users (base_quota == -1), store a sentinel
             quota = DialogueQuota(
                 user_id=user_id,
                 date=today,
                 base_quota=base_quota if base_quota != -1 else -1,
                 consumed=0,
-                fragment_extra=0,
+                fragment_extra=carry_over,
                 fragment_consumed=0,
             )
             self.db.add(quota)
             await self.db.flush()
+            if carry_over > 0:
+                logger.info(f"Fragment quota carried over: user={user_id}, amount={carry_over}")
         return quota
 
     async def get_user_quota_status(self, user_id: uuid.UUID) -> Dict:
@@ -229,8 +250,9 @@ class QuotaService:
     async def reset_all_daily_quotas(self) -> int:
         """Reset all daily quotas at UTC 00:00.
 
-        - Base quota is refreshed (new record created with new day)
-        - Fragment extra is zeroed (does not carry over)
+        CR-032 fix: Fragment extra now carries over to next day.
+        Only base quota is refreshed (new record created with new day).
+        Unused fragment_extra from yesterday is carried over in _get_or_create_quota().
 
         Returns:
             Number of quota records affected (from previous day)
@@ -238,16 +260,16 @@ class QuotaService:
         today = datetime.now(timezone.utc).date()
         yesterday = today - timedelta(days=1)
 
-        # Fragment extra doesn't carry over — zero out yesterday's records
+        # Count yesterday's records for audit
         result = await self.db.execute(
             select(DialogueQuota).where(DialogueQuota.date == yesterday)
         )
         old_quotas = result.scalars().all()
         count = len(old_quotas)
 
-        # We don't delete old records (audit trail); new day creates new records
-        # Fragment carryover prevention: old records' fragment_extra is irrelevant
-        # because new records start with fragment_extra=0
+        # We don't delete old records (audit trail)
+        # New day creates new records with carried-over fragment_extra
+        # (handled in _get_or_create_quota)
 
         logger.info(f"Daily quota reset: {count} records from {yesterday}")
         return count

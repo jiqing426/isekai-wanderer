@@ -10,7 +10,7 @@ class GiftRecord(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=func.gen_random_uuid())
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("game_sessions.id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("game_sessions.id"), nullable=True)
     character_id = Column(UUID(as_uuid=True), ForeignKey("characters.id"), nullable=False)
     gift_id = Column(String(100), nullable=False)
     gift_name = Column(String(255), nullable=False)

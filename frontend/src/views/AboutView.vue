@@ -39,20 +39,6 @@
         </div>
       </section>
 
-      <!-- Team -->
-      <section class="content-section glass-card fade-in-up delay-3">
-        <h2 class="section-title">{{ $t('about.teamTitle') }}</h2>
-        <p class="team-intro">{{ $t('about.teamIntro') }}</p>
-        <div class="team-grid">
-          <div v-for="(member, index) in teamMembers" :key="index" class="team-member">
-            <div class="member-avatar">{{ member.emoji }}</div>
-            <h3 class="member-name">{{ member.name }}</h3>
-            <p class="member-role">{{ member.role }}</p>
-            <p class="member-desc">{{ member.desc }}</p>
-          </div>
-        </div>
-      </section>
-
       <!-- Contact -->
       <section class="content-section glass-card fade-in-up delay-4">
         <h2 class="section-title">{{ $t('about.contactTitle') }}</h2>
@@ -86,37 +72,8 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { useI18n } from 'vue-i18n';
 
 const router = useRouter();
-const { t } = useI18n();
-
-const teamMembers = [
-  {
-    emoji: '👨‍💻',
-    name: t('about.team1Name'),
-    role: t('about.team1Role'),
-    desc: t('about.team1Desc')
-  },
-  {
-    emoji: '👩‍🎨',
-    name: t('about.team2Name'),
-    role: t('about.team2Role'),
-    desc: t('about.team2Desc')
-  },
-  {
-    emoji: '👨‍🔬',
-    name: t('about.team3Name'),
-    role: t('about.team3Role'),
-    desc: t('about.team3Desc')
-  },
-  {
-    emoji: '👩‍💼',
-    name: t('about.team4Name'),
-    role: t('about.team4Role'),
-    desc: t('about.team4Desc')
-  }
-];
 </script>
 
 <style scoped>
@@ -196,50 +153,6 @@ const teamMembers = [
   margin: 0;
 }
 
-/* Team */
-.team-intro {
-  font-size: 15px;
-  line-height: 1.8;
-  color: var(--text-main);
-  margin: 0 0 24px;
-}
-
-.team-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 24px;
-}
-
-.team-member {
-  text-align: center;
-}
-
-.member-avatar {
-  font-size: 64px;
-  margin-bottom: 12px;
-}
-
-.member-name {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0 0 4px;
-  color: var(--text-main);
-}
-
-.member-role {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--brand-primary);
-  margin: 0 0 8px;
-}
-
-.member-desc {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-muted);
-  margin: 0;
-}
-
 /* Contact */
 .contact-info {
   display: flex;
@@ -289,8 +202,7 @@ const teamMembers = [
     font-size: 20px;
   }
 
-  .vision-grid,
-  .team-grid {
+  .vision-grid {
     grid-template-columns: 1fr;
   }
 }

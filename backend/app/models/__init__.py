@@ -9,3 +9,12 @@ from app.models.paywall_event import PaywallEvent, PaywallScene, PaywallDisplayT
 
 # CR-017 Unlock Animation System
 from app.models.unlock_record import UnlockRecord, UnlockType, Rarity  # noqa: F401
+
+# CR-037 Corvus-Story-Core models
+from app.models.corvus import (  # noqa: F401
+    PlayerCandidate,
+    CorvusGameSession,
+    SessionNpc,
+    InventoryItem,
+    StoryFlag,
+)

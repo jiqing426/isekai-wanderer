@@ -52,6 +52,26 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@isekai-wanderer.local"
 
+    # TTS (CR-005: Aliyun CosyVoice)
+    tts_enabled: bool = True
+    tts_provider: str = "aliyun"
+    tts_api_key: str = "sk-6Nig_1ndlOU3eaIVK2dDHQ"
+    tts_base_url: str = "http://47.106.104.209/v1"
+    tts_model: str = "cosyvoice-v3.5-flash"
+    tts_voice_flash: str = "cosyvoice-v3.5-flash-hlthflash-dbffd19fadfe4e4ba9dee752a0456932"
+    tts_voice_plus: str = "cosyvoice-v3.5-plus-hlthplus-174ab62afc7f413ca455dfc5f5d08667"
+    tts_voice_output_dir: str = "/app/static/voices"
+
+    # CR-027: Token Budget Configuration
+    token_budget_total: int = 2300  # Total token budget for 6-layer prompt
+    token_budget_l1_global: int = 200  # Global rules layer
+    token_budget_l2_world: int = 500  # World knowledge (Lorebook)
+    token_budget_l3_npc: int = 300  # NPC profile (character)
+    token_budget_l4_memory: int = 800  # Memory recall
+    token_budget_l5_narrative: int = 300  # Narrative director
+    token_budget_l6_player: int = 200  # Player input
+    token_encoding: str = "cl100k_base"  # tiktoken encoding model
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]

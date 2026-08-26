@@ -11,7 +11,7 @@
             :stats="ending.stats"
           />
           <div class="ending-actions">
-            <n-button v-if="ending.ending_type === 'bad'" type="primary" size="large" @click="router.push(`/game?script=${scriptId}`)">
+            <n-button v-if="ending.ending_type === 'bad'" type="primary" size="large" @click="handleRestart">
               🔄 {{ $t('endingExtra.restartRoute') }}
             </n-button>
             <n-button size="large" secondary @click="router.push('/discover')">
@@ -69,6 +69,13 @@ async function loadEnding() {
 }
 
 onMounted(() => { loadEnding(); });
+
+function handleRestart() {
+  // BUG-030-002: 清除 localStorage 中的旧 session，强制重新开始
+  localStorage.removeItem('game_session');
+  localStorage.removeItem('game_script');
+  router.push(`/game?script=${scriptId}`);
+}
 </script>
 
 <style scoped>

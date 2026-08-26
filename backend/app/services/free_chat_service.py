@@ -56,14 +56,13 @@ class FreeChatService:
             }
         """
         # 1. 获取或创建会话
-        # 优先查找已有的会话（基于 user_id + character_id + script_id）
+        # 优先查找已有的会话（基于 user_id + character_id，不依赖 script_id）
         if not session_id:
             from sqlalchemy import select
-            # 查找该用户与该角色/剧本的最近会话
+            # 查找该用户与该角色的最近会话
             stmt = select(FreeChatSession).where(
                 FreeChatSession.user_id == UUID(user_id),
-                FreeChatSession.character_id == UUID(character_id) if character_id else True,
-                FreeChatSession.script_id == UUID(script_id) if script_id else True
+                FreeChatSession.character_id == UUID(character_id) if character_id else True
             ).order_by(FreeChatSession.created_at.desc()).limit(1)
             result = await db.execute(stmt)
             existing_session = result.scalar_one_or_none()
@@ -96,11 +95,11 @@ class FreeChatService:
         # 4. 获取当前好感度
         affection_value = await self._get_affection(db, user_id, character_id)
         
-        # 4. 获取最近对话历史（最近5条）
-        recent_messages = await self._get_recent_messages(db, session_id, limit=5)
+        # 4. 获取最近对话历史（最近20条，确保重要信息不被截断）
+        recent_messages = await self._get_recent_messages(db, session_id, limit=20)
         
-        # 5. 获取相关记忆（source="free_chat" 或 "game_event"）
-        memories = await self._get_memories(db, user_id, character_id, limit=10)
+        # 5. 获取相关记忆（使用向量相似度召回，而不是简单的时间倒序）
+        memories = await self._get_relevant_memories(db, user_id, character_id, query=message, limit=10)
         
         # 6. 构建Prompt（包含剧本背景）
         system_prompt = build_free_chat_prompt(
@@ -131,6 +130,23 @@ class FreeChatService:
         # 8. 保存对话到数据库
         await self._save_message(db, session_id, user_id, "user", message)
         await self._save_message(db, session_id, user_id, "assistant", reply_text)
+        
+        # 9. 提取并存储记忆（异步执行，不阻塞响应）
+        try:
+            from app.services.narrative.memory_service import MemoryService
+            memory_service = MemoryService(db)
+            # 合并用户消息和 AI 回复作为对话内容
+            dialogue_text = f"用户: {message}\n{character_persona["name"]}: {reply_text}"
+            await memory_service.extract_and_store(
+                user_id=UUID(user_id),
+                character_id=UUID(character_id),
+                dialogue_text=dialogue_text,
+                session_id=UUID(session_id),
+            )
+        except Exception as e:
+            # 记忆提取失败不影响主流程
+            import logging
+            logging.getLogger(__name__).warning(f"Memory extraction failed: {e}")
         
         await db.commit()
         
@@ -173,7 +189,7 @@ class FreeChatService:
         return []
     
     async def _get_memories(self, db: AsyncSession, user_id: str, character_id: str, limit: int = 10) -> List[dict]:
-        """获取相关记忆"""
+        """获取相关记忆（按时间倒序，兼容旧代码）"""
         from sqlalchemy import select
         from app.models.memory import CharacterMemory
         
@@ -186,6 +202,29 @@ class FreeChatService:
         memories = result.scalars().all()
         
         return [{"content": m.memory_text} for m in memories]
+    
+    async def _get_relevant_memories(self, db: AsyncSession, user_id: str, character_id: str, query: str, limit: int = 10) -> List[dict]:
+        """获取相关记忆（使用向量相似度召回）
+        
+        通过 pgvector KNN 搜索找到与当前查询最相关的记忆，
+        而不是简单按时间排序。
+        """
+        from app.services.narrative.memory_service import MemoryService
+        
+        try:
+            memory_service = MemoryService(db)
+            memories = await memory_service.recall(
+                user_id=UUID(user_id),
+                character_id=UUID(character_id),
+                query_text=query,
+                limit=limit,
+            )
+            return [{"content": m["memory_text"]} for m in memories]
+        except Exception as e:
+            # 如果向量召回失败，fallback 到时间排序
+            import logging
+            logging.getLogger(__name__).warning(f"Memory recall failed, falling back to time-based: {e}")
+            return await self._get_memories(db, user_id, character_id, limit)
     
     async def _save_message(self, db: AsyncSession, session_id: str, user_id: str, role: str, content: str):
         """保存消息到会话 - 确保持久化到数据库"""

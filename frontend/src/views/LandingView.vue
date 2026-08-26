@@ -77,6 +77,71 @@
       </div>
     </section>
 
+    <!-- Script Showcase Section -->
+    <section class="script-showcase-section">
+      <div class="section-header">
+        <h2 class="section-title gradient-text reveal">🎭 精选剧本</h2>
+        <p class="section-desc reveal delay-1">探索我们精心打造的互动故事世界</p>
+      </div>
+      
+      <div class="script-cards-grid reveal-scale">
+        <div 
+          v-for="script in showcaseScripts" 
+          :key="script.id"
+          class="script-card-item"
+        >
+          <!-- Image Carousel with Swiper -->
+          <div class="card-carousel">
+            <swiper
+              :modules="swiperModules"
+              :autoplay="{ delay: 3000, disableOnInteraction: false }"
+              :pagination="{ clickable: true }"
+              :loop="script.images.length > 1"
+              :slides-per-view="1"
+              :space-between="0"
+              class="card-swiper"
+            >
+              <swiper-slide v-for="(image, index) in script.images" :key="index">
+                <div class="card-carousel-image-container">
+                  <img 
+                    :src="image" 
+                    :alt="script.title"
+                    class="card-carousel-image"
+                    @error="handleCardImageError($event)"
+                  />
+                </div>
+              </swiper-slide>
+            </swiper>
+          </div>
+          
+          <!-- Script Info -->
+          <div class="card-info">
+            <h3 class="card-title">{{ script.title }}</h3>
+            
+            <!-- Characters -->
+            <div class="card-characters" v-if="script.characters.length > 0">
+              <div 
+                v-for="character in script.characters" 
+                :key="character.id"
+                class="card-character"
+              >
+                <span class="card-character-emoji">{{ character.emoji }}</span>
+                <span class="card-character-name">{{ character.name }}</span>
+              </div>
+            </div>
+            
+            <!-- Description -->
+            <p class="card-description">{{ script.description }}</p>
+            
+            <!-- CTA Button -->
+            <button class="card-cta-btn" @click="router.push('/discover')">
+              🔍 查看
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Features Section (6 cards, 4-column grid) -->
     <section id="features" class="features-section">
       <div class="section-header">
@@ -149,6 +214,13 @@
 
     <!-- Footer -->
     <footer class="landing-footer">
+      <div class="footer-links">
+        <router-link to="/about">{{ $t('landing.footerAbout') }}</router-link>
+        <span class="footer-divider">·</span>
+        <router-link to="/privacy">{{ $t('landing.footerPrivacy') }}</router-link>
+        <span class="footer-divider">·</span>
+        <router-link to="/terms">{{ $t('landing.footerTerms') }}</router-link>
+      </div>
       <p>{{ $t('landing.footerText') }}</p>
     </footer>
   </div>
@@ -160,6 +232,10 @@ import { useRouter } from 'vue-router';
 import { useHead } from '@vueuse/head';
 import { useAuthStore } from '@/stores/auth';
 import { useScrollReveal } from '@/composables/useScrollReveal';
+import { Swiper, SwiperSlide } from 'swiper/vue';
+import { Autoplay, Pagination } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/pagination';
 
 useHead({
   title: 'Isekai Wanderer - 穿越异世界，书写你的传奇',
@@ -180,6 +256,83 @@ const starsRef = ref<HTMLElement | null>(null);
 const particlesRef = ref<HTMLElement | null>(null);
 
 useScrollReveal(pageRef);
+
+// Swiper modules
+const swiperModules = [Autoplay, Pagination];
+
+// Script Showcase Cards
+interface ShowcaseCharacter {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+}
+
+interface ShowcaseScript {
+  id: string;
+  title: string;
+  description: string;
+  emoji: string;
+  images: string[];
+  characters: ShowcaseCharacter[];
+}
+
+const showcaseScripts = ref<ShowcaseScript[]>([
+  {
+    id: 'e56ca348-cc08-45f2-a6fa-baa4c725d192',
+    title: '星辰之约',
+    description: '在星光璀璨的夜晚，你与温柔的占星师林辰相遇。命运的齿轮开始转动，每一次选择都将改变你们的未来。',
+    emoji: '⭐',
+    images: [
+      '/assets/covers/starry-vow.jpg',
+      '/assets/covers/starry-vow.jpg',
+      '/assets/covers/starry-vow.jpg',
+    ],
+    characters: [
+      { id: '1', name: '林辰', emoji: '🌟', description: '温柔的占星师' },
+      { id: '2', name: '月华', emoji: '🌙', description: '月之守护者' },
+      { id: '3', name: '星野', emoji: '✨', description: '星辰精灵' },
+    ],
+  },
+  {
+    id: 'de1c935a-3e82-4e29-aff9-c69c3a460418',
+    title: '星月奇缘',
+    description: '在神秘的月夜下，你与天才天文学家沈星澜相遇。星辰与月光的交织，开启了一段奇幻的缘分。',
+    emoji: '🌙',
+    images: [
+      '/assets/covers/star-moon-fate.jpg',
+      '/assets/covers/star-moon-fate.jpg',
+      '/assets/covers/star-moon-fate.jpg',
+    ],
+    characters: [
+      { id: '1', name: '沈星澜', emoji: '🔭', description: '天才天文学家' },
+      { id: '2', name: '月影', emoji: '🌕', description: '月之精灵' },
+    ],
+  },
+  {
+    id: '93bbc975-04f8-452d-ab27-d8f5348eb29d',
+    title: '樱花恋曲',
+    description: '在樱花盛开的季节，你与温柔的文学教授藤原雪相遇。古典文学与现代情感的碰撞，开启了一段诗意的恋情。',
+    emoji: '🌸',
+    images: [
+      '/assets/covers/cherry-blossom-romance.jpg',
+      '/assets/covers/cherry-blossom-romance.jpg',
+      '/assets/covers/cherry-blossom-romance.jpg',
+    ],
+    characters: [
+      { id: '1', name: '藤原雪', emoji: '📚', description: '文学教授' },
+      { id: '2', name: '樱井', emoji: '🌸', description: '文学少女' },
+      { id: '3', name: '白雪', emoji: '❄️', description: '古典文学研究者' },
+    ],
+  },
+]);
+
+function handleCardImageError(event: Event) {
+  const img = event.target as HTMLImageElement;
+  img.style.display = 'none';
+}
+
+// playScript 已弃用：精选剧本卡片按钮改为「查看」，跳转剧本大厅 /discover
 
 // Rotating subtitle (3 sentences, typewriter effect, 3s interval)
 const rotatingSubtitles = [
@@ -727,6 +880,215 @@ onUnmounted(() => {
   margin: 0;
 }
 
+/* Script Showcase Section */
+.script-showcase-section {
+  padding: 80px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.script-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+/* Card Item */
+.script-card-item {
+  background: rgba(167, 139, 250, 0.05);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.script-card-item:hover {
+  transform: translateY(-4px);
+  border-color: rgba(167, 139, 250, 0.3);
+  box-shadow: 0 12px 40px rgba(139, 92, 246, 0.15);
+}
+
+/* Card Carousel */
+.card-carousel {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.card-swiper {
+  width: 100%;
+  height: 100%;
+}
+
+.card-swiper :deep(.swiper) {
+  width: 100%;
+  height: 100%;
+}
+
+.card-swiper :deep(.swiper-wrapper) {
+  width: 100%;
+  height: 100%;
+}
+
+.card-swiper :deep(.swiper-slide) {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-carousel-image-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-carousel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Swiper pagination override */
+.card-swiper :deep(.swiper-pagination) {
+  bottom: 10px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.card-swiper :deep(.swiper-pagination-bullet) {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  opacity: 1;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.card-swiper :deep(.swiper-pagination-bullet-active) {
+  background: #a78bfa;
+  border-color: #a78bfa;
+  transform: scale(1.3);
+}
+
+/* Card Info */
+.card-info {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+/* Card Characters */
+.card-characters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-character {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.card-character-emoji {
+  font-size: 14px;
+}
+
+.card-character-name {
+  font-weight: 500;
+}
+
+/* Card Description */
+.card-description {
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card CTA Button */
+.card-cta-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #a78bfa, #FF6B9D);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(167, 139, 250, 0.3);
+  margin-top: 4px;
+}
+
+.card-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(167, 139, 250, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 1023px) {
+  .script-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .script-showcase-section {
+    padding: 60px 16px;
+  }
+  
+  .script-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .card-carousel-emoji {
+    font-size: 60px;
+  }
+  
+  .card-title {
+    font-size: 16px;
+  }
+  
+  .card-description {
+    font-size: 12px;
+  }
+  
+  .card-cta-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
 /* Features - 6 cards, 4-column grid */
 .features-section {
   padding: 40px 40px;
@@ -1198,6 +1560,29 @@ onUnmounted(() => {
   border-top: 1px solid rgba(167,139,250,.1);
   color: var(--text-muted, #7c6f9b);
   font-size: 13px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.footer-links a {
+  color: var(--text-muted, #7c6f9b);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-links a:hover {
+  color: var(--brand-primary, #a78bfa);
+}
+
+.footer-divider {
+  color: rgba(167,139,250,.3);
 }
 
 .landing-footer p {

@@ -47,7 +47,8 @@ const levels: LevelDef[] = [
   { key: '暧昧', threshold: 20, color: '#F472B6' },
   { key: '信赖', threshold: 40, color: '#38BDF8' },
   { key: '羁绊', threshold: 60, color: '#A78BFA' },
-  { key: '挚爱', threshold: 80, color: '#F43F5E' },
+  { key: '挚友', threshold: 80, color: '#F43F5E' },
+  { key: '挚爱', threshold: 100, color: '#EC4899' },
 ];
 
 const props = withDefaults(defineProps<{

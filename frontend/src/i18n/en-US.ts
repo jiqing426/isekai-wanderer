@@ -104,6 +104,9 @@ export default {
     showcaseDesc: 'Explore amazing stories from other players',
     testimonialsTitle: 'Testimonials',
     footerText: '© 2026 Isekai Wanderer. All rights reserved.',
+    footerAbout: 'About Us',
+    footerPrivacy: 'Privacy Policy',
+    footerTerms: 'Terms of Service',
     // How it works
     howTitle: 'How It Works',
     step1Title: 'Create Your Character',

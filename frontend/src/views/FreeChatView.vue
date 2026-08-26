@@ -6,82 +6,95 @@
           <n-button text @click="router.back()" class="back-btn">← {{ $t('common.back') }}</n-button>
           <h1 class="gradient-text">💬 {{ $t('freeChat.title') }}</h1>
         </div>
-        <div class="chat-subtitle-row">
-          <p class="chat-subtitle">{{ characterName }}</p>
-          <p class="script-name">📖 {{ scriptName }}</p>
-          <div v-if="affectionLevel" class="affection-badge">
-            {{ affectionEmoji }} {{ affectionLevel }}
-          </div>
-        </div>
       </header>
 
-      <div class="chat-container">
-        <!-- FC-05: 动态话题推荐区域 -->
-        <div class="topic-recommendation" v-if="topics.length > 0">
-          <div class="topic-header">
-            <span class="topic-icon">💡</span>
-            <span class="topic-title">推荐话题</span>
+      <div class="chat-layout">
+        <!-- 左侧人物介绍栏 -->
+        <aside class="left-sidebar">
+          <CharacterInfo
+            :character-id="characterId"
+            :character-name="characterName"
+            :character-title="characterTitle"
+          />
+          <AffectionDisplay
+            :character-id="characterId"
+            :value="currentAffection"
+          />
+          <div class="script-info">
+            <div class="script-label">📖 剧本</div>
+            <div class="script-value">{{ scriptName }}</div>
           </div>
-          <div class="topic-chips-row">
-            <button
-              v-for="topic in topics"
-              :key="topic.id"
-              class="topic-chip-btn"
-              @click="useTopic(topic)"
+        </aside>
+
+        <!-- 右侧聊天区域 -->
+        <div class="chat-container">
+          <div class="chat-messages" ref="messagesContainer">
+            <div v-if="messages.length === 0 && !loading" class="chat-welcome fade-in-up">
+              <div class="welcome-avatar">✨</div>
+              <div class="welcome-text">{{ $t('freeChat.welcome', { name: characterName }) }}</div>
+            </div>
+
+            <div
+              v-for="(msg, index) in messages"
+              :key="index"
+              class="chat-message"
+              :class="msg.role"
             >
-              <span class="topic-emoji">{{ topic.emoji }}</span>
-              <span class="topic-text">{{ topic.label }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="chat-messages" ref="messagesContainer">
-          <div v-if="messages.length === 0 && !loading" class="chat-welcome fade-in-up">
-            <div class="welcome-avatar">✨</div>
-            <div class="welcome-text">{{ $t('freeChat.welcome', { name: characterName }) }}</div>
-          </div>
-
-          <div
-            v-for="(msg, index) in messages"
-            :key="index"
-            class="chat-message"
-            :class="msg.role"
-          >
-            <div class="message-avatar">{{ msg.role === 'user' ? '👤' : '✨' }}</div>
-            <div class="message-bubble">
-              <div class="message-content">{{ msg.content }}</div>
-              <div v-if="msg.timestamp" class="message-time">{{ formatTime(msg.timestamp) }}</div>
+              <div class="message-avatar">{{ msg.role === 'user' ? '👤' : '✨' }}</div>
+              <div class="message-bubble">
+                <div class="message-content">{{ msg.content }}</div>
+                <div v-if="msg.timestamp" class="message-time">{{ formatTime(msg.timestamp) }}</div>
+              </div>
+            </div>
+            <div v-if="loading" class="chat-message assistant">
+              <div class="message-avatar">✨</div>
+              <div class="message-bubble typing">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+              </div>
             </div>
           </div>
-          <div v-if="loading" class="chat-message assistant">
-            <div class="message-avatar">✨</div>
-            <div class="message-bubble typing">
-              <span class="typing-dot"></span>
-              <span class="typing-dot"></span>
-              <span class="typing-dot"></span>
-            </div>
-          </div>
-        </div>
 
-        <div class="chat-input-area">
-          <n-input
-            v-model:value="inputMessage"
-            :placeholder="$t('freeChat.inputPlaceholder')"
-            @keyup.enter="sendMessage"
-            :disabled="loading"
-            size="large"
-          >
-            <template #suffix>
-              <n-button
-                text
-                @click="sendMessage"
-                :disabled="!inputMessage.trim() || loading"
-                class="send-btn"
+          <!-- FC-05: 动态话题推荐区域 - 移到输入框上方 -->
+          <div class="topic-recommendation" v-if="topics.length > 0">
+            <div class="topic-header">
+              <span class="topic-icon">💡</span>
+              <span class="topic-title">推荐话题</span>
+            </div>
+            <div class="topic-chips-row">
+              <button
+                v-for="topic in topics"
+                :key="topic.id"
+                class="topic-chip-btn"
+                @click="useTopic(topic)"
               >
-                📤
-              </n-button>
-            </template>
-          </n-input>
+                <span class="topic-emoji">{{ topic.emoji }}</span>
+                <span class="topic-text">{{ topic.label }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="chat-input-area">
+            <n-input
+              v-model:value="inputMessage"
+              :placeholder="$t('freeChat.inputPlaceholder')"
+              @keyup.enter="sendMessage"
+              :disabled="loading"
+              size="large"
+            >
+              <template #suffix>
+                <n-button
+                  text
+                  @click="sendMessage"
+                  :disabled="!inputMessage.trim() || loading"
+                  class="send-btn"
+                >
+                  📤
+                </n-button>
+              </template>
+            </n-input>
+          </div>
         </div>
       </div>
     </div>
@@ -95,6 +108,8 @@ import { useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { gameApi, type FreeChatMessage, type FreeChatTopic } from '@/api/game';
 import { useAffectionStore } from '@/stores/affection';
+import CharacterInfo from '@/components/CharacterInfo.vue';
+import AffectionDisplay from '@/components/AffectionDisplay.vue';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -103,9 +118,11 @@ const message = useMessage();
 const affectionStore = useAffectionStore();
 
 const sessionId = route.params.sessionId as string;
-const characterId = route.query.characterId as string;
+const characterId = ref('');
 const characterName = ref('');
+const characterTitle = ref('');
 const scriptName = ref('');
+const affectionValue = ref(0);
 const topics = ref<FreeChatTopic[]>([]);
 const messages = ref<FreeChatMessage[]>([]);
 const inputMessage = ref('');
@@ -115,6 +132,12 @@ const messagesContainer = ref<HTMLElement | null>(null);
 const page = ref(1);
 const hasMore = ref(true);
 const loadingMore = ref(false);
+
+// 好感度相关
+const currentAffection = computed(() => {
+  // 直接使用 API 返回的好感度值（包括0）
+  return affectionValue.value;
+});
 
 // 预设快捷话题
 const presetTopics = [
@@ -127,8 +150,8 @@ const presetTopics = [
 
 // 好感度相关
 const affectionLevel = computed(() => {
-  if (!characterId) return '';
-  const aff = affectionStore.getAffection(characterId);
+  if (!characterId.value) return '';
+  const aff = affectionStore.getAffection(characterId.value);
   return aff?.level || '';
 });
 
@@ -136,13 +159,14 @@ const affectionEmoji = computed(() => {
   const level = affectionLevel.value;
   const emojiMap: Record<string, string> = {
     '相识': '🤝',
-    '友好': '😊',
-    '亲密': '💕',
+    '暧昧': '💕',
+    '信赖': '💙',
+    '羁绊': '💜',
     '挚友': '💖',
-    '挚爱': '💗',
   };
   return emojiMap[level] || '🤝';
 });
+void affectionEmoji; // used in template
 
 function formatTime(timestamp: string): string {
   const date = new Date(timestamp);
@@ -230,17 +254,26 @@ async function scrollToBottom() {
 
 onMounted(async () => {
   // FE-FEAT-021: 从 API 加载剧本和角色名称
+  // BUG-029-002: 优先使用 query 参数中的角色（用户点击的目标角色），而非 API 返回的玩家角色
+  const queryCharacterId = (route.query.characterId as string) || '';
+  const queryCharacterName = (route.query.character as string) || '';
   try {
     const status = await gameApi.getGameStatus(sessionId);
-    characterName.value = status.character_name || (route.query.character as string) || t('freeChat.defaultCharacter');
+    characterId.value = queryCharacterId || status.character_id || '';
+    characterName.value = queryCharacterName || status.character_name || t('freeChat.defaultCharacter');
+    characterTitle.value = (status as any).character_title || '';
     scriptName.value = status.script_name || (route.query.scriptName as string) || '未知剧本';
+    affectionValue.value = status.affection_value || 0;
   } catch {
-    characterName.value = (route.query.character as string) || t('freeChat.defaultCharacter');
+    characterName.value = queryCharacterName || t('freeChat.defaultCharacter');
+    characterTitle.value = '';
+    characterId.value = queryCharacterId || '';
     scriptName.value = (route.query.scriptName as string) || '未知剧本';
+    affectionValue.value = 0;
   }
   
-  // 加载好感度数据
-  if (characterId) {
+  // 加载好感度数据（作为备用）
+  if (characterId.value && affectionValue.value === 0) {
     await affectionStore.loadAffections();
   }
   
@@ -257,7 +290,7 @@ onMounted(async () => {
 
 <style scoped>
 .free-chat-page { 
-  max-width: 720px; 
+  max-width: 1200px; 
   margin: 0 auto; 
   padding: 24px 16px; 
   display: flex; 
@@ -268,32 +301,72 @@ onMounted(async () => {
 .chat-header { margin-bottom: 16px; flex-shrink: 0; }
 .chat-header-row { display: flex; align-items: center; gap: 12px; }
 .chat-header h1 { font-size: 24px; font-weight: 700; margin: 0; }
-.chat-subtitle-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-.chat-subtitle { color: var(--text-muted); font-size: 14px; margin: 0; font-weight: 600; }
-.script-name { color: var(--text-muted); font-size: 13px; margin: 0; }
-.affection-badge {
-  padding: 4px 12px;
-  border-radius: 16px;
-  background: rgba(192, 132, 252, 0.15);
-  border: 1px solid rgba(192, 132, 252, 0.3);
-  color: var(--brand-primary);
-  font-size: 13px;
-  font-weight: 600;
-}
 .back-btn { color: var(--text-muted) !important; font-size: 13px !important; }
 
-.chat-container { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* 两栏布局 */
+.chat-layout {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左侧人物介绍栏 */
+.left-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow-y: auto;
+}
+
+.script-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(167, 139, 250, 0.05);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  border-radius: 12px;
+}
+
+.script-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.script-value {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+/* 右侧聊天区域 */
+.chat-container { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  min-height: 0; 
+  overflow: hidden;
+}
+
 .chat-messages { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 16px; }
 
 .chat-welcome { text-align: center; padding: 40px 20px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .welcome-avatar { font-size: 48px; }
 .welcome-text { font-size: 16px; color: var(--text-main); }
-/* FC-05: 动态话题推荐样式 */
+
+/* FC-05: 动态话题推荐样式 - 输入框上方 */
 .topic-recommendation {
   flex-shrink: 0;
   padding: 12px 16px;
-  background: rgba(192, 132, 252, 0.05);
-  border-bottom: 1px solid var(--border-color);
 }
 .topic-header {
   display: flex;
@@ -368,4 +441,29 @@ onMounted(async () => {
 .chat-input-area { flex-shrink: 0; padding: 12px 0; border-top: 1px solid var(--border-color); }
 .send-btn { font-size: 18px; }
 
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .chat-layout {
+    flex-direction: column;
+  }
+  .left-sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 12px;
+    gap: 12px;
+  }
+  .left-sidebar > :deep(.character-info) {
+    flex: 1;
+    min-width: 200px;
+  }
+  .left-sidebar > :deep(.affection-display) {
+    flex: 1;
+    min-width: 200px;
+  }
+  .script-info {
+    flex: 1;
+    min-width: 150px;
+  }
+}
 </style>

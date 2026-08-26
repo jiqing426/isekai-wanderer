@@ -37,6 +37,10 @@ Isekai Wanderer uses a decoupled frontend/backend architecture. The frontend is 
 | Module | Path | Responsibility | Tech Stack |
 | --- | --- | --- | --- |
 | `frontend/` | `/root/isekai-wanderer/frontend` | Vue 3 PWA user-facing client | Vue 3 + TS + Vite + Pinia + Naive UI |
+
+**CR-028 additions:**
+- `frontend/src/components/LockedCharacterOverlay.vue` — Locked character overlay with unlock price
+- `frontend/src/components/UnlockPromptDialog.vue` — Unlock prompt dialog for paid characters
 | `backend/` | `/root/isekai-wanderer/backend` | FastAPI backend service | Python 3.12 + FastAPI + SQLAlchemy + Alembic |
 | `deploy/` | `/root/isekai-wanderer/deploy` | Docker Compose + Nginx | Docker + Nginx |
 | `scripts/` | `/root/isekai-wanderer/scripts` | Build/test/deploy scripts | Shell + Python |
@@ -325,3 +329,220 @@ The affection system tracks user-character relationships on a 0–100 scale with
 - S015 → Backend webhook
 - Email Recall → Backend cron
 - Push Notification → Frontend Service Worker
+
+---
+
+## CR-027 Additions: Layered Prompt Narrative Engine
+
+### New Modules
+
+| Module | Path | Responsibility | Tech Stack |
+|--------|------|----------------|------------|
+| LorebookService | `backend/app/services/lorebook_service.py` | World knowledge CRUD + tag-based matching | SQLAlchemy + PostgreSQL JSONB |
+| SceneConfigService | `backend/app/services/scene_config_service.py` | Scene-to-node binding management | SQLAlchemy + PostgreSQL JSONB |
+| PromptBuilder | `backend/app/services/prompt_builder.py` | Six-layer structured prompt assembly | Pure Python |
+| TokenBudgetController | `backend/app/services/token_budget.py` | Per-layer token counting + truncation | tiktoken (cl100k_base) |
+
+### Prompt Assembly Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PromptBuilder.build(session_id, user_id, node, character)   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+  │ L1: Global  │ │ L2: World   │ │ L3: NPC     │
+  │ Rules       │ │ Knowledge   │ │ Profile     │
+  │ (200 tok)   │ │ (500 tok)   │ │ (300 tok)   │
+  └─────────────┘ └──────┬──────┘ └─────────────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+       ┌───────────┐ ┌────────┐ ┌──────────┐
+       │SceneConfig│→│Lorebook│→│Token     │
+       │Service    │ │Service │ │Budget    │
+       │(tags)     │ │(match) │ │Controller│
+       └───────────┘ └────────┘ └──────────┘
+                         │
+              ┌──────────┼──────────┐
+              ▼          ▼          ▼
+       ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+       │ L4: Memory  │ │ L5: Narr.   │ │ L6: User    │
+       │ (800 tok)   │ │ Director    │ │ Input       │
+       │             │ │ (300 tok)   │ │ (200 tok)   │
+       └─────────────┘ └─────────────┘ └─────────────┘
+              │               │               │
+              ▼               ▼               ▼
+       ┌─────────────────────────────────────────────┐
+       │ system_prompt (L1-L5) + user_prompt (L6)    │
+       │ Total budget: ≤ 2300 tokens                 │
+       └─────────────────────────────────────────────┘
+```
+
+### Degradation Strategy
+
+| Failure | Handling | Log Level |
+|---------|----------|----------|
+| LorebookService exception | L2 uses empty string, other layers normal | warning |
+| MemoryService exception | L4 uses empty string, other layers normal | warning |
+| SceneConfigService exception | L2 scene part empty, Lorebook match skipped | warning |
+| PromptBuilder overall exception | NarrativeEngine falls back to simple prompt | error |
+
+### Dependency Direction (CR-027)
+
+```
+NarrativeEngine
+  └── PromptBuilder
+        ├── LorebookService ──→ lorebook_entries (DB)
+        ├── SceneConfigService ──→ scene_configs (DB)
+        ├── MemoryService ──→ character_memories (DB/pgvector)
+        ├── TokenBudgetController (tiktoken)
+        └── Character model ──→ characters (DB, extended)
+```
+
+### CR-028 Additions: Character Playable / Multi-Route
+
+#### New Module Dependencies
+
+```
+NarrativeEngine
+  └── PromptBuilder
+        └── [NEW] L3 Player Identity ──→ game_sessions.character_id + characters.play_description
+
+ScriptService ──→ characters (playable, playable_route_id, unlock_type)
+                ──→ user_character_unlocks (is_unlocked calculation)
+
+GameService ──→ characters (playable validation, playable_route_id)
+              ──→ game_sessions (character_id, character_name)
+
+SavesService ──→ game_sessions (character_name)
+               ──→ characters (character lookup)
+
+CharacterService ──→ characters (unlock_type validation)
+                   ──→ user_character_unlocks (unlock record)
+```
+
+### CR-029 Additions: Node Branch Character Filtering
+
+#### New Module Dependencies
+
+```
+ScriptService
+  └── get_node_with_choices() ──→ nodes.character_id (filter by session.character_id)
+  └── submit_choice() ──→ nodes.character_id (validate visibility, 403 on mismatch)
+
+NarrativeEngine
+  └── [no new dependencies] — filtering happens in ScriptService layer
+```
+
+#### Node Visibility Flow
+
+```
+GET /game/{sessionId}/dialogue
+  └── NarrativeEngine.generate_dialogue()
+        └── ScriptService.get_game_session_state()
+              └── ScriptService.get_node_with_choices(node_id, session_character_id)
+                    └── WHERE character_id IS NULL OR character_id = session_character_id
+
+POST /game/{sessionId}/choice
+  └── ScriptService.submit_choice()
+        └── ScriptService.get_next_node(choice_id)
+              └── Validate: next_node.character_id matches session.character_id
+              └── 403 NARRATIVE_NODE_NOT_VISIBLE on mismatch
+```
+
+#### PromptBuilder Layer Update
+
+No changes to PromptBuilder. Node filtering is transparent to prompt assembly.
+
+### Admin Frontend Pages (CR-027)
+
+| Route | Component | Purpose |
+|-------|-----------|--------|
+| /lorebook | LorebookManage.vue | World knowledge CRUD + tag filter |
+| /scene-configs | SceneConfig.vue | Script→Route→Node tree + scene editing |
+| /characters/:id | CharacterEdit.vue (extended) | NPC desire/fear/secret editing |
+
+### CR-030 Additions: Chapter Structure Refactor
+
+#### New Module Dependencies
+
+```
+ScriptService
+  └── get_chapters() ──→ routes.chapter_number, routes.chapter_type (group by chapter)
+
+GameService
+  └── get_session_status() ──→ routes.chapter_number, routes.chapter_type (via session.route_id)
+  └── get_dialogue() ──→ routes.chapter_number, routes.chapter_type (via current_node.route_id)
+
+Frontend
+  └── ChapterProgress.vue ──→ GET /game/{session_id}/status (chapter_number, chapter_title)
+```
+
+#### Chapter Information Flow
+
+```
+GET /game/{sessionId}/status
+  └── GameService.get_session_status()
+        └── Query route via session.route_id
+              └── Read route.chapter_number, route.chapter_type
+              └── Map chapter_type → chapter_title (encounter→相遇, daily→日常, conflict→冲突, convergence→收束)
+              └── Return chapter_number, chapter_type, chapter_title (null if route has no chapter info)
+
+GET /scripts/{scriptId}/chapters
+  └── ScriptService.get_chapters(script_id)
+        └── Query routes WHERE script_id = ? AND chapter_number IS NOT NULL
+        └── Group by chapter_number, order ascending
+        └── Return chapters array with routes per chapter
+```
+
+#### Backward Compatibility
+
+- Old sessions (route without chapter info) return `chapter_number: null, chapter_type: null, chapter_title: null`
+- Frontend detects null → fallback to display route.title (existing behavior)
+- Existing `chapter` (route.title) and `chapter_id` (route.id) fields preserved for transition period
+
+### CR-037 Additions: Corvus-Story-Core 集成
+
+#### New Modules
+
+| Module | Path | Responsibility |
+|--------|------|----------------|
+| CorvusClient | `backend/app/services/corvus_client.py` | Corvus HTTP + SSE 客户端，仅访问 127.0.0.1:8082 |
+| CorvusAdapter | `backend/app/services/corvus_adapter.py` | SSE 翻译 + world_state DB 同步 + 向量记忆写入/召回 + NPC knownInfo 注入/恢复 |
+| EmbeddingService | `backend/app/services/embedding_service.py` | bge-small-zh-v1.5 本地 embedding 推理 (512 维) + pgvector KNN 召回 |
+| CorvusModels | `backend/app/models/corvus.py` | 5 张新表 SQLAlchemy 模型 |
+
+#### Engine Dispatcher (Feature Flag)
+
+```
+Engine Dispatcher (backend/app/api/v1/game.py)
+  ├── engine_type='legacy' → NarrativeEngine (现有路径不变)
+  └── engine_type='corvus'  → CorvusAdapter (新路径)
+```
+
+#### Data Flow: Corvus 游戏回合
+
+```
+用户输入 → CorvusAdapter.stream_turn()
+  1. recall_and_inject(): pgvector KNN 召回 Top-5 → NPC knownInfo 注入 (PATCH Corvus)
+  2. CorvusClient.stream_message(): POST Corvus /api/games/{gameId}/messages → SSE 事件流
+  3. SSETranslator: Corvus SSE 事件 → 前端格式 (text/done/gm_update/stream_end/error)
+  4. 异步副作用:
+     - assistant-complete → write_memory (LLM 提取 → bge embedding → pgvector 存储)
+     - gm_update → sync_world_state (session_npcs / inventory_items / story_flags)
+     - done/error → restore_npc_knowninfo (恢复 NPC knownInfo 原始值)
+```
+
+#### Corvus Service Topology
+
+```
+┌──────────────────────┐  SSE 透传 (127.0.0.1:8082)  ┌──────────────────────┐
+│ isekai 后端 (Python)  │ ←────────────────────────→ │ Corvus (Node.js)     │
+│ FastAPI :8000         │                             │ Express :8082        │
+│ + pgvector 512维      │                             │ + LLM → thoushub     │
+│ + 5 张新表            │                             │ + 文件存储 JSON/JSONL │
+└──────────────────────┘                             └──────────────────────┘
+```

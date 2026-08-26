@@ -22,6 +22,7 @@ export interface Gift {
 export interface GiftHistory {
   id: string
   character_id: string
+  character_name: string
   gift_name: string
   gift_icon: string
   affection_change: number

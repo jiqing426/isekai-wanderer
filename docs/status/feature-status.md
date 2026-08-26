@@ -38,6 +38,8 @@
 | OAuth 登录 | Planned（延后） | — | — | — | — | CEO 裁剪：不在 MVP |
 | 管理后台 | Planned（延后） | — | — | — | — | CEO 裁剪：不在 MVP |
 | 社区与 UGC | Planned（CR-004） | — | — | — | — | CEO 澄清：CR-003 不含，留待 CR-004 |
+| 剧本角色选择与多故事线 | Planned（CR-028 P1） | REQ-PLAY-001~009 | AC-PLAY-001~009 | 剧本详情页/游戏页/存档管理页/个人中心 | Browser E2E + API/DB | 多角色多Route，独立存档 |
+| Corvus-Story-Core 集成 | Planned（CR-037 P1） | REQ-CORVUS-001~009 | AC-001~AC-028 | /game?script={session_id} + /api/game/* | Browser E2E + API/DB + Runtime Smoke | 新旧引擎共存+SSE流式+pgvector向量记忆 |
 
 ## CR-003 功能汇总
 
@@ -59,8 +61,10 @@
 | 账户删除功能缺失 | 用户数据合规 | MVP 不做，上线前补齐 | 后续 CR 补齐 |
 | mock 碎片无消费场景 | 留存验证深度有限 | 仅累积展示 + 签到阶梯奖励 | MVP+1 加入消费场景 |
 | 无离线能力 | 弱网体验 | 仅 installable PWA | 后续 CR 评估 |
+| 无管理后台配置可扮演角色 | 运营效率 | 直接操作数据库 | CR-028 本期不做，后续迭代 |
 | 碎片中心仅展示层 | 碎片经济闭环 | 复用现有 fragments 表，不新增支付流程 | CR-004 评估真实支付 |
 | 成就称号池未定义 | 金箱奖励 | BE 先用 placeholder title code | 内容策划确认后补齐 |
+| 付费角色解锁无真实支付 | 商业化 | 模拟解锁，不扣费 | 后续 CR 接入支付流程 |
 
 ## TODO
 

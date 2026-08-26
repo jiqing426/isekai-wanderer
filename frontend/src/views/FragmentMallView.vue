@@ -100,7 +100,7 @@
               :options="transactionFilterOptions"
               size="small"
               style="width: 150px"
-              @update:value="loadTransactions"
+              @update:value="handleFilterChange"
             />
           </div>
           <div v-if="loadingTransactions" class="loading-state">
@@ -126,14 +126,14 @@
               </div>
             </div>
           </div>
-          <div v-if="transactions.length > 0" class="load-more">
-            <n-button 
-              v-if="hasMoreTransactions"
-              :loading="loadingMore"
-              @click="loadMoreTransactions"
-            >
-              {{ $t('fragment.loadMore') }}
-            </n-button>
+          <div v-if="transactionTotal > 0" class="pagination-wrapper">
+            <n-pagination
+              :page="transactionPage"
+              :page-count="totalPages"
+              :page-size="pageSize"
+              @update:page="handlePageChange"
+              show-quick-jumper
+            />
           </div>
         </div>
 
@@ -197,9 +197,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useMessage, NSpin, NEmpty, NButton, NModal, NSelect } from 'naive-ui';
+import { useMessage, NSpin, NEmpty, NButton, NModal, NSelect, NPagination } from 'naive-ui';
 import { getMyAsset, getShopGoods, exchangeGoods, getFragmentTransactions } from '@/api/fragment';
 import type { ShopGood, FragmentTransaction } from '@/types/fragment';
 
@@ -213,13 +213,14 @@ const shopGoods = ref<ShopGood[]>([]);
 const transactions = ref<FragmentTransaction[]>([]);
 const loadingShop = ref(false);
 const loadingTransactions = ref(false);
-const loadingMore = ref(false);
+
 const exchangingId = ref<string | null>(null);
 const showExchangeModal = ref(false);
 const selectedGoods = ref<ShopGood | null>(null);
 const transactionFilter = ref<string>('all');
 const transactionPage = ref(1);
 const transactionTotal = ref(0);
+const pageSize = 10;
 
 // Tabs
 const tabs = computed(() => [
@@ -234,7 +235,7 @@ const transactionFilterOptions = computed(() => [
   { label: t('fragment.expense'), value: 'expense' },
 ]);
 
-const hasMoreTransactions = computed(() => transactions.value.length < transactionTotal.value);
+const totalPages = computed(() => Math.ceil(transactionTotal.value / pageSize));
 
 // Methods
 async function loadBalance() {
@@ -262,9 +263,8 @@ async function loadShopGoods() {
 
 async function loadTransactions() {
   loadingTransactions.value = true;
-  transactionPage.value = 1;
   try {
-    const params: any = { page: 1, page_size: 20 };
+    const params: any = { page: transactionPage.value, page_size: pageSize };
     if (transactionFilter.value && transactionFilter.value !== 'all') {
       params.type = transactionFilter.value;
     }
@@ -279,23 +279,17 @@ async function loadTransactions() {
   }
 }
 
-async function loadMoreTransactions() {
-  loadingMore.value = true;
-  transactionPage.value++;
-  try {
-    const params: any = { page: transactionPage.value, page_size: 20 };
-    if (transactionFilter.value && transactionFilter.value !== 'all') {
-      params.type = transactionFilter.value;
-    }
-    const res = await getFragmentTransactions(params);
-    transactions.value.push(...res.transactions);
-  } catch (error) {
-    console.error('Failed to load more transactions:', error);
-    message.error(t('fragment.loadMoreFailed'));
-  } finally {
-    loadingMore.value = false;
-  }
+function handlePageChange(page: number) {
+  transactionPage.value = page;
+  loadTransactions();
 }
+
+function handleFilterChange() {
+  transactionPage.value = 1;
+  loadTransactions();
+}
+
+
 
 function handleExchange(goods: ShopGood) {
   selectedGoods.value = goods;
@@ -607,9 +601,10 @@ onMounted(() => {
   color: #ef4444;
 }
 
-.load-more {
-  margin-top: 20px;
-  text-align: center;
+.pagination-wrapper {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
 }
 
 /* Get Tab */

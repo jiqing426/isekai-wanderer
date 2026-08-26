@@ -51,7 +51,6 @@ MOCK_ACHIEVEMENTS_V2 = [
     {"id": "ach-008", "name": "大师", "description": "解锁所有成就", "icon": "👑", "unlocked": False, "unlocked_at": None, "claimed": False},
     {"id": "ach-009", "name": "选择困难", "description": "累计做出100次选择", "icon": "🤔", "unlocked": True, "unlocked_at": "2026-07-18T09:00:00Z", "claimed": True},
     {"id": "ach-010", "name": "碎片猎人", "description": "累计获得1000碎片", "icon": "💎", "unlocked": True, "unlocked_at": "2026-07-18T15:00:00Z", "claimed": False},
-    {"id": "ach-011", "name": "社交达人", "description": "发布10条帖子", "icon": "📝", "unlocked": False, "unlocked_at": None, "claimed": False},
     {"id": "ach-012", "name": "回忆录", "description": "完成5个结局", "icon": "📖", "unlocked": False, "unlocked_at": None, "claimed": False},
 ]
 
@@ -138,12 +137,12 @@ MOCK_MEMORIES = [
 ]
 
 MOCK_AFFECTIONS = [
-    {"character_id": "char-001", "character_name": "林辰", "value": 72, "level": "friendly", "level_label": "友好", "next_level": {"level": "close", "level_label": "亲密", "threshold": 80, "remaining": 8}},
-    {"character_id": "char-002", "character_name": "藤原雪", "value": 58, "level": "neutral", "level_label": "普通", "next_level": {"level": "friendly", "level_label": "友好", "threshold": 60, "remaining": 2}},
-    {"character_id": "char-003", "character_name": "沈星澜", "value": 85, "level": "close", "level_label": "亲密", "next_level": {"level": "devoted", "level_label": "挚爱", "threshold": 95, "remaining": 10}},
-    {"character_id": "char-004", "character_name": "Zero", "value": 45, "level": "neutral", "level_label": "普通", "next_level": {"level": "friendly", "level_label": "友好", "threshold": 60, "remaining": 15}},
-    {"character_id": "char-005", "character_name": "韩墨", "value": 30, "level": "cold", "level_label": "冷淡", "next_level": {"level": "neutral", "level_label": "普通", "threshold": 40, "remaining": 10}},
-    {"character_id": "char-006", "character_name": "苏暖", "value": 92, "level": "devoted", "level_label": "挚爱", "next_level": None},
+    {"character_id": "char-001", "character_name": "林辰", "value": 72, "level": "bond", "level_label": "羁绊", "next_level": {"level": "love", "level_label": "挚友", "threshold": 80, "remaining": 8}},
+    {"character_id": "char-002", "character_name": "藤原雪", "value": 58, "level": "trust", "level_label": "信赖", "next_level": {"level": "bond", "level_label": "羁绊", "threshold": 60, "remaining": 2}},
+    {"character_id": "char-003", "character_name": "沈星澜", "value": 85, "level": "love", "level_label": "挚友", "next_level": None},
+    {"character_id": "char-004", "character_name": "Zero", "value": 45, "level": "trust", "level_label": "信赖", "next_level": {"level": "bond", "level_label": "羁绊", "threshold": 60, "remaining": 15}},
+    {"character_id": "char-005", "character_name": "韩墨", "value": 30, "level": "ambiguous", "level_label": "暧昧", "next_level": {"level": "trust", "level_label": "信赖", "threshold": 40, "remaining": 10}},
+    {"character_id": "char-006", "character_name": "苏暖", "value": 92, "level": "love", "level_label": "挚友", "next_level": None},
 ]
 
 MOCK_DAILY_STATS = {"current_streak": 7, "longest_streak": 14, "total_days": 23, "today_checked_in": True}

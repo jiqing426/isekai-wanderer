@@ -12,36 +12,38 @@
 
       <!-- Phase: Game Playing -->
       <div v-if="phase === 'playing'" class="phase-game">
-        <!-- CR-016: 额度展示条 -->
-        <div class="quota-bar" v-if="subscriptionStore.dialogueQuota">
-          <div class="quota-left">
-            <span class="quota-icon">💬</span>
-            <span class="quota-label">对话额度</span>
-            <span class="quota-value" :class="{ 'is-subscriber': subscriptionStore.isSubscriber }">
-              {{ subscriptionStore.isSubscriber ? '∞' : `${subscriptionStore.dialogueQuota.remaining} / ${subscriptionStore.dialogueQuota.base_quota}` }}
-            </span>
-            <span v-if="!subscriptionStore.isSubscriber" class="quota-reset-hint" :title="quotaResetHint">
-              🕐 每日 08:00 重置
-            </span>
-          </div>
-          <div class="quota-right">
-            <span class="lifecycle-tag" :class="subscriptionStore.dialogueQuota.lifecycle_stage">
-              {{ lifecycleStageLabel(subscriptionStore.dialogueQuota.lifecycle_stage) }}
-            </span>
-            <n-button v-if="!subscriptionStore.isSubscriber && subscriptionStore.dialogueQuota.remaining <= 2" size="tiny" type="primary" @click="router.push('/subscribe')">
-              补充额度
-            </n-button>
-          </div>
-        </div>
-
         <!-- 游戏标题栏 -->
         <div class="game-header">
+          <n-button @click="router.back()" class="back-btn" title="返回">
+            ← 返回
+          </n-button>
           <ChapterProgress
             :chapter="currentChapter"
+            :chapter-number="gameStatus?.chapter_number"
+            :chapter-title="gameStatus?.chapter_title"
             :convergence-point="currentConvergencePoint"
             :progress="chapterProgress"
           />
           <div class="header-actions">
+            <!-- CR-016: 额度展示 - 移到header-actions中 -->
+            <div 
+              class="quota-inline" 
+              v-if="subscriptionStore.dialogueQuota"
+              :title="subscriptionStore.isSubscriber 
+                ? '订阅用户：无限对话额度' 
+                : `对话额度：剩余 ${subscriptionStore.dialogueQuota.remaining}/${subscriptionStore.dialogueQuota.base_quota}\n每日 08:00 重置`"
+            >
+              <span class="quota-icon">💬</span>
+              <span class="quota-value" :class="{ 'is-subscriber': subscriptionStore.isSubscriber }">
+                {{ subscriptionStore.isSubscriber ? '∞' : `${subscriptionStore.dialogueQuota.remaining}/${subscriptionStore.dialogueQuota.base_quota}` }}
+              </span>
+              <span v-if="!subscriptionStore.isSubscriber && subscriptionStore.dialogueQuota.remaining <= 2" class="quota-reset-hint" :title="quotaResetHint">
+                🕐 08:00重置
+              </span>
+              <n-button v-if="!subscriptionStore.isSubscriber && subscriptionStore.dialogueQuota.remaining <= 2" size="tiny" type="primary" @click="router.push('/subscribe')">
+                补充
+              </n-button>
+            </div>
             <n-button @click="handleManualSave" class="icon-btn" title="存档">
               💾 存档
             </n-button>
@@ -61,6 +63,7 @@
               :character-age="characterDetail?.age"
               :character-birthday="characterDetail?.birthday"
               :character-likes="parsedCharacterLikes"
+              :avatar-url="playerCharacterAvatar"
             />
             <AffectionDisplay
               :character-id="gameStatus?.character_id || game.currentDialogue?.character_id"
@@ -72,7 +75,7 @@
           </aside>
 
           <!-- 右侧栏 flex:1 -->
-          <main class="right-story-stage">
+          <main class="right-story-stage" :style="{ backgroundImage: `url(${currentBackground})` }">
             <StoryPanel
               :text="game.currentDialogue?.text || '剧情正在展开...'"
               :character-name="characterDisplayName"
@@ -81,7 +84,8 @@
               @complete="onStoryComplete"
             />
             <ChoicePanel
-              v-if="game.hasChoices"
+              ref="choicePanelRef"
+              v-if="game.hasChoices || game.loading"
               :choices="choiceOptions"
               :loading="game.loading"
               @select="handleChoice"
@@ -109,8 +113,16 @@
                 <h2 class="ending-title">{{ game.currentDialogue?.ending_title || $t('game.ending') }}</h2>
                 <p class="ending-desc">{{ game.currentDialogue?.ending_description || game.currentDialogue?.text || '' }}</p>
                 <div class="ending-actions">
-                  <n-button size="large" secondary @click="router.push('/discover')">{{ $t('game.backToHome') }}</n-button>
-                  <n-button size="large" secondary @click="handleRestart">🔄 {{ $t('game.startGame') }}</n-button>
+                  <n-button size="large" secondary @click="router.push('/discover')">🏠 返回首页</n-button>
+                  <n-button size="large" secondary @click="handleRestartCurrentChapter">🔄 重新开始</n-button>
+                  <n-button 
+                    v-if="(game.currentDialogue as any)?.has_next_chapter" 
+                    size="large" 
+                    type="primary" 
+                    @click="handleNextChapter"
+                  >
+                    ▶️ 进入{{ (game.currentDialogue as any)?.next_chapter_title || '下一章节' }}
+                  </n-button>
                 </div>
               </div>
             </div>
@@ -224,6 +236,7 @@ const affectionStore = useAffectionStore();
 const subscriptionStore = useSubscriptionStore();
 
 const paywallManagerRef = ref<InstanceType<typeof PaywallManager> | null>(null);
+const choicePanelRef = ref<InstanceType<typeof ChoicePanel> | null>(null);
 
 const phase = ref<'loading' | 'playing' | 'error'>('loading');
 const errorMsg = ref('');
@@ -278,6 +291,8 @@ const gameProgress = ref<{
   dialogue_count: number;
   current_chapter?: string;
   total_chapters?: number;
+  explored_nodes?: number;
+  total_nodes?: number;
 } | null>(null);
 
 // 游戏状态（角色信息）
@@ -287,6 +302,9 @@ const gameStatus = ref<{
   character_id: string;
   affection_value: number;
   affection_level: string;
+  chapter_number?: number | null;
+  chapter_type?: string | null;
+  chapter_title?: string | null;
 } | null>(null);
 
 // 角色详细数据
@@ -296,7 +314,15 @@ const characterDetail = ref<{
   birthday?: string;
   likes?: string[] | { items: string[] };
   personality?: string | Record<string, any>;
+  avatar_url?: string;
+  sprites?: Array<{ emotion: string; image_url: string }>;
 } | null>(null);
+
+// CR-028: 玩家扮演角色头像（供 CharacterInfo 组件复用）
+// CR-031 BUG-031-003: 只使用 avatar_url，不走 sprites fallback（新角色可能无头像或 sprites 为占位图）
+const playerCharacterAvatar = computed(() => {
+  return characterDetail.value?.avatar_url || '';
+});
 
 // 解析角色喜好（兼容数组和对象格式）
 const parsedCharacterLikes = computed(() => {
@@ -316,6 +342,7 @@ async function loadGameProgress() {
       completion_rate: progress.completion_rate || 0,
       choice_count: progress.choice_count || 0,
       dialogue_count: progress.dialogue_count || 0,
+      current_chapter: (progress as any).current_chapter,  // CR-020: 保存章节信息
     };
   } catch (err) {
     console.error('Failed to load game progress:', err);
@@ -333,6 +360,9 @@ async function loadGameStatus() {
       character_id: status.character_id || '',
       affection_value: status.affection_value || 0,
       affection_level: status.affection_level || '相识',
+      chapter_number: status.chapter_number ?? null,
+      chapter_type: status.chapter_type ?? null,
+      chapter_title: status.chapter_title ?? null,
     };
     // 加载角色详细数据
     if (status.character_id) {
@@ -344,6 +374,8 @@ async function loadGameStatus() {
           birthday: detail.birthday,
           likes: detail.likes || [],
           personality: detail.personality,
+          avatar_url: detail.avatar_url || '',
+          sprites: detail.sprites || [],
         };
       } catch (e) {
         console.warn('Failed to load character detail:', e);
@@ -373,7 +405,8 @@ async function loadHistoryFromApi() {
   }
 }
 
-// CR-016: 生命周期阶段标签
+// CR-016: 生命周期阶段标签（保留但暂时未使用，避免 TS 报错）
+// @ts-ignore
 function lifecycleStageLabel(stage: string): string {
   const map: Record<string, string> = {
     honeymoon: '蜜月期',
@@ -399,8 +432,36 @@ const quotaResetHint = computed(() => {
 
 // Computed properties for new components
 const currentChapter = computed(() => {
-  // Extract chapter from current node or dialogue
-  return game.currentDialogue?.chapter || '第一章';
+  // CR-030: 优先使用 gameStatus 的章节信息（来自 API），其次使用 progress API 的章节信息
+  if (gameStatus.value?.chapter_number && gameStatus.value?.chapter_title) {
+    return `第${gameStatus.value.chapter_number}章：${gameStatus.value.chapter_title}`;
+  }
+  // CR-020: 其次使用 progress API 的章节信息，最后使用 dialogue 的章节信息
+  return gameProgress.value?.current_chapter || game.currentDialogue?.chapter || '序章';
+});
+
+// 章节背景图片映射：根据章节动态切换背景
+const chapterBackgrounds: Record<string, string> = {
+  '第一章': 'http://47.107.174.176:8000/static/images/others/d6eb2bac-5b7e-496d-bed7-df085f34a564.png',
+  '第二章': 'http://47.107.174.176:8000/static/images/scripts/covers/edaa2171-11c9-403e-a55f-543e97e94205.png',
+  '第三章': 'http://47.107.174.176:8000/static/images/scripts/covers/3cfbf3fb-9164-4a54-8191-631f4bb6bb79.png',
+};
+
+const defaultBackground = 'http://47.107.174.176:8000/static/images/others/d6eb2bac-5b7e-496d-bed7-df085f34a564.png';
+
+const currentBackground = computed(() => {
+  const chapter = currentChapter.value;
+  // 先精确匹配
+  if (chapterBackgrounds[chapter]) {
+    return chapterBackgrounds[chapter];
+  }
+  // 尝试模糊匹配（如 "第二章" 可能包含在 "第二章：星月奇缘" 中）
+  for (const [key, url] of Object.entries(chapterBackgrounds)) {
+    if (chapter.includes(key) || key.includes(chapter)) {
+      return url;
+    }
+  }
+  return defaultBackground;
 });
 
 const currentConvergencePoint = computed(() => {
@@ -435,18 +496,56 @@ const choiceOptions = computed(() => {
 });
 
 const characterDisplayName = computed(() => {
-  if (!game.currentDialogue?.character_id) return t('gameView.narrator');
-  const cid = game.currentDialogue.character_id;
-  const gameName = game.characterNameMap.get(cid);
-  if (gameName) return gameName;
-  const aff = affectionStore.getAffection(cid);
-  if (aff?.character_name) return aff.character_name;
-  return t('gameView.character');
+  // CR-035 T-035-FE-001: 优先使用 gameStatus 中的角色名（从 /game/{session_id}/status API 获取）
+  if (gameStatus.value?.character_name) {
+    return gameStatus.value.character_name;
+  }
+  // 其次使用 currentDialogue 的 character_id 查找
+  if (game.currentDialogue?.character_id) {
+    const cid = game.currentDialogue.character_id;
+    const gameName = game.characterNameMap[cid];
+    if (gameName) return gameName;
+    const aff = affectionStore.getAffection(cid);
+    if (aff?.character_name) return aff.character_name;
+  }
+  return t('gameView.narrator');
 });
 
 // Initialize game
 async function initGame() {
   const scriptId = route.query.script as string;
+  const sessionId = route.query.session as string | undefined;
+  const routeId = route.query.route as string | undefined;  // CR-020: 支持从指定章节开始
+  const characterId = route.query.character_id as string | undefined;  // CR-028: 支持指定角色
+
+  // 从个人中心「继续游戏」跳转：带 session 参数；或页面刷新时 localStorage 有 session
+  // CR-031 BUG-031-001: await resumeSession
+  if (sessionId && !scriptId) {
+    phase.value = 'loading';
+    game.reset();
+    await game.loadScripts();
+    try {
+      // CR-031: await the async resumeSession call (previously missing await)
+      await game.resumeSession(sessionId);
+      if (game.currentSession) {
+        phase.value = 'playing';
+        await affectionStore.loadAffections();
+        await Promise.all([
+          loadGameProgress(),
+          loadGameStatus(),
+          loadHistoryFromApi()
+        ]);
+      } else {
+        phase.value = 'error';
+        errorMsg.value = '无法恢复会话，请重新开始游戏';
+      }
+    } catch (err) {
+      phase.value = 'error';
+      errorMsg.value = err instanceof Error ? err.message : '恢复会话失败';
+    }
+    return;
+  }
+
   if (!scriptId) {
     phase.value = 'error';
     errorMsg.value = t('gameView.missingScriptId');
@@ -456,7 +555,7 @@ async function initGame() {
   game.reset();
   await game.loadScripts();
   try {
-    await game.startGame(scriptId);
+    await game.startGame(scriptId, routeId, characterId);  // CR-020: 传递 routeId, CR-028: 传递 characterId
     if (game.currentSession) {
       phase.value = 'playing';
       await affectionStore.loadAffections();
@@ -503,14 +602,22 @@ async function handleChoice(choiceId: string) {
     });
   }
   
+  // 触发选择大师任务进度
+  try {
+    await gameApi.updateDailyTaskProgress('task_choice');
+  } catch (err) {
+    console.error('Failed to update choice task progress:', err);
+  }
+  
   // 检查当前额度是否足够（如果只剩1次，这次用完就没了）
   const quotaBefore = subscriptionStore.dialogueQuota?.remaining || 0;
   const willExhaustQuota = quotaBefore <= 1 && !subscriptionStore.isSubscriber;
   
   const result = await game.submitChoice(choiceId);
   
-  // 如果发生错误，提前返回
+  // 如果发生错误，重置选择面板状态
   if (result?.error) {
+    choicePanelRef.value?.reset();
     return;
   }
 
@@ -573,11 +680,17 @@ function goToFreeChat() {
     message.warning('请先开始游戏');
     return;
   }
+  // CR-032 T-032-FE-003: 确保传递 NPC 角色 ID，不传递玩家角色 ID
+  const npcCharacterId = game.currentDialogue?.character_id;
+  if (!npcCharacterId) {
+    message.warning('当前没有对话角色，无法开启自由对话');
+    return;
+  }
   router.push({
     path: `/game/${game.currentSession.id}/free-chat`,
     query: {
       character: characterDisplayName.value,
-      characterId: game.currentDialogue?.character_id,
+      characterId: npcCharacterId,  // CR-032: 必须传递 NPC 角色，不能 fallback 到玩家角色
       scriptId: game.currentScript?.id,
     },
   });
@@ -618,6 +731,14 @@ async function handleFreeChat(msg: string) {
   
   // 使用 submitCustomInput 推进剧情（和选择一样）
   const result = await game.submitCustomInput(msg);
+  
+  // CR-020: 处理章节转换提示
+  if (result?.chapter_transition) {
+    const transitionMsg = result.chapter_transition.message;
+    // 显示章节转换提示
+    message.success(`🎉 ${transitionMsg}`, { duration: 3000 });
+    // 可以在这里添加更复杂的章节转换动画
+  }
   
   // CR-019: 存储 AI 回复到数据库
   if (game.currentSession && game.currentDialogue?.text) {
@@ -704,8 +825,10 @@ async function onGiftSent() {
 
 // View gift history
 async function viewGiftHistory() {
-  if (!game.currentSession) {
-    message.warning('暂无送礼记录');
+  // CR-032 T-032-FE-004: 获取当前 NPC 角色的送礼记录
+  const npcCharacterId = game.currentDialogue?.character_id || gameStatus.value?.character_id;
+  if (!npcCharacterId) {
+    message.warning('当前没有角色信息，无法查看送礼记录');
     return;
   }
   
@@ -713,7 +836,8 @@ async function viewGiftHistory() {
   giftHistoryLoading.value = true;
   
   try {
-    const historyData = await gameApi.getGiftHistory(game.currentSession.id);
+    // 使用角色专属的送礼记录 API，而非 session 级别的全局记录
+    const historyData = await gameApi.getCharacterGiftHistory(npcCharacterId);
     if (historyData && historyData.gifts) {
       giftHistory.value = historyData.gifts;
     }
@@ -743,17 +867,65 @@ async function handleManualSave() {
   }
 }
 
-// Restart game
-async function handleRestart() {
+// Restart current chapter
+async function handleRestartCurrentChapter() {
   const scriptId = game.currentScript?.id;
+  const chapterId = game.currentDialogue?.chapter;
   if (!scriptId) {
     router.push('/discover');
     return;
   }
+  phase.value = 'loading';
+  // 先清除 localStorage 中的旧会话，避免 startGame 直接恢复旧会话
+  localStorage.removeItem('game_session');
+  localStorage.removeItem('game_script');
   game.reset();
-  await game.startGame(scriptId);
+  await game.loadScripts();
+  // 从当前章节重新开始
+  await game.startGame(scriptId, chapterId);
   if (game.currentSession) {
+    phase.value = 'playing';
     await affectionStore.loadAffections();
+    // 重新加载游戏状态
+    await Promise.all([
+      loadGameProgress(),
+      loadGameStatus(),
+      loadHistoryFromApi()
+    ]);
+  } else {
+    phase.value = 'error';
+    errorMsg.value = game.error || '无法重新开始章节';
+  }
+}
+
+// Go to next chapter
+async function handleNextChapter() {
+  const scriptId = game.currentScript?.id;
+  const nextChapterId = (game.currentDialogue as any)?.next_chapter;
+  if (!scriptId || !nextChapterId) {
+    router.push('/discover');
+    return;
+  }
+  phase.value = 'loading';
+  // 先清除 localStorage 中的旧会话，避免 startGame 直接恢复旧会话
+  localStorage.removeItem('game_session');
+  localStorage.removeItem('game_script');
+  game.reset();
+  await game.loadScripts();
+  // 从下一章节开始
+  await game.startGame(scriptId, nextChapterId);
+  if (game.currentSession) {
+    phase.value = 'playing';
+    await affectionStore.loadAffections();
+    // 重新加载游戏状态
+    await Promise.all([
+      loadGameProgress(),
+      loadGameStatus(),
+      loadHistoryFromApi()
+    ]);
+  } else {
+    phase.value = 'error';
+    errorMsg.value = game.error || '无法进入下一章节';
   }
 }
 
@@ -809,14 +981,50 @@ onMounted(async () => {
 /* Two-column layout */
 .game-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 16px;
   margin-bottom: 20px;
+}
+
+.back-btn {
+  flex-shrink: 0;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* CR-016: 额度展示 - 内联样式 */
+.quota-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(192, 132, 252, 0.08);
+  border: 1px solid rgba(192, 132, 252, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.quota-inline .quota-icon {
+  font-size: 14px;
+}
+
+.quota-inline .quota-value {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.quota-inline .quota-value.is-subscriber {
+  color: #ffd700;
+}
+
+.quota-inline .quota-reset-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .icon-btn {
@@ -868,12 +1076,32 @@ onMounted(async () => {
   flex-direction: column;
   gap: 24px;
   padding: 24px;
-  background: var(--glass-bg);
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  transition: background-image 0.6s ease;
+  background-blend-mode: overlay;
   border: 1px solid var(--border-color);
   border-radius: 16px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+  position: relative;
+}
+
+.right-story-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 10, 26, 0.75);
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.right-story-stage > * {
+  position: relative;
+  z-index: 1;
 }
 
 .action-btn {

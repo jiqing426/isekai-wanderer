@@ -19,17 +19,16 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
         secure: false,
-        configure: (proxy, options) => {
-          proxy.on('proxyReq', (proxyReq, req, res) => {
-            // 确保 POST 请求的 body 被正确转发
-            if (req.method === 'POST' && req.body) {
-              const bodyData = JSON.stringify(req.body);
-              proxyReq.setHeader('Content-Type', 'application/json');
-              proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-              proxyReq.write(bodyData);
-            }
-          });
-        },
+      },
+      '/static': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/images': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://backend:8000',
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

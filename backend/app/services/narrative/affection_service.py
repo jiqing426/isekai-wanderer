@@ -57,15 +57,21 @@ class AffectionService:
         return affection
 
     async def apply_choice_delta(
-        self, user_id: UUID, choice_id: UUID
+        self, user_id: UUID, choice_id: UUID, character_id: Optional[UUID] = None
     ) -> Optional[AffectionChange]:
         """
         Apply affection change from a player choice.
 
         Reads affection_delta from NodeChoice, clamps to ±5,
         updates value, recalculates level.
+        
+        Args:
+            user_id: The user making the choice
+            choice_id: The choice being made
+            character_id: Optional character context (from session/node). 
+                         If not provided, will try to extract from node content.
         """
-        # Load choice to get affection_delta and character context
+        # Load choice to get affection_delta
         stmt = select(NodeChoice).where(NodeChoice.id == choice_id)
         result = await self.db.execute(stmt)
         choice = result.scalar_one_or_none()
@@ -76,16 +82,15 @@ class AffectionService:
         # Clamp delta to ±5
         delta = max(-MAX_DELTA, min(MAX_DELTA, choice.affection_delta))
 
-        # We need the character_id - extract from node content or choice metadata
-        # For now, get it from the node's content JSON
-        from app.models.script import Node
-        node_stmt = select(Node).where(Node.id == choice.node_id)
-        node_result = await self.db.execute(node_stmt)
-        node = node_result.scalar_one_or_none()
+        # If character_id not provided, try to extract from node content
+        if not character_id:
+            from app.models.script import Node
+            node_stmt = select(Node).where(Node.id == choice.node_id)
+            node_result = await self.db.execute(node_stmt)
+            node = node_result.scalar_one_or_none()
 
-        character_id = None
-        if node and node.content and "character_id" in node.content:
-            character_id = UUID(node.content["character_id"])
+            if node and node.content and "character_id" in node.content:
+                character_id = UUID(node.content["character_id"])
 
         if not character_id:
             return None
@@ -206,6 +211,6 @@ def _level_label(level: str) -> str:
         "ambiguous": "暧昧",
         "trust": "信赖",
         "bond": "羁绊",
-        "love": "挚爱",
+        "love": "挚友",
     }
     return labels.get(level, level)

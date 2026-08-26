@@ -6,6 +6,19 @@
         <p class="subtitle">{{ $t('saveManager.subtitle') }}</p>
       </header>
 
+      <!-- CR-028: 角色筛选标签栏 -->
+      <div v-if="characterTabs.length > 0" class="character-filter-tabs">
+        <button
+          v-for="tab in characterTabs"
+          :key="tab.id"
+          class="filter-tab"
+          :class="{ active: selectedCharacterId === tab.filterValue }"
+          @click="selectCharacterFilter(tab.filterValue)"
+        >
+          {{ tab.name }}
+        </button>
+      </div>
+
       <n-spin :show="loading">
         <n-empty v-if="!loading && saves.length === 0" :description="$t('saveManager.noSaves')">
           <template #extra>
@@ -26,6 +39,8 @@
             <div class="save-info">
               <div class="save-title-row">
                 <span class="save-title">{{ save.script_title }}</span>
+                <!-- CR-028: 显示角色名 -->
+                <span v-if="save.character_name" class="save-character-badge">🎮 {{ save.character_name }}</span>
                 <n-tag v-if="save.status === 'completed'" size="small" type="success" :bordered="false">{{ $t('saveManager.completed') }}</n-tag>
                 <n-tag v-if="save.status === 'active'" size="small" type="info" :bordered="false">{{ $t('saveManager.inProgress') }}</n-tag>
               </div>
@@ -99,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { useHead } from '@vueuse/head';
@@ -125,6 +140,29 @@ const editName = ref('');
 const expandedSessionId = ref<string | null>(null);
 const showDeleteModal = ref(false);
 const deleteTarget = ref<SaveItem | null>(null);
+
+// CR-028: 角色筛选
+const selectedCharacterId = ref<string | null>(null);
+
+// 从存档列表中提取角色标签（去重）
+const characterTabs = computed(() => {
+  const map = new Map<string, string>();
+  for (const save of saves.value) {
+    if (save.character_id && save.character_name) {
+      map.set(save.character_id, save.character_name);
+    }
+  }
+  const tabs: { id: string; name: string; filterValue: string | null }[] = [{ id: '__all__', name: '全部', filterValue: null }];
+  for (const [id, name] of map) {
+    tabs.push({ id, name, filterValue: id });
+  }
+  return tabs;
+});
+
+function selectCharacterFilter(filterValue: string | null) {
+  selectedCharacterId.value = filterValue;
+  loadSaves();
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -203,7 +241,7 @@ function handleFork(newSessionId: string) {
 async function loadSaves() {
   loading.value = true;
   try {
-    const resp = await gameApi.getSaves();
+    const resp = await gameApi.getSaves(selectedCharacterId.value || undefined);
     saves.value = resp.saves;
   } catch (err) {
     console.warn('加载存档失败:', err);
@@ -238,4 +276,45 @@ onMounted(() => {
 .save-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .delete-btn:hover { color: #E11D48 !important; }
 .delete-target { font-weight: 600; color: var(--text-main); }
+
+/* CR-028: 角色筛选标签栏 */
+.character-filter-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-tab {
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-tab:hover {
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.filter-tab.active {
+  background: rgba(167, 139, 250, 0.2);
+  border-color: #a78bfa;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* CR-028: 存档卡片角色徽章 */
+.save-character-badge {
+  font-size: 12px;
+  background: rgba(167, 139, 250, 0.15);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 6px;
+  padding: 2px 8px;
+  color: rgba(255, 255, 255, 0.9);
+}
 </style>

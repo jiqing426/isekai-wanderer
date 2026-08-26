@@ -12,13 +12,29 @@ from app.api.v1.auth import get_current_user_id
 from app.models.daily import DailyCheckin, StreakRecord
 from app.models.payment import Fragment, FragmentTransaction
 
-# AC-028: Streak milestone rewards (Day 3/7/14/30)
+# 每日签到基础奖励（按连续签到天数分段）
+DAILY_BASE_REWARDS = [
+    (1, 6, 2),     # Day 1-6: 2碎片/天
+    (7, 13, 3),    # Day 7-13: 3碎片/天
+    (14, 29, 5),   # Day 14-29: 5碎片/天
+    (30, 9999, 8), # Day 30+: 8碎片/天
+]
+
+# 里程碑奖励（Day 3/7/14/30）
 STREAK_MILESTONES = {
-    3:  {"type": "fragment", "amount": 30,  "special": None,          "title": "三日之约", "description": "连续签到 3 天奖励"},
-    7:  {"type": "fragment", "amount": 100, "special": "cg_rare",     "title": "七日之约", "description": "连续签到 7 天奖励 + 稀有 CG"},
-    14: {"type": "fragment", "amount": 250, "special": "skin_exclusive", "title": "两周之约", "description": "连续签到 14 天奖励 + 限定皮肤"},
-    30: {"type": "fragment", "amount": 500, "special": "character_unlock", "title": "月满之约", "description": "连续签到 30 天奖励 + 隐藏角色"},
+    3:  {"type": "fragment", "amount": 10,  "special": None,              "title": "三日之约", "description": "连续签到 3 天 +10 碎片"},
+    7:  {"type": "fragment", "amount": 20,  "special": "hidden_dialogue", "title": "七日之约", "description": "连续签到 7 天 +20 碎片 + 隐藏对话解锁"},
+    14: {"type": "fragment", "amount": 30,  "special": "cg_rare",         "title": "两周之约", "description": "连续签到 14 天 +30 碎片 + 稀有CG解锁 + 角色好感度+5"},
+    30: {"type": "fragment", "amount": 50,  "special": "cg_exclusive",    "title": "月满之约", "description": "连续签到 30 天 +50 碎片 + 独占CG解锁 + 成就 Day 30 Streak"},
 }
+
+
+def get_daily_base_reward(streak_days: int) -> int:
+    """根据连续签到天数返回当日基础碎片奖励"""
+    for start, end, amount in DAILY_BASE_REWARDS:
+        if start <= streak_days <= end:
+            return amount
+    return 8  # 默认 Day 30+
 
 router = APIRouter(prefix="/daily", tags=["daily"])
 
@@ -105,10 +121,8 @@ async def checkin(
         db.add(milestone_txn)
         await db.commit()
 
-    # Calculate fragments earned (base 10 + streak bonus)
-    base_fragments = 10
-    streak_bonus = min(streak.current_streak, 10)  # cap at 10
-    fragments_earned = base_fragments + streak_bonus
+    # Calculate fragments earned (按分段规则)
+    fragments_earned = get_daily_base_reward(streak.current_streak)
     
     # Grant fragments
     frag_stmt = select(Fragment).where(Fragment.user_id == uid)

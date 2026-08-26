@@ -349,7 +349,7 @@ onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
 </script>
 
 <style scoped>
-.gallery-page { max-width: 900px; margin: 0 auto; padding: 32px 16px 48px; }
+.gallery-page { max-width: 1200px; margin: 0 auto; padding: 32px 16px 48px; }
 .page-header { margin-bottom: 24px; }
 .page-header-row { display: flex; align-items: center; margin-bottom: 12px; }
 .back-btn { color: var(--text-muted) !important; font-size: 13px !important; padding: 0 !important; }

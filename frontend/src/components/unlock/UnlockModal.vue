@@ -57,12 +57,15 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUnlockModal } from '@/composables/useUnlockModal'
 import CGUnlockCard from './CGUnlockCard.vue'
 import AchievementUnlockCard from './AchievementUnlockCard.vue'
 import MultiRewardSummary from './MultiRewardSummary.vue'
 import RewardFloat from './RewardFloat.vue'
 import GenericUnlockCard from './GenericUnlockCard.vue'
+
+const router = useRouter()
 
 defineProps<{
   autoProcess?: boolean
@@ -89,6 +92,10 @@ watch(isVisible, (val) => {
 })
 
 function handleConfirm() {
+  // 如果是CG类型，跳转到收藏馆
+  if (currentUnlock.value?.type === 'cg') {
+    router.push('/gallery')
+  }
   confirm()
 }
 

@@ -39,8 +39,12 @@ class ForkRequest(BaseModel):
 # ──────────────────────────────────────────────
 
 
-def _snapshot_to_card(snap: SaveSnapshot) -> dict:
-    return {
+def _snapshot_to_card(snap: SaveSnapshot, session: GameSession = None) -> dict:
+    """Convert snapshot to card response.
+    
+    CR-028: Include character info from associated GameSession if available.
+    """
+    card = {
         "id": str(snap.id),
         "session_id": str(snap.session_id),
         "label": snap.label or f"Auto Save {snap.created_at.strftime('%Y-%m-%d %H:%M')}",
@@ -48,6 +52,16 @@ def _snapshot_to_card(snap: SaveSnapshot) -> dict:
         "choice_count": len(snap.choice_history) if snap.choice_history else 0,
         "created_at": snap.created_at.isoformat() if snap.created_at else None,
     }
+    
+    # CR-028: Add character info from GameSession
+    if session:
+        card["character_id"] = str(session.character_id) if session.character_id else None
+        card["character_name"] = session.character_name or "默认角色"
+    else:
+        card["character_id"] = None
+        card["character_name"] = "默认角色"
+    
+    return card
 
 
 # ──────────────────────────────────────────────
@@ -59,32 +73,61 @@ def _snapshot_to_card(snap: SaveSnapshot) -> dict:
 async def list_snapshots(
     limit: int = 50,
     offset: int = 0,
+    character_id: Optional[str] = None,  # CR-028: Filter by character
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """
     CR3-012: List user's save snapshots.
+    CR-028: Support filtering by character_id.
     """
     uid = uuid.UUID(user_id)
-
-    # Total count
-    count_result = await db.execute(
-        select(func.count(SaveSnapshot.id)).where(SaveSnapshot.user_id == uid)
-    )
+    
+    # Build base query
+    base_query = select(SaveSnapshot).where(SaveSnapshot.user_id == uid)
+    
+    # CR-028: Filter by character_id if provided
+    if character_id:
+        try:
+            char_uuid = uuid.UUID(character_id)
+        except ValueError:
+            raise AppException(ErrorCode.INVALID_CHARACTER_ID, 400, "Invalid character_id format")
+        
+        # Join with GameSession to filter by character_id
+        base_query = (
+            base_query
+            .join(GameSession, SaveSnapshot.session_id == GameSession.id)
+            .where(GameSession.character_id == char_uuid)
+        )
+    
+    # Total count — must use the same filtered base_query so total reflects
+    # the character_id filter when provided (BUG-001 fix).
+    # Use func.count() (no column arg) to avoid cartesian product with JOIN columns.
+    count_query = select(func.count()).select_from(base_query.subquery())
+    count_result = await db.execute(count_query)
     total = count_result.scalar() or 0
-
+    
     stmt = (
-        select(SaveSnapshot)
-        .where(SaveSnapshot.user_id == uid)
+        base_query
         .order_by(SaveSnapshot.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
     result = await db.execute(stmt)
     snapshots = list(result.scalars().all())
-
+    
+    # CR-028: Load associated GameSessions for character info
+    session_ids = [snap.session_id for snap in snapshots]
+    sessions = {}
+    if session_ids:
+        session_result = await db.execute(
+            select(GameSession).where(GameSession.id.in_(session_ids))
+        )
+        for session in session_result.scalars().all():
+            sessions[session.id] = session
+    
     return {
-        "snapshots": [_snapshot_to_card(s) for s in snapshots],
+        "snapshots": [_snapshot_to_card(s, sessions.get(s.session_id)) for s in snapshots],
         "total": total,
         "offset": offset,
         "limit": limit,
@@ -129,7 +172,8 @@ async def create_snapshot(
     await db.commit()
     await db.refresh(snapshot)
 
-    return {"snapshot": _snapshot_to_card(snapshot)}
+    # BUG-002 fix: pass session so character_id / character_name are populated
+    return {"snapshot": _snapshot_to_card(snapshot, session)}
 
 
 @router.delete("/{snapshot_id}")

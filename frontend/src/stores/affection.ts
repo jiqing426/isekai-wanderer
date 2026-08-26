@@ -16,7 +16,7 @@ export const AFFECTION_LEVELS: Record<AffectionLevel, { min: number; max: number
   ambiguous: { min: 20, max: 39, color: '#F472B6', label: '暧昧' },
   trust: { min: 40, max: 59, color: '#38BDF8', label: '信赖' },
   bond: { min: 60, max: 79, color: '#A78BFA', label: '羁绊' },
-  love: { min: 80, max: 100, color: '#F43F5E', label: '挚爱' },
+  love: { min: 80, max: 100, color: '#F43F5E', label: '挚友' },
 };
 
 export function getAffectionLevel(value: number): AffectionLevel {

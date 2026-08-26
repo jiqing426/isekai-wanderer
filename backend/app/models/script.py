@@ -24,6 +24,8 @@ class Script(Base):
     characters_per_script: Mapped[int] = mapped_column(Integer, default=3)
     # CR-post-page: hot_value for sorting
     hot_value: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    # author
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True, default="美澜")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -43,6 +45,9 @@ class Route(Base):
     branch_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Branch category: main, branch_a, branch_b, secret")
     branch_label: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="Human-readable branch identifier")
     branch_condition: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="Condition to enter this branch")
+    # CR-030: Chapter structure
+    chapter_number: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True, comment="CR-030: Chapter number (1-4), NULL for backward compat")
+    chapter_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True, comment="CR-030: Chapter type (encounter/daily/conflict/convergence), NULL for backward compat")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     script: Mapped["Script"] = relationship(back_populates="routes")
@@ -60,6 +65,13 @@ class Node(Base):
     node_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     content: Mapped[dict] = mapped_column(JSON, nullable=False)
     background: Mapped[str | None] = mapped_column(Text, nullable=True, comment="W06: Background image URL for this node")
+    # CR-029: Character branch filtering (NULL=public, non-NULL=branch visible only to this character)
+    character_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("characters.id"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     route: Mapped["Route"] = relationship(back_populates="nodes")
@@ -110,6 +122,27 @@ class Character(Base):
     personality: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_main: Mapped[bool] = mapped_column(Boolean, default=False)
+    # CR-005: TTS voice configuration
+    gender: Mapped[str] = mapped_column(String(10), default="female", comment="Character gender: male/female/neutral")
+    tts_config: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="CR-005: TTS voice config with emotion samples")
+    # CR-027: NPC inner drive (desire/fear/secret)
+    desire: Mapped[str | None] = mapped_column(Text, nullable=True, comment="CR-027: Character's inner desire")
+    fear: Mapped[str | None] = mapped_column(Text, nullable=True, comment="CR-027: Character's deep fear")
+    secret: Mapped[str | None] = mapped_column(Text, nullable=True, comment="CR-027: Character's hidden secret")
+    # CR-028: Playable character routes
+    playable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    playable_route_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("routes.id"), nullable=True
+    )
+    play_description: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="CR-028: Description for playing as this character"
+    )
+    unlock_type: Mapped[str] = mapped_column(
+        String(20), default="free", nullable=False, comment="CR-028: free/paid/subscription"
+    )
+    unlock_price: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, comment="CR-028: Price in fragments"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     sprites: Mapped[list["CharacterSprite"]] = relationship(back_populates="character")

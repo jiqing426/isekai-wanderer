@@ -256,6 +256,7 @@ async def get_transactions(
         'recharge': '充值',
         'purchase': '碎片购买',
         'qa_test_topup': '测试充值',
+        'task_claim': '每日任务奖励',
     }
     
     # Build response with description mapping

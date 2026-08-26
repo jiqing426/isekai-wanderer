@@ -117,8 +117,8 @@
             <button 
               v-if="canPlayVoice" 
               class="voice-play-btn"
+              :class="{ 'is-playing': playingVoiceId === voice.id }"
               @click="playVoice(voice.id)"
-              :disabled="playingVoiceId === voice.id"
             >
               <span v-if="playingVoiceId === voice.id" class="playing-indicator">⏸️</span>
               <span v-else>▶️</span>
@@ -210,7 +210,7 @@ import { useMessage } from 'naive-ui';
 import { useHead } from '@vueuse/head';
 import { useI18n } from 'vue-i18n';
 import { gameApi } from '@/api/game';
-import type { CharacterDetail } from '@/api/game';
+import type { CharacterDetail, VoiceSample } from '@/api/game';
 import AffectionMeter from '@/components/AffectionMeter.vue';
 import GiftModal from '@/components/GiftModal.vue';
 
@@ -266,8 +266,8 @@ async function loadPersonality() {
   }
 }
 
-// 语音试听相关
-const voiceSamples = ref<Array<{ id: string; label: string; icon: string }>>([]);
+// 语音试听相关 (CR-005: 支持预生成音频 + 降级)
+const voiceSamples = ref<VoiceSample[]>([]);
 const loadingVoices = ref(false);
 
 async function loadVoices() {
@@ -294,7 +294,8 @@ async function loadUserSubscription() {
   loadingSubscription.value = true;
   try {
     const response = await gameApi.getUserSubscription();
-    userSubscription.value = response.subscription?.plan || 'free';
+    // 兼容两种返回格式
+    userSubscription.value = response.currentPlanId || response.subscription?.plan || 'free';
   } catch (err) {
     console.error('Failed to load subscription:', err);
     userSubscription.value = 'free';
@@ -307,20 +308,70 @@ const canPlayVoice = computed(() => {
   return userSubscription.value === 'standard' || userSubscription.value === 'premium';
 });
 
-function playVoice(voiceId: string) {
+import { useCharacterVoice } from '@/composables/useCharacterVoice';
+
+const { speak: speakVoice, stop: stopVoice, setVoiceEnabled } = useCharacterVoice();
+
+// 启用语音功能
+onMounted(() => {
+  setVoiceEnabled(true);
+});
+
+// CR-036: 播放语音 — 调用后端实时合成接口
+async function playVoice(voiceId: string) {
+  const voice = voiceSamples.value.find(v => v.id === voiceId);
+  if (!voice) return;
+  
   if (playingVoiceId.value === voiceId) {
-    // 停止播放
     playingVoiceId.value = null;
-    // TODO: 实际停止音频播放
-  } else {
-    // 开始播放
-    playingVoiceId.value = voiceId;
-    // TODO: 实际播放音频
-    // 模拟3秒后停止
-    setTimeout(() => {
-      playingVoiceId.value = null;
-    }, 3000);
+    return;
   }
+  
+  playingVoiceId.value = voiceId;
+  
+  try {
+    const emotion = voice.label || '打招呼';
+    
+    // 使用 api 工具类发请求（自动带 token）
+    const response = await fetch(
+      `/api/v1/characters/${character.value?.id}/voices/synthesize?emotion=${encodeURIComponent(emotion)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${getCookieValue('isekai_access_token')}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    
+    const audio = new Audio(audioUrl);
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      if (playingVoiceId.value === voiceId) {
+        playingVoiceId.value = null;
+      }
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(audioUrl);
+      playingVoiceId.value = null;
+    };
+    audio.play();
+  } catch (err) {
+    console.error('Voice synthesis failed:', err);
+    playingVoiceId.value = null;
+    message.error('语音合成失败，请稍后重试');
+  }
+}
+
+function getCookieValue(name: string): string {
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[2]) : '';
 }
 
 function showUpgradePrompt() {
@@ -483,6 +534,13 @@ onMounted(async () => {
       loadVoices(),
       loadUserSubscription()
     ]);
+    
+    // 触发角色探索任务进度
+    try {
+      await gameApi.updateDailyTaskProgress('task_profile');
+    } catch (err) {
+      console.error('Failed to update daily task progress:', err);
+    }
   }
 });
 </script>

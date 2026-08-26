@@ -68,7 +68,14 @@
 
         <div class="detail-card glass-card fade-in-up">
           <div class="detail-header">
-            <div class="detail-avatar">{{ selectedPost.author.name.charAt(0) }}</div>
+            <div class="detail-avatar">
+              <img v-if="selectedPost.author?.avatar && !avatarFailed" 
+                   :src="selectedPost.author.avatar" 
+                   :alt="selectedPost.author.name" 
+                   class="detail-avatar-img" 
+                   @error="avatarFailed = true" />
+              <span v-else>{{ selectedPost.author.name.charAt(0) }}</span>
+            </div>
             <div>
               <div class="detail-author">{{ selectedPost.author.name }}</div>
               <div class="detail-time">{{ formatTime(selectedPost.created_at) }}</div>
@@ -196,6 +203,7 @@ const hasMore = ref(true);
 const currentPage = ref(1);
 const searchKeyword = ref('');
 const selectedPost = ref<Post | null>(null);
+const avatarFailed = ref(false);
 const comments = ref<Comment[]>([]);
 const loadingComments = ref(false);
 const newComment = ref('');
@@ -471,19 +479,19 @@ watch(selectedPost, (newPost) => {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tab-button:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: rgba(167, 139, 250, 0.08);
+  color: var(--text-main);
 }
 
 .tab-button.active {
-  background: var(--color-primary);
-  color: white;
+  background: var(--brand-primary);
+  color: #fff;
 }
 
 .post-list { display: flex; flex-direction: column; gap: 16px; }
@@ -503,6 +511,10 @@ watch(selectedPost, (newPost) => {
   background: linear-gradient(135deg, #818CF8, #C084FC);
   display: flex; align-items: center; justify-content: center;
   color: white; font-weight: 700; font-size: 18px; flex-shrink: 0;
+  overflow: hidden;
+}
+.detail-avatar-img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
 }
 .detail-author { font-size: 15px; font-weight: 600; color: var(--text-main); }
 .detail-time { font-size: 12px; color: var(--text-subtle); }

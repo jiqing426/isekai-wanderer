@@ -59,3 +59,29 @@ Thumbs.db
 docker-data/
 tmp/
 *.pid
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Test reports and results
+test-results/
+playwright-report/
+frontend/test-results/
+frontend/playwright-report/
+
+# Build artifacts
+backend/static/assets/
+
+# Sensitive data
+login_data.json
+*.bak
+
+# Python
+*.pyc
+
+# Misc
+embedding_server.py
+test_*.py
+test_*.json

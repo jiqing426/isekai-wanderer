@@ -33,9 +33,10 @@ class ModelConfig:
     fallback_chain: List[str]
 
 
-# 模型池 (S×4 + A×4 + B×4 + C×1 = 13)
+# 模型池 (S×5 + A×5 + B×4 + C×1 = 15)
 MODEL_POOL = {
     # S级
+    "hermes-3-llama-3.1-405b": ModelConfig("hermes-3-llama-3.1-405b", "nousresearch", "S", ["MiniMax-M2.5", "qwen3.7-max", "deepseek-v4-pro"]),
     "qwen3.7-max": ModelConfig("qwen3.7-max", "qwen", "S", ["deepseek-v4-pro", "kimi-k2.6", "qwen3.6-plus"]),
     "deepseek-v4-pro": ModelConfig("deepseek-v4-pro", "deepseek", "S", ["qwen3.7-max", "kimi-k2.6", "qwen3.6-plus"]),
     "kimi-k2.7-code": ModelConfig("kimi-k2.7-code", "moonshot", "S", ["glm-5.2", "qwen3.7-max", "qwen3.6-plus"]),
@@ -46,6 +47,7 @@ MODEL_POOL = {
     "deepseek-v4-flash": ModelConfig("deepseek-v4-flash", "deepseek", "A", ["kimi-k2.5", "glm-5", "qwen3.6-plus"]),
     "kimi-k2.6": ModelConfig("kimi-k2.6", "moonshot", "A", ["glm-5.1", "qwen3.7-plus", "deepseek-v3.2"]),
     "glm-5.1": ModelConfig("glm-5.1", "zhipu", "A", ["kimi-k2.6", "qwen3.7-plus", "deepseek-v3.2"]),
+    "MiniMax-M2.5": ModelConfig("MiniMax-M2.5", "minimax", "A", ["qwen3.7-plus", "kimi-k2.5", "glm-5"]),
 
     # B级
     "qwen3.6-plus": ModelConfig("qwen3.6-plus", "qwen", "B", ["deepseek-v3.2", "glm-5", "kimi-k2.5"]),
@@ -63,8 +65,8 @@ SCENARIO_MODEL_MAP = {
     ScenarioType.CONVERGENCE: "qwen3.7-max",
     ScenarioType.CHOICE_GENERATION: "qwen3.7-plus",
     ScenarioType.ENDING: "qwen3.7-max",
-    ScenarioType.FREE_CHAT: "deepseek-v4-flash",
-    ScenarioType.FREE_CHAT_ADVANCED: "qwen3.7-plus",
+    ScenarioType.FREE_CHAT: "hermes-3-llama-3.1-405b",
+    ScenarioType.FREE_CHAT_ADVANCED: "hermes-3-llama-3.1-405b",
     ScenarioType.MEMORY_EXTRACTION: "qwen3.6-flash",
     ScenarioType.EMOTION_INFERENCE: "qwen3.6-flash",
     ScenarioType.CONTENT_MODERATION: "qwen3.6-flash",

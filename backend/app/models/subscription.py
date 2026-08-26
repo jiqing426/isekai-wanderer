@@ -53,3 +53,14 @@ class Subscription(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    
+    # Fragment grant tracking
+    fragment_quota: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="Monthly fragment quota for this tier"
+    )
+    last_fragment_grant_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="Last fragment grant time"
+    )
+    next_fragment_grant_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="Next scheduled fragment grant time"
+    )

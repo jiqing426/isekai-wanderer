@@ -1,7 +1,7 @@
 <template>
   <div class="character-info">
     <div class="avatar-placeholder">
-      <img v-if="avatarUrl" :src="avatarUrl" :alt="characterName" class="avatar-img" />
+      <img v-if="avatarUrl && !avatarFailed" :src="avatarUrl" :alt="characterName" class="avatar-img" @error="avatarFailed = true" />
       <span v-else class="avatar-initial">{{ characterName?.[0] || '?' }}</span>
     </div>
     <div class="info-text">
@@ -19,7 +19,9 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
+import { ref, watch } from 'vue';
+
+const props = withDefaults(defineProps<{
   characterId?: string;
   characterName: string;
   characterTitle?: string;
@@ -30,6 +32,14 @@ withDefaults(defineProps<{
 }>(), {
   characterName: '未知角色',
   characterLikes: () => [],
+});
+
+// CR-032: 图片加载失败时 fallback 到首字母
+const avatarFailed = ref(false);
+
+// 当 avatarUrl 或 characterId 变化时重置失败状态
+watch(() => [props.avatarUrl, props.characterId], () => {
+  avatarFailed.value = false;
 });
 </script>
 

@@ -170,6 +170,17 @@ export interface CharacterSprite {
   image_url: string;
 }
 
+// ── CR-005: Voice sample types ──
+export interface VoiceSample {
+  id: string;
+  label: string;        // 情绪标签：打招呼/日常对话/告白/生气
+  icon: string;         // emoji 图标
+  audio_url: string | null;  // 预生成的音频 URL（null 时降级到 Web Speech）
+  text: string;         // 试听文案（降级时使用）
+  voice: string;        // CosyVoice 声音角色（降级时使用）
+  speed: number;        // 语速（降级时使用）
+}
+
 export interface AffectionDetail {
   value: number;
   level: string;
@@ -199,6 +210,7 @@ export interface CharacterDetail {
   height?: number;
   birthday?: string;
   created_at?: string;
+  avatar_url?: string;
 }
 
 export interface GiftItem {
@@ -225,6 +237,9 @@ export interface SaveItem {
   last_played_at: string;
   created_at: string;
   ending_name?: string;
+  // CR-028: 角色信息
+  character_id?: string | null;
+  character_name?: string;
 }
 
 export interface SnapshotItem {
@@ -380,19 +395,58 @@ export const gameApi = {
     return api.get('/characters/gifts/catalog');
   },
 
+  getCharacterGiftHistory(characterId: string): Promise<{
+    gifts: Array<{
+      id: string;
+      character_id: string;
+      character_name: string;
+      gift_id: string;
+      gift_name: string;
+      quantity: number;
+      affection_delta: number;
+      created_at: string;
+    }>;
+    total: number;
+  }> {
+    // CR-032: 后端返回 history 字段，前端映射为 gifts
+    return api.get<any>(`/characters/${characterId}/gift-history`).then((resp: any) => ({
+      gifts: resp.history || resp.gifts || [],
+      total: (resp.history || resp.gifts || []).length,
+    }));
+  },
+
   sendGift(characterId: string, giftId: string): Promise<{
     status: string;
     new_affection_value: number;
     affection_gained: number;
     remaining_shards: number;
   }> {
-    return api.post(`/characters/${characterId}/gift`, { gift_id: giftId });
+    return api.post(`/gifts/send`, { character_id: characterId, gift_id: giftId });
+  },
+
+  // ── CR-025 S017: Daily Tasks API ──
+
+  getDailyTasks(): Promise<any> {
+    return api.get('/daily-tasks');
+  },
+
+  updateDailyTaskProgress(taskType: string, increment = 1): Promise<any> {
+    return api.post('/daily-tasks/progress', { task_type: taskType, increment });
+  },
+
+  claimDailyTask(taskType: string): Promise<any> {
+    return api.post('/daily-tasks/claim', { task_type: taskType });
+  },
+
+  claimAllDailyTasks(): Promise<any> {
+    return api.post('/daily-tasks/claim-all');
   },
 
   // ── CR3-015/016/017: Save & Snapshot & Ending API ──
 
-  getSaves(): Promise<{ saves: SaveItem[] }> {
-    return api.get('/saves');
+  getSaves(characterId?: string): Promise<{ saves: SaveItem[] }> {
+    const query = characterId ? `?character_id=${characterId}` : '';
+    return api.get(`/saves${query}`);
   },
 
   renameSave(sessionId: string, name: string): Promise<{ status: string }> {
@@ -454,16 +508,6 @@ export const gameApi = {
     return api.post('/achievements/claim', { achievement_id: achievementId });
   },
 
-  // ── CR3-025: Daily Tasks API ──
-
-  getDailyTasks(): Promise<{ tasks: DailyTask[] }> {
-    return api.get('/daily-tasks');
-  },
-
-  claimDailyTask(taskId: string): Promise<{ success: boolean }> {
-    return api.post('/daily-tasks/claim', { task_id: taskId });
-  },
-
   // ── CR3-026: Activity Chest API ──
 
   getActivityProgress(): Promise<ActivityProgress> {
@@ -514,11 +558,11 @@ export const gameApi = {
     return api.get(`/characters/${characterId}/personality`);
   },
 
-  getCharacterVoices(characterId: string): Promise<{ voices: any[] }> {
+  getCharacterVoices(characterId: string): Promise<{ voices: VoiceSample[] }> {
     return api.get(`/characters/${characterId}/voices`);
   },
 
-  getUserSubscription(): Promise<{ subscription: any }> {
+  getUserSubscription(): Promise<any> {
     return api.get('/user/subscription');
   },
 
@@ -551,6 +595,9 @@ export const gameApi = {
     affection_level: string;
     current_chapter?: string;
     total_chapters?: number;
+    chapter_number?: number | null;
+    chapter_type?: string | null;
+    chapter_title?: string | null;
   }> {
     return api.get(`/game/${sessionId}/status`);
   },

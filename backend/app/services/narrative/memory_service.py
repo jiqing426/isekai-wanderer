@@ -44,15 +44,36 @@ class MemoryService:
         if not dialogue_text or len(dialogue_text.strip()) < 10:
             return []
 
+        # Resolve character name to avoid UUID leaking into memory text
+        character_name = ""
+        try:
+            from app.models.script import Character as CharacterModel
+            char_result = await self.db.execute(
+                select(CharacterModel).where(CharacterModel.id == character_id)
+            )
+            char_obj = char_result.scalar_one_or_none()
+            if char_obj:
+                character_name = char_obj.name
+        except Exception:
+            pass
+        if not character_name:
+            character_name = str(character_id)
+
         # Step 1: Extract memories via LLM
         import asyncio
         try:
             memory_texts = await asyncio.wait_for(
-                llm_gateway.extract_memory(dialogue_text, character_name=str(character_id)),
-                timeout=5.0
+                llm_gateway.extract_memory(dialogue_text, character_name=character_name),
+                timeout=30.0  # 增加到 30 秒，避免 API 慢时跳过记忆提取
             )
         except asyncio.TimeoutError:
             # LLM timeout, skip memory extraction
+            import logging
+            logging.getLogger(__name__).warning(f"Memory extraction timed out for user={user_id}, character={character_id}")
+            return []
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Memory extraction failed: {e}")
             return []
 
         if not memory_texts:
@@ -61,12 +82,20 @@ class MemoryService:
         # Step 2: Generate embeddings and store
         memories = []
         for mem_text in memory_texts:
+            # BUG-029-008: 防御性类型检查，确保 mem_text 是字符串
+            if not isinstance(mem_text, str):
+                if isinstance(mem_text, dict):
+                    mem_text = mem_text.get('fact') or mem_text.get('text') or mem_text.get('memory') or ''
+                else:
+                    mem_text = str(mem_text) if mem_text else ''
+            
             if not mem_text or len(mem_text.strip()) < 5:
                 continue
 
             embedding = await self._get_embedding(mem_text)
-            if not embedding:
-                continue
+            # 即使 embedding 失败也存储，后续可以补充
+            # if not embedding:
+            #     continue
 
             memory = CharacterMemory(
                 user_id=user_id,

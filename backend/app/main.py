@@ -71,9 +71,13 @@ setup_cors(app)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(LoggingMiddleware)
 
-# Mock 数据中间件（优先于真实路由）
-from app.mock_middleware import MockMiddleware
-app.add_middleware(MockMiddleware)
+# Mock 中间件 — 仅开发环境加载，生产环境(APP_ENV=production)自动跳过
+from app.mock_middleware import MockMiddleware, MOCK_ENABLED
+if MOCK_ENABLED:
+    app.add_middleware(MockMiddleware)
+    print("[Startup] MockMiddleware enabled — mock routes active")
+else:
+    print("[Startup] MockMiddleware skipped — production mode")
 
 # Routes
 app.include_router(api_router)

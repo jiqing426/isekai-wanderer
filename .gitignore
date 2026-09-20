@@ -81,7 +81,5 @@ login_data.json
 # Python
 *.pyc
 
-# Misc
-embedding_server.py
-test_*.py
-test_*.json
+# Misc - root-level test scripts have been moved to tests/legacy/
+# (kept for backward compatibility with any old git tracking)

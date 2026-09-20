@@ -47,15 +47,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useMessage } from 'naive-ui';
 
 const props = withDefaults(defineProps<{
   characterId?: string;
   characterName?: string;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }>(), {
   characterId: '',
   characterName: '',
+  defaultExpanded: false,
 });
 
 const emit = defineEmits<{
@@ -63,8 +64,8 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-const message = useMessage();
-const isExpanded = ref(false);
+// D7: isExpanded 初始值由 defaultExpanded prop 控制（Corvus 引擎默认展开）
+const isExpanded = ref(props.defaultExpanded ?? false);
 const inputText = ref('');
 const loading = ref(false);
 const error = ref('');

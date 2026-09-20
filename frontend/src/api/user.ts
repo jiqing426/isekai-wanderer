@@ -70,8 +70,8 @@ export function getMemorySummary() {
   return api.get<MemorySummary>('/users/me/memory/summary');
 }
 
-export function getCharacterBond() {
-  return api.get<BondList>('/users/me/characters/bond');
+export function getCharacterBond(offset = 0, limit = 10) {
+  return api.get<BondList>(`/users/me/characters/bond?offset=${offset}&limit=${limit}`);
 }
 
 export function getMyEndings() {
@@ -171,6 +171,17 @@ export function getLatestSession(): Promise<{
 
 // ── Avatar Upload API ──
 
+// Cookie 工具函数
+function setCookie(name: string, value: string, days: number = 7) {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
 export function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
   const doUpload = async (token: string): Promise<Response> => {
     const formData = new FormData();
@@ -185,7 +196,7 @@ export function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
   };
 
   const tryRefresh = async (): Promise<string | null> => {
-    const refreshToken = localStorage.getItem('isekai_refresh_token');
+    const refreshToken = getCookie('isekai_refresh_token');
     if (!refreshToken) return null;
     
     try {
@@ -196,8 +207,8 @@ export function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
       });
       if (refreshRes.ok) {
         const data = await refreshRes.json();
-        localStorage.setItem('isekai_access_token', data.access_token);
-        localStorage.setItem('isekai_refresh_token', data.refresh_token);
+        setCookie('isekai_access_token', data.access_token, 7);
+        setCookie('isekai_refresh_token', data.refresh_token, 30);
         return data.access_token;
       }
     } catch {
@@ -207,7 +218,7 @@ export function uploadAvatar(file: File): Promise<{ avatar_url: string }> {
   };
 
   return (async () => {
-    let accessToken = localStorage.getItem('isekai_access_token');
+    let accessToken = getCookie('isekai_access_token');
     
     // If no token, try refresh first
     if (!accessToken) {

@@ -27,6 +27,17 @@ try:
 except ImportError:
     pass
 
+# Register JSONB type for SQLite (renders as TEXT)
+try:
+    from sqlalchemy.dialects.postgresql import JSONB
+    from sqlalchemy.ext.compiler import compiles
+
+    @compiles(JSONB, "sqlite")
+    def compile_jsonb_sqlite(type_, compiler, **kw):
+        return "TEXT"
+except ImportError:
+    pass
+
 
 # Use an in-memory SQLite for unit tests (fast, no external deps)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

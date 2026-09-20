@@ -26,6 +26,13 @@ class GameSession(Base):
     ending_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     choice_history: Mapped[dict] = mapped_column(JSON, default=list)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    # CR-028: Character identity for multi-story system
+    character_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("characters.id"), nullable=True
+    )
+    character_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="CR-028: Snapshot of character name at session start"
+    )
 
 
 class GameProgress(Base):

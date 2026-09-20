@@ -1,14 +1,19 @@
 <template>
   <div class="route-tree">
     <div v-for="chapter in chapters" :key="chapter.id" class="chapter-node">
-      <div class="chapter-header" :class="{ current: chapter.isCurrent, locked: chapter.isLocked }">
+      <div 
+        class="chapter-header" 
+        :class="{ current: chapter.isCurrent, locked: chapter.isLocked, unlocked: !chapter.isLocked }"
+        @click="handleChapterClick(chapter)"
+      >
         <span class="chapter-icon">
-          {{ chapter.isCompleted ? '✅' : chapter.isCurrent ? '🔵' : '🔒' }}
+          {{ chapter.isCompleted ? '✅' : chapter.isCurrent ? '🔵' : chapter.isLocked ? '🔒' : '🔓' }}
         </span>
         <span class="chapter-title">{{ chapter.title }}</span>
         <span v-if="chapter.isLocked && chapter.lockReason" class="lock-reason">
           （{{ chapter.lockReason }}）
         </span>
+        <span v-else-if="!chapter.isLocked" class="play-hint">点击继续</span>
       </div>
       
       <div v-if="chapter.subRoutes && chapter.subRoutes.length > 0" class="sub-routes">
@@ -31,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+
 interface SubRoute {
   id: string;
   icon: string;
@@ -43,6 +49,7 @@ interface SubRoute {
 
 interface Chapter {
   id: string;
+  routeId?: string;
   title: string;
   isCompleted: boolean;
   isCurrent: boolean;
@@ -54,6 +61,18 @@ interface Chapter {
 defineProps<{
   chapters: Chapter[];
 }>();
+
+const emit = defineEmits<{
+  (e: 'chapter-click', chapter: Chapter): void;
+}>();
+
+
+function handleChapterClick(chapter: Chapter) {
+  if (chapter.isLocked) {
+    return;
+  }
+  emit('chapter-click', chapter);
+}
 </script>
 
 <style scoped>

@@ -34,13 +34,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/DiscoverView.vue'),
     meta: { requiresAuth: true },
   },
-  // CR3-009: Character list
-  {
-    path: '/characters',
-    name: 'CharacterList',
-    component: () => import('@/views/CharacterListView.vue'),
-    meta: { requiresAuth: true },
-  },
   // CR3-010: Character detail
   {
     path: '/characters/:characterId',
@@ -74,13 +67,6 @@ const routes: RouteRecordRaw[] = [
     path: '/achievements',
     name: 'Achievements',
     component: () => import('@/views/AchievementView.vue'),
-    meta: { requiresAuth: true },
-  },
-  // CR3-028: Profile page
-  {
-    path: '/profile',
-    name: 'Profile',
-    component: () => import('@/views/ProfileView.vue'),
     meta: { requiresAuth: true },
   },
   // CR-008: Personal Center
@@ -216,8 +202,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
-  // 从 localStorage 同步 token（用于测试场景或外部修改）
-  auth.syncFromLocalStorage();
+  // 从 cookie 同步 token（用于多 tab 场景）
+  auth.syncFromCookie();
 
   // If authenticated but profile not loaded (e.g. after page refresh), fetch it
   if (auth.isAuthenticated && !auth.user) {
@@ -231,6 +217,11 @@ router.beforeEach(async (to) => {
         emailVerified: profile.email_verified,
         avatar: profile.avatar_url,
       });
+
+      // CR-043 AC-020: 登录/页面刷新后自动加载订阅状态
+      const { useSubscriptionStore } = await import('@/stores/subscription');
+      const subscriptionStore = useSubscriptionStore();
+      await subscriptionStore.fetchSubscriptionStatus();
     } catch (err: any) {
       console.warn('路由守卫验证 Token 失败:', err instanceof Error ? err.message : err);
       // Only clear tokens if it's an auth error (401)

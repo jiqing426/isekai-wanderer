@@ -9,7 +9,7 @@ export interface UserProfile {
   avatar_url: string | null;
   signature: string | null;
   email_verified: boolean;
-  subscription_tier: 'free' | 'standard' | 'premium';
+  subscription_tier: 'free' | 'basic' | 'standard' | 'premium';
   preferred_genre: string | null;
   locale: string;
   onboarding_completed: boolean;
@@ -29,7 +29,7 @@ export interface ChangePasswordRequest {
 }
 
 export interface SubscriptionStatus {
-  tier: 'free' | 'standard' | 'premium';
+  tier: 'free' | 'basic' | 'standard' | 'premium';
   status: 'active' | 'trialing' | 'cancelled' | 'expired';
   trial_started_at: string | null;
   trial_ends_at: string | null;
@@ -81,7 +81,7 @@ export interface BillRecord {
 }
 
 export interface MemberInfo {
-  tier: 'free' | 'standard' | 'premium';
+  tier: 'free' | 'basic' | 'standard' | 'premium';
   status: 'active' | 'inactive' | 'cancelled' | 'trialing';
   member_since: string | null;
   expires_at: string | null;

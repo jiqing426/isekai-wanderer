@@ -5,7 +5,7 @@
       <div class="loading-spinner"></div>
       <span>思考中...</span>
     </div>
-    <div v-else class="choice-list">
+    <div class="choice-list">
       <div
         v-for="(choice, i) in choices"
         :key="choice.id"
@@ -13,7 +13,7 @@
         :style="{ animationDelay: `${i * 0.08}s` }"
         :class="{
           selected: selectedId === choice.id,
-          disabled: submitting || choice.locked,
+          disabled: submitting || choice.locked || loading,
           locked: choice.locked,
           premium: choice.is_premium,
         }"
@@ -65,7 +65,7 @@ interface Choice {
   hint?: string;
 }
 
-defineProps<{ 
+const props = defineProps<{ 
   choices: Choice[];
   loading?: boolean;
 }>();
@@ -74,27 +74,31 @@ const emit = defineEmits<{ select: [id: string] }>();
 const selectedId = ref<string | null>(null);
 const submitting = ref(false);
 
+function reset() {
+  selectedId.value = null;
+  submitting.value = false;
+}
+
+defineExpose({ reset });
+
 async function handleSelect(choice: Choice) {
-  if (submitting.value || choice.locked) return;
+  if (submitting.value || choice.locked || props.loading) return;
   selectedId.value = choice.id;
   submitting.value = true;
   
   try {
     emit('select', choice.id);
   } finally {
+    // 500ms 后释放锁，允许下次选择
     setTimeout(() => { submitting.value = false; }, 500);
   }
 }
 
-// 当选择完成后，锁定所有选项
-watch(selectedId, (newId) => {
-  if (newId) {
-    // 选择后 500ms 锁定所有选项
-    setTimeout(() => {
-      submitting.value = true;
-    }, 500);
-  }
-});
+// 新选项到达时重置状态，避免上次选择锁死面板
+watch(() => props.choices, () => {
+  selectedId.value = null;
+  submitting.value = false;
+})
 </script>
 
 <style scoped>

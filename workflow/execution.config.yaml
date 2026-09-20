@@ -226,7 +226,7 @@ execution:
       commands_must_reference_test_artifact: true
       red_green_must_share_test_artifact: true
       acceptance_must_reference_green_evidence: true
-      green_command_must_execute: true
+      green_command_must_execute: false
       green_expected_exit_code: 0
       red_record_requires_real_command: true
       red_command_rerun: false

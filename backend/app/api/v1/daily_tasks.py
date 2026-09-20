@@ -1,13 +1,10 @@
-"""CR3-023: Extended daily task API with progress tracking and claim.
+"""S017: Daily task API with progress tracking and claim.
 
-Extends the existing /daily/tasks endpoint with:
-- Progress update API (called by game engine)
-- Task completion check
-- Reward claim API
+Daily tasks reset at Beijing time (UTC+8) 00:00.
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -25,35 +22,47 @@ router = APIRouter(prefix="/daily-tasks", tags=["daily-tasks"])
 
 
 # ──────────────────────────────────────────────
-# Task Definitions (MVP: hardcoded for today)
+# Task Definitions (S017)
 # ──────────────────────────────────────────────
 
 TASK_DEFINITIONS = {
     "task_dialogue": {
         "id": "task_dialogue",
-        "title": "完成 3 次对话",
-        "description": "与角色进行 3 次对话",
-        "target": 3,
+        "title": "💬 对话达人",
+        "description": "完成1次对话",
+        "icon": "💬",
+        "target": 1,
         "reward_type": "fragments",
-        "reward_amount": 10,
+        "reward_amount": 3,
     },
     "task_choice": {
         "id": "task_choice",
-        "title": "做出 5 次选择",
-        "description": "在对话中做出 5 次选择",
-        "target": 5,
+        "title": "🎯 选择大师",
+        "description": "做出1次选择",
+        "icon": "🎯",
+        "target": 1,
         "reward_type": "fragments",
-        "reward_amount": 10,
+        "reward_amount": 3,
     },
     "task_profile": {
         "id": "task_profile",
-        "title": "查看角色信息",
-        "description": "查看任意角色的详细信息",
+        "title": "👤 角色探索",
+        "description": "查看1个角色档案",
+        "icon": "👤",
         "target": 1,
         "reward_type": "fragments",
-        "reward_amount": 5,
+        "reward_amount": 2,
     },
 }
+
+# 全完成额外奖励
+ALL_COMPLETE_BONUS = 5
+
+
+def get_beijing_today() -> date:
+    """获取北京时间的今天日期"""
+    beijing_tz = timezone(timedelta(hours=8))
+    return datetime.now(beijing_tz).date()
 
 
 # ──────────────────────────────────────────────
@@ -83,9 +92,10 @@ async def list_daily_tasks(
     """
     CR3-023: List daily tasks with progress for today.
     Auto-creates task records if not exist.
+    S017: Uses Beijing time (UTC+8) for date calculation.
     """
     uid = uuid.UUID(user_id)
-    today = date.today()
+    today = get_beijing_today()
 
     # Get or create today's tasks
     result = await db.execute(
@@ -129,13 +139,27 @@ async def list_daily_tasks(
 
     completed_count = sum(1 for t in tasks if t["completed"])
     claimed_count = sum(1 for t in tasks if t["claimed"])
+    
+    # 检查全完成奖励是否已领取
+    all_complete_reason = "task_claim:all_complete"
+    bonus_result = await db.execute(
+        select(FragmentTransaction).where(
+            FragmentTransaction.user_id == uid,
+            FragmentTransaction.reason == all_complete_reason,
+            func.date(FragmentTransaction.created_at) == today,
+        )
+    )
+    all_complete_claimed = bonus_result.scalar_one_or_none() is not None
 
     return {
         "tasks": tasks,
         "total": len(tasks),
         "completed": completed_count,
         "claimed": claimed_count,
-        "reset_at": "UTC 00:00",
+        "all_completed": completed_count == 3,
+        "all_claimed": claimed_count == 3,
+        "all_complete_claimed": all_complete_claimed,
+        "reset_at": "北京时间 00:00",
     }
 
 
@@ -153,9 +177,10 @@ async def update_progress(
     """
     CR3-023: Update task progress. Called by game engine when action occurs.
     Auto-marks task as completed when progress >= target.
+    S017: Uses Beijing time (UTC+8) for date calculation.
     """
     uid = uuid.UUID(user_id)
-    today = date.today()
+    today = get_beijing_today()
     task_type = request.task_type
 
     if task_type not in TASK_DEFINITIONS:
@@ -222,9 +247,10 @@ async def claim_task(
     """
     CR3-023: Claim reward for completed task.
     Returns 400 if not completed, 409 if already claimed.
+    S017: Uses Beijing time (UTC+8) for date calculation.
     """
     uid = uuid.UUID(user_id)
-    today = date.today()
+    today = get_beijing_today()
     task_type = request.task_type
 
     if task_type not in TASK_DEFINITIONS:
@@ -296,4 +322,84 @@ async def claim_task(
         "task_type": task_type,
         "claimed": True,
         "reward": {"type": defn["reward_type"], "amount": reward_amount},
+    }
+
+
+# ──────────────────────────────────────────────
+# S017: Claim all-complete bonus
+# ──────────────────────────────────────────────
+
+
+@router.post("/claim-all")
+async def claim_all_tasks(
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    S017: 领取全完成奖励 — 3个任务全部完成时，额外+5碎片。
+    不可重复领取。
+    """
+    uid = uuid.UUID(user_id)
+    today = get_beijing_today()
+
+    # 检查今日3个任务是否全部完成
+    result = await db.execute(
+        select(DailyTask).where(
+            DailyTask.user_id == uid,
+            DailyTask.date == today,
+        )
+    )
+    tasks = result.scalars().all()
+    task_map = {t.task_type: t for t in tasks}
+
+    # 确保3个任务都存在且已完成
+    for task_id in TASK_DEFINITIONS:
+        task = task_map.get(task_id)
+        if not task or not task.completed:
+            raise AppException(
+                ErrorCode.TASK_NOT_COMPLETED,
+                400,
+                "Not all tasks are completed yet",
+            )
+
+    # 检查是否已领取过（用 FragmentTransaction reason 判断）
+    all_complete_reason = "task_claim:all_complete"
+    bonus_result = await db.execute(
+        select(FragmentTransaction).where(
+            FragmentTransaction.user_id == uid,
+            FragmentTransaction.reason == all_complete_reason,
+            func.date(FragmentTransaction.created_at) == today,
+        )
+    )
+    if bonus_result.scalar_one_or_none() is not None:
+        raise AppException(
+            ErrorCode.TASK_ALREADY_CLAIMED,
+            409,
+            "All-complete bonus already claimed today",
+        )
+
+    # 发放5碎片
+    frag_result = await db.execute(
+        select(Fragment).where(Fragment.user_id == uid)
+    )
+    frag = frag_result.scalar_one_or_none()
+    if frag:
+        frag.balance += ALL_COMPLETE_BONUS
+    else:
+        frag = Fragment(user_id=uid, balance=ALL_COMPLETE_BONUS)
+        db.add(frag)
+
+    # 记录交易
+    tx = FragmentTransaction(
+        user_id=uid,
+        amount=ALL_COMPLETE_BONUS,
+        reason=all_complete_reason,
+    )
+    db.add(tx)
+
+    await db.commit()
+
+    return {
+        "claimed": True,
+        "reward": ALL_COMPLETE_BONUS,
     }

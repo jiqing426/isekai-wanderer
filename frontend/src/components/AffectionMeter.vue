@@ -52,7 +52,7 @@ const LEVELS = [
   { min: 20, max: 39, label: '暧昧', color: '#F472B6' },
   { min: 40, max: 59, label: '信赖', color: '#38BDF8' },
   { min: 60, max: 79, label: '羁绊', color: '#A78BFA' },
-  { min: 80, max: 100, label: '挚爱', color: '#F43F5E' },
+  { min: 80, max: 100, label: '挚友', color: '#F43F5E' },
 ];
 
 const clampedValue = computed(() => Math.max(0, Math.min(100, props.value)));

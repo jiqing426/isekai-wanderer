@@ -53,7 +53,7 @@ def read_text(path):
 
 def write_text(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    path.write_text(text, encoding="utf-8")
 
 
 def now_text():

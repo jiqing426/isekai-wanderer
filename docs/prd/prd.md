@@ -5,253 +5,78 @@
 | 项 | 内容 |
 | --- | --- |
 | 来源 | 用户 PRD |
-| 关联 CR | CR-001 |
-| 标题 | PRD_IsekaiWanderer_v4.1_完整版_20260710 |
-| 记录时间 | 2026-07-17T08:05:26Z |
-
-## 结构化摘要（PM REQUIREMENT 阶段产出）
-
-### 产品定位
-
-AI 驱动的二次元交互式叙事网页游戏。核心差异化：结构化剧本（vs 自由对话）+ 跨会话角色记忆 + 好感度养成。
-
-### 目标用户
-
-- **P0 核心**：乙女玩家（~30%）+ 冒险者（~25%）
-- P1 扩展（延后）：创作者、社交玩家
-- P2 机会（延后）：鉴赏家
-
-### MVP 范围（CEO INIT 裁剪后）
-
-**做（P0）**：
-
-| 编号 | 能力 | REQ |
-| --- | --- | --- |
-| S001 | 叙事一致性引擎 | REQ-001 |
-| S002 | 结构化剧本系统（2 个剧本：乙女恋爱 3 路线 + 奇幻冒险 2 路线） | REQ-002 |
-| S003 | 跨会话角色记忆 | REQ-003 |
-| S004 | 好感度系统（基础版） | REQ-004 |
-| S006 | 基础视觉呈现 | REQ-005 |
-| S007 | 用户账户系统（仅邮箱） | REQ-006 |
-| S016 | 每日签到 Streak | REQ-007 |
-| S017 | 每日任务系统 | REQ-008 |
-
-**不做（延后）**：
-- S025 订阅方案、S024 内购系统（真实支付不在 MVP，用 mock 碎片）
-- OAuth 登录（Google/Discord）
-- 第 3 个剧本（悬疑推理）
-- 所有 P1 功能（UGC/社交/国际化/SEO/Push/邮件/自由对话/结局分享/Discord/CG画廊）
-- 管理后台
-
-### 成功标准
-
-| 指标 | 目标 | 停止条件 |
-| --- | --- | --- |
-| D1 留存 | ≥40% | D1 <15% |
-| D7 留存 | ≥15% | — |
-| 首玩完成率 | ≥30% | <30% |
-| 签到 Day3 到达率 | ≥20% | — |
-
-### 验收追踪
-
-- 32 条 P0 验收项（AC-001 ~ AC-032）
-- 3 条 P1 验收项（AC-033 ~ AC-035，延后）
-- 详见 `workflow/changes/CR-001/acceptance.md`
-
-### 待澄清问题
-
-| Q 编号 | 问题 | 阻塞 MVP | 建议 |
-| --- | --- | --- | --- |
-| Q-001 | 首发剧本数量 | 否 | ✅ 已确认：2 个（乙女恋爱 3 路线 + 奇幻冒险 2 路线） |
-| Q-002 | 邮箱验证是否需要 | 否 | 需要（防滥用） |
-| Q-003 | mock 碎片是否需要消费场景 | 否 | 仅累积展示 |
-| Q-004 | 记忆是否需要用户可见页面 | 否 | 仅后台透明运作 |
-| Q-005 | 部署目标平台 | 否 | Docker Compose + VPS |
-| Q-006 | 是否需要 PWA 离线 | 否 | 仅 installable PWA |
-| Q-007 | 好感度等级是否影响称呼 | 否 | 仅数值+进度条 |
-
-### 前置条件
-
-| 编号 | 条件 | 阻塞 MVP |
-| --- | --- | --- |
-| PRE-01 | LLM API 选型 | 是 |
-| PRE-02 | 向量数据库选型 | 是 |
-| PRE-03 | 美术资源获取方式 | 否 |
-| PRE-04 | 首发剧本大纲 | 是 |
-
-### 技术约束
-
-- 网页端优先（PWA）
-- AI 叙事引擎（LLM + 规则引擎混合）
-- 向量数据库（角色记忆）
-- 流式响应（文字动画）
-
-## CR-004 移动端适配摘要
-
-| 项 | 内容 |
-| --- | --- |
-| 关联 CR | CR-004 |
-| 标题 | 移动端适配（Mobile Responsive） |
-| 记录时间 | 2026-07-19 |
-| 状态 | REQUIREMENT in-progress |
-
-### 变更目标
-
-为 28 个前端页面 + 22 个公共组件增加移动端（≤767px）适配，零改动 PC 端（≥1024px）。
-
-### 范围
-
-- P0（7 页面）：LandingView、HomeView、GameView、DiscoverView、CharacterListView、CharacterDetailView、CommunityView
-- P1（18 页面）：Login、Register、Onboarding、Profile、Settings、SaveManager、ShardCenter、Achievement、Subscription、Gallery、Gift、ScriptDetail、Ending、Recap、RouteMap、FreeChat、ForgotPassword、ResetPassword
-- P2（3 页面）：Share、OAuthCallback、404
-- 新增：底部 TabBar（5 入口：首页/发现/游戏/社区/我的）、`src/styles/mobile.css`
-
-### 核心原则
-
-1. 零改动 PC 端（≥1024px）
-2. 纯 CSS 层改动，不动业务逻辑
-3. 新建 mobile.css，不动 global.css
-4. 触摸友好（≥44px）
-5. 单列布局，无横向滚动
-
-### 执行策略
-
-Demo 先行（LandingView + HomeView）→ 用户确认 → P0 全面 → P1 → P2，预估 7-10 天。
-
-### 验收追踪
-
-- 38 条验收项（AC-MOB-001 ~ AC-MOB-038），详见 `workflow/changes/CR-004/acceptance.md`
-- P0×15 / P1×20 / P2×3
-
-### 待澄清问题
-
-无。用户已确认 5 项，CEO 已 INIT 通过。
-
----
+| 关联 CR | CR-043 |
+| 标题 | PRD: CR-043 — 订阅权益区分与 CG 画廊权限控制 |
+| 记录时间 | 2026-09-16T08:16:13Z |
 
 ## 原始 PRD
 
 ```markdown
-# PRD_IsekaiWanderer_v4.1_完整版_20260710
+# PRD: CR-043 — 订阅权益区分与 CG 画廊权限控制
 
-**产品名称**：异世界漫游（Isekai Wanderer）
-**产品代号**：AI二次元交互式叙事游戏（网页端）
-**文档版本**：v4.1 完整版（付费+留存增量升级 · 完整独立阅读版）
-**迭代日期**：2026-07-10
-**基线版本**：v4.0（中英双语+原型图对齐版 · 2026-06-24）
-**升级性质**：完整版（v4.0全部内容 + v4.1增量合并，可独立阅读）
-**目标上线**：MVP 3个月内（2026 Q3）
-**编码规范**：SXXX-MMM-FXX.XX-ACXX/ERRXX（全员严格执行）
-**制度依据**：V9.2编码标准 · 总法-36（分层交付强制） · 总法-39（统一溯源编码） · 子法-AI（AI原生应用专项规则） · 指法-PRD（战略需求层规范）
+## 背景
 
-## 一、产品概述
+当前系统中订阅权益的定义已在 `TIER_PERMISSIONS` 中完整定义（free/basic/standard/premium），包括 CG 画廊访问权限（`ugc_access`）、角色解锁权限（`script_access`）、存档数量、对话次数等。
 
-### 1.1 产品名称与定位
-- **产品名称**：异世界漫游（Isekai Wanderer）
-- **产品定位**："AI驱动的二次元交互式叙事游戏——Your Story, Woven by AI / 每一个选择都改变故事，每一个角色都记得你"
-- **核心价值主张**：AI动态叙事 + 跨会话记忆 + 角色养成，打造沉浸式二次元互动体验
-- **增强价值主张**：区别于自由对话型产品，采用结构化剧本设计，确保叙事质量和情感深度
-- **商业化定位**：Freemium + 4级订阅（Free/Basic/Standard/Premium）+ 单剧本购买的混合变现模式
+但实际执行层面存在以下问题：
 
-### 1.2 目标用户
-- **P0（核心）** 乙女玩家（林小雨）~30% — 高二次元浓度，追求情感连接与故事深度 — $8-17/月
-- **P0（核心）** 冒险者（陈浩然）~25% — 喜欢奇幻冒险，追求多线多结局体验 — $8-17/月
-- **P1（扩展）** 创作者（佐藤美咲）~20% — 有UGC创作欲望 — $4-8/月
-- **P1（扩展）** 社交玩家（王可欣）~15% — 碎片化娱乐需求 — $4-8/月
-- **P2（机会）** 鉴赏家（Alex Chen）~10% — 叙事品质敏感者 — $17-30/月
+1. **CG 画廊未按订阅权益区分**：`gallery.py` 中 CG 解锁只检查 `UnlockedCG` 表（用户是否通过剧情解锁），不检查订阅等级。`canAccessCGGallery` 权限在后端 API 返回但前端 Gallery 页面不检查。
+2. **剧本访问未强制检查**：`script_access` 权限已定义（trial_only / all_normal / all_including_exclusive），但 `game.py` 中选角和开始游戏时不检查 `script_access`，只检查 `character.playable`。
+3. **订阅页面点击订阅报错**：已修复（dateutil 模块问题 + payment URL 问题）。
 
-### 1.3 解决的 6 个显性痛点
-1. 人设崩塌（85%用户遭遇）→ S001 叙事一致性引擎
-2. 缺乏长期目标（70%用户）→ S002 结构化剧本系统
-3. 角色失忆（65%用户）→ S003 跨会话角色记忆
-4. 情感节奏失控 → S008 情感节奏控制系统
-5. 网页端体验差（40%用户）→ S006 基础视觉呈现
-6. 缺乏回访动力（60%用户）→ S016/S017/S018/S026 留存系统
+## 变更目标
 
-## 二、功能需求清单
+1. CG 画廊页面和 API 按订阅等级限制访问/显示
+2. 剧本和角色选择时强制检查 `script_access` 权限
+3. 前端在需要订阅的功能入口处显示锁/升级提示
 
-### 2.1 P0 级功能（MVP 必须上线）
+## 功能需求
 
-**S001-NARR-F01：叙事一致性引擎**
-- 构建"剧情节点+状态机+角色性格约束"三层防护体系
-- 关键剧情节点100%人工预设，AI仅负责节点间对话细节生成
-- 子功能：S001-NARR-F01.01 剧情节点预设 | S001-NARR-F01.02 规则引擎校验 | S001-NARR-F01.03 兜底机制
+### REQ-001：CG 画廊订阅权益区分
+- standard 及以上用户可访问完整 CG 画廊
+- free/basic 用户只能看到已解锁的 CG，未解锁 CG 显示锁图标和"升级订阅解锁"提示
+- 后端 gallery API 返回 `is_accessible` 字段标识当前用户是否有权访问
 
-**S002-SCRIPT-F01：结构化剧本系统**
-- 每个剧本3条角色路线，每条路线2-3个结局（好/普通/坏）
-- MVP提供3个首发剧本：乙女恋爱×1 + 悬疑推理×1 + 奇幻冒险×1
-- 子功能：S002-SCRIPT-F01.01 剧本路线管理 | S002-SCRIPT-F01.02 收敛节点设计 | S002-SCRIPT-F01.03 路线探索展示 | S002-SCRIPT-F01.04 多周目引导（v4.1新增）
+### REQ-002：剧本访问权限强制检查
+- `script_access = trial_only`（free）：只能玩试用剧本
+- `script_access = all_normal`（basic/standard）：可玩所有普通剧本
+- `script_access = all_including_exclusive`（premium）：可玩所有剧本含独家内容
+- game.py 中开始游戏、选角时检查用户 tier 对应的 script_access
 
-**S003-MEM-F01：跨会话角色记忆**
-- 向量数据库存储用户与角色关键交互记忆
-- 高置信度记忆（>0.8）才召回；不确定时不提及
-- 子功能：S003-MEM-F01.01 记忆存储 | S003-MEM-F01.02 记忆召回 | S003-MEM-F01.03 摘要压缩
+### REQ-003：前端订阅权益展示
+- 需要订阅才能访问的功能入口显示锁/升级提示
+- CG 画廊中未解锁且需要订阅的 CG 显示"升级订阅"按钮
+- 角色列表中需要更高订阅等级的角色显示"升级订阅"按钮
 
-**S004-BOND-F01：角色养成/好感度系统（基础版）**
-- 好感度5等级：相识→暧昧→信赖→羁绊→挚爱（0-100数值化）
-- 每次互动变化≤±5；半隐藏进度条
-- 子功能：S004-BOND-F01.01 好感度计算 | S004-BOND-F01.02 进度条展示 | S004-BOND-F01.03 CG解锁
+### REQ-004：订阅流程状态同步修复
+- 订阅成功后立即刷新订阅状态（`subscriptionStore.fetchSubscriptionStatus()`），不只是刷新套餐列表
+- 订阅成功后刷新用户信息（`getUserProfile()` → `authStore.setUser()`），更新 `user.subscription_tier`
+- 修复 Settings 会员页面 `member-info` 状态判断逻辑：从 `SubscriptionService.get_user_subscription()` 读取 status/expires_at/member_since，不再依赖 `User.trial_started_at`/`User.trial_ends_at`
+- `member-info` 的 tier 通过 `SubscriptionService.get_user_tier()` 获取，和 `/cr016/subscription/status` 保持一致
+- 登录成功后自动加载订阅状态（`fetchSubscriptionStatus()`）
+- `UserProfile.subscription_tier` 类型补齐 `'basic'`
 
-**S005-QUAL-F01：首玩剧本质量保障**
-- 3个首发剧本×4周打磨；50人Beta测试
-- 首玩剧本3分钟内进入选择点，15分钟内解锁首个CG/成就
+## 不变项
+- 已有的 `TIER_PERMISSIONS` 定义不变
+- 已有的 `unlock_type` 角色解锁机制不变
+- 已有的订阅状态管理不变
 
-**S006-VIS-F01：基础视觉呈现**
-- 每个角色≥5种表情立绘，每个剧本≥3个场景背景图+2首BGM
-- 流式文字动画≥30fps，页面首次加载<3秒
-
-**S007-USER-F01：用户账户系统**
-- 支持Google/Discord/邮箱一键注册登录
-- 注册后3步引导：选择偏好→推荐剧本→开始体验
-
-**S016-STREAK-F01：每日签到Streak系统（v4.1新增P0）**
-- 每日自动签到（UTC 0:00），连续天数追踪+阶梯奖励
-- Day 3/7/14/30 阶梯奖励（碎片+隐藏对话+稀有CG+独占CG）
-
-**S017-DAILY-F01：每日任务系统（v4.1新增P0）**
-- 每天3个固定小任务：对话达人(+10碎片) / 选择大师(+5碎片) / 角色探索(+5碎片)
-- 全完成额外+25碎片+Streak延续1天
-
-**S025-SUB-F01：订阅方案体系（v4.1新增P0）**
-- 4档订阅：Free/Basic/Standard/Premium
-- 月付和年付（年付省20%），4种货币（USD/JPY/EUR/KRW）
-- Standard为推荐档（⭐BEST VALUE），7天免费试用
-
-**S024-PURCH-F01：内购系统（v4.1新增P0）**
-- 单剧本购买 + 虚拟货币（碎片）充值
-- 支持Apple/Google/Stripe支付
-
-### 2.2 P1 级功能
-- P1-1: S008-EMO-F01 情感节奏控制系统
-- P1-2: S009-STYLE-F01 AI风格化对话系统
-- P1-3: S010-COMM-F01 社交分享系统
-- P1-4: S011-UGC-F01 用户创作内容系统
-- P1-5: S012-I18N-F01 国际化系统
-- P1-6: S013-CG-F01 CG画廊系统
-- P1-7: S014-SEO-F01 SEO与内容营销系统
-- P1-8: S015-DISC-F01 Discord社区集成
-- P1-9: 自由对话模式（v4.1新增）
-- P1-10: 邮件召回系统（v4.1新增）
-- P1-11: Push通知系统 S018-PUSH（v4.1新增P0→P1）
-- P1-12: 结局分享系统（v4.1新增）
-
-## 三、数据模型（关键实体）
-- User表：subscription_tier（free/basic/standard/premium）+ trial相关字段
-- Subscription / Purchase / DailyTask / StreakRecord / Achievement（v4.1新增5个实体）
-
-## 四、API 端点（v4.1新增）
-- 订阅与支付API：从5个扩充到13个端点
-- 留存相关API：5个新端点
-
-## 五、埋点事件
-- 8个付费相关埋点事件（v4.1新增）
-
-## 六、MVP验证指标
-- D1/D7留存率 / ARPU / Paywall转化率 / 月度流失率 / 首玩转化率 / 试用转化率
-
-## 七、技术约束
-- 网页端优先（PWA）
-- AI叙事引擎（LLM + 规则引擎混合）
-- 向量数据库（角色记忆）
-- 流式响应（文字动画）
+## 技术约束
+- 复用 `SubscriptionService.check_permission()` 和 `get_tier_permissions()`
+- 前端复用 `useSubscriptionStore`
+- 不修改数据库结构
 ```
+
+## 结构化摘要
+
+| 项 | 内容 |
+| --- | --- |
+| 目标 | 让订阅权益在执行层面真正落地——TIER_PERMISSIONS 已定义但未被后端代码强制执行，CG 画廊和剧本访问存在权益绕过 |
+| 目标用户 | 乙女玩家（核心）、冒险者（核心）；free/basic/standard/premium 四档订阅用户 |
+| 范围（做） | REQ-001 CG 画廊按订阅等级限制访问/显示、REQ-002 剧本和角色选择强制检查 script_access、REQ-003 前端订阅权益展示（锁/升级提示）、REQ-004 订阅流程状态同步修复（订阅成功后状态刷新、member-info 数据源修复、登录后自动加载、类型补齐） |
+| 非目标（不做） | 不修改 TIER_PERMISSIONS 定义、不修改数据库结构、不修改 unlock_type 机制、不做真实支付/订阅、不新增订阅等级 |
+| MVP 验收 | 21 条 AC（AC-001~AC-021），P0：AC-001/002/005/006/009/011/012/015/016/017/018/019，P1：AC-003/004/007/008/010/013/014/020/021 |
+| 待澄清问题 | Q-001 is_accessible 字段 API 契约（暂缓 DESIGN）、Q-002 script_access 映射规则（暂缓 DESIGN）、Q-003 试用剧本范围（暂缓 DESIGN）、Q-004 standard+ 查看 CG 显示方式（暂缓 DESIGN）、Q-005 权限检查层级（暂缓 DESIGN） |
+| CEO 附条件 | C1 is_accessible 字段设计 Architect 确认、C2 script_access 三档映射规则 Architect 确认、C3 权限边界变更 Security 审查 |
+| OpenSpec Change | `openspec/changes/CR-043-prd-cr-043-订阅权益区分与-cg-画廊权限控制/` |
+| 需求关口 | `python tools/check-gate-readiness.py --gate requirement --change CR-043-prd-cr-043-订阅权益区分与-cg-画廊权限控制 --change-id CR-043` |

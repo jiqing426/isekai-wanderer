@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python deps
 COPY requirements.txt .
+ENV HF_ENDPOINT=https://hf-mirror.com
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app code

@@ -1,19 +1,27 @@
-"""Mock 中间件 — 拦截 500/404 接口，返回 mock 数据。
+"""Mock 中间件 — 仅用于开发环境，拦截未实现的接口返回 mock 数据。
 
-可通过环境变量 DISABLE_MOCK=1 关闭 mock，用于真实 API 测试。
+生产安全：当 APP_ENV=production 或 DISABLE_MOCK=1 时，mock 中间件完全跳过，
+mock_data.py 不被导入，所有 mock 路由注册为空操作，所有请求走真实路由。
 """
-import os, json, re
+import os, json, re, sys
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-MOCK_ENABLED = os.getenv("DISABLE_MOCK", "").strip() not in ("1", "true", "True", "yes")
-from app.mock_data import (
-    N, Y, D, CARDS, CATEGORIES, TAGS, ACHIEVEMENTS, ACTIVITY,
-    SAVES, POSTS, COMMENTS, COLLECTIONS, GAL_ACH, CHARS, CHAR_DETAIL,
-    AFFECTIONS, GIFTS, MEMORIES, SNAPSHOTS, ENDING, TOPICS, CHAT_HIST,
-    ROUTE_MAP,
+MOCK_ENABLED = (
+    os.getenv("DISABLE_MOCK", "").strip() not in ("1", "true", "True", "yes")
+    and os.getenv("APP_ENV", "").strip() != "production"
 )
+
+if MOCK_ENABLED:
+    from app.mock_data import (
+        N, Y, D, CARDS, CATEGORIES, TAGS, ACHIEVEMENTS, ACTIVITY,
+        SAVES, POSTS, COMMENTS, COLLECTIONS, GAL_ACH, CHARS, CHAR_DETAIL,
+        AFFECTIONS, GIFTS, MEMORIES, SNAPSHOTS, ENDING, TOPICS, CHAT_HIST,
+        ROUTE_MAP,
+    )
+else:
+    print("[MockMiddleware] DISABLED — production mode or DISABLE_MOCK=1", file=sys.stderr)
 
 # (method, regex) -> handler
 ROUTES = []
@@ -25,8 +33,10 @@ def _match(method, path):
     return None
 
 def R(method, pattern):
+    """Register a mock route. No-op when mock is disabled."""
     def deco(fn):
-        ROUTES.append((method, re.compile(f"^/api/v1{pattern}$"), fn))
+        if MOCK_ENABLED:
+            ROUTES.append((method, re.compile(f"^/api/v1{pattern}$"), fn))
         return fn
     return deco
 
@@ -290,11 +300,11 @@ def _(): return {"transactions":[{"id":"pay-001","type":"subscription","amount":
 class MockMiddleware(BaseHTTPMiddleware):
     """拦截 /api/v1 请求，如果匹配到 mock 路由则直接返回，不走真实路由。
 
-    设置 DISABLE_MOCK=1 环境变量可关闭 mock，走真实路由。
+    生产安全：APP_ENV=production 或 DISABLE_MOCK=1 时，中间件完全透传，
+    不拦截任何请求，mock_data.py 不被导入。
     """
 
     async def dispatch(self, request: Request, call_next):
-        # If mock is disabled, always call real routes
         if not MOCK_ENABLED:
             return await call_next(request)
 
@@ -306,6 +316,5 @@ class MockMiddleware(BaseHTTPMiddleware):
             data = handler()
             return JSONResponse(content=data)
 
-        # 没匹配的走正常路由，但如果返回 500 也用 mock 兜底
         response = await call_next(request)
         return response

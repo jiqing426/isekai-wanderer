@@ -123,6 +123,9 @@ export default {
     showcaseDesc: '探索其他玩家的精彩故事',
     testimonialsTitle: '用户评价',
     footerText: '© 2026 Isekai Wanderer. All rights reserved.',
+    footerAbout: '关于我们',
+    footerPrivacy: '隐私政策',
+    footerTerms: '服务条款',
     // How it works
     howTitle: '如何使用',
     step1Title: '创建角色',

@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from sqlalchemy import select
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,13 +32,34 @@ class ScriptService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_node_with_choices(self, node_id: UUID) -> Optional[Node]:
-        """Load a single node with its choices."""
+    async def get_node_with_choices(
+        self,
+        node_id: UUID,
+        session_character_id: Optional[UUID] = None,
+    ) -> Optional[Node]:
+        """Load a single node with its choices, with optional character filtering.
+
+        CR-029: When session_character_id is provided, only returns nodes where
+        character_id IS NULL (public) or matches session_character_id.
+        When session_character_id is None (old session), only returns public nodes.
+        """
         stmt = (
             select(Node)
             .options(selectinload(Node.choices))
             .where(Node.id == node_id)
         )
+        # CR-029: Character filtering
+        if session_character_id is not None:
+            stmt = stmt.where(
+                sa.or_(
+                    Node.character_id.is_(None),
+                    Node.character_id == session_character_id,
+                )
+            )
+        else:
+            # No character session → only public nodes
+            stmt = stmt.where(Node.character_id.is_(None))
+
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -87,8 +109,16 @@ class ScriptService:
 
     # ---- Choice validation & transition ----
 
-    async def get_next_node(self, choice_id: UUID) -> Optional[Node]:
-        """Get the next node based on a choice."""
+    async def get_next_node(
+        self,
+        choice_id: UUID,
+        session_character_id: Optional[UUID] = None,
+    ) -> Optional[Node]:
+        """Get the next node based on a choice.
+
+        CR-029: Passes session_character_id through to get_node_with_choices
+        for character-aware filtering.
+        """
         stmt = select(NodeChoice).where(NodeChoice.id == choice_id)
         result = await self.db.execute(stmt)
         choice = result.scalar_one_or_none()
@@ -96,7 +126,10 @@ class ScriptService:
         if not choice or not choice.next_node_id:
             return None
 
-        return await self.get_node_with_choices(choice.next_node_id)
+        return await self.get_node_with_choices(
+            choice.next_node_id,
+            session_character_id=session_character_id,
+        )
 
     async def validate_choice(self, node_id: UUID, choice_id: UUID) -> bool:
         """Validate that a choice belongs to a node."""
@@ -155,7 +188,10 @@ class ScriptService:
 
         current_node = None
         if session.current_node_id:
-            current_node = await self.get_node_with_choices(session.current_node_id)
+            current_node = await self.get_node_with_choices(
+                session.current_node_id,
+                session_character_id=session.character_id,
+            )
 
         return {
             "session": session,
@@ -194,7 +230,22 @@ class ScriptService:
             )
 
         # Get next node
-        next_node = await self.get_next_node(choice_id)
+        next_node = await self.get_next_node(
+            choice_id,
+            session_character_id=session.character_id,
+        )
+
+        # CR-029: Validate next node visibility for character sessions
+        if next_node and session.character_id is not None:
+            if (
+                next_node.character_id is not None
+                and next_node.character_id != session.character_id
+            ):
+                raise AppException(
+                    error_code="NARRATIVE_NODE_NOT_VISIBLE",
+                    status_code=403,
+                    message="This narrative node is not available for the current character",
+                )
 
         # Record progress
         progress = GameProgress(
@@ -220,12 +271,38 @@ class ScriptService:
             session.current_node_id = next_node.id
 
             if await self.is_terminal_node(next_node):
-                session.status = "completed"
-                ending_type = self.get_ending_type(next_node)
-                if ending_type:
-                    session.ending_type = ending_type
-                from datetime import datetime
-                session.completed_at = datetime.utcnow()
+                # CR-020: 检查是否有下一个章节（route）
+                # 如果有下一个 route，不标记为 completed，而是准备章节转换
+                current_route_result = await self.db.execute(
+                    select(Route).where(Route.id == next_node.route_id)
+                )
+                current_route = current_route_result.scalar_one_or_none()
+                
+                has_next_route = False
+                if current_route:
+                    all_routes_result = await self.db.execute(
+                        select(Route)
+                        .where(Route.script_id == current_route.script_id)
+                        .order_by(Route.created_at)
+                    )
+                    all_routes = all_routes_result.scalars().all()
+                    
+                    current_route_index = next((i for i, r in enumerate(all_routes) if r.id == current_route.id), None)
+                    if current_route_index is not None and current_route_index < len(all_routes) - 1:
+                        has_next_route = True
+                
+                if has_next_route:
+                    # 章节结束，但不是游戏结局
+                    # 不标记为 completed，让前端显示"继续下一章节"
+                    pass
+                else:
+                    # 真正的游戏结局
+                    session.status = "completed"
+                    ending_type = self.get_ending_type(next_node)
+                    if ending_type:
+                        session.ending_type = ending_type
+                    from datetime import datetime
+                    session.completed_at = datetime.utcnow()
         else:
             session.status = "completed"
             from datetime import datetime
@@ -258,24 +335,27 @@ class ScriptService:
                 message=f"Script {script_id} not found",
             )
 
-        # Load user's completed game sessions for this script
-        completed_stmt = (
+        # Load user's game sessions for this script (both completed and active)
+        # CR-020: 每个章节开始时都应该解锁，不仅仅是完成整个游戏后
+        sessions_stmt = (
             select(GameSession)
             .where(
                 GameSession.user_id == user_id,
                 GameSession.script_id == script_id,
-                GameSession.status == "completed",
+                GameSession.status.in_(["completed", "active"]),
             )
         )
-        completed_result = await self.db.execute(completed_stmt)
-        completed_sessions = completed_result.scalars().all()
+        sessions_result = await self.db.execute(sessions_stmt)
+        sessions = sessions_result.scalars().all()
 
         # Build set of explored route IDs and ending types
         explored_route_ids: set = set()
         route_endings: Dict[UUID, list] = {}
-        for session in completed_sessions:
+        for session in sessions:
+            # CR-020: 只要有会话（active 或 completed），就标记为 explored
             explored_route_ids.add(session.route_id)
-            if session.ending_type:
+            # 只有 completed 的会话才记录 ending
+            if session.status == "completed" and session.ending_type:
                 route_endings.setdefault(session.route_id, []).append(session.ending_type)
 
         # Build response

@@ -131,6 +131,16 @@ async function request<T>(
 ): Promise<T> {
   const { skipAutoLogout, ...fetchOptions } = options;
   const auth = useAuthStore();
+  
+  // 多 tab 同步：每次请求前从 cookie 读取最新 token
+  auth.syncFromCookie();
+  
+  // 主动刷新：token 即将过期时提前刷新，用户无感
+  if (auth.isAuthenticated && auth.isTokenExpiringSoon() && auth.refreshToken) {
+    await tryRefreshToken();
+    auth.syncFromCookie(); // 刷新后同步新 token
+  }
+  
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string> || {}),

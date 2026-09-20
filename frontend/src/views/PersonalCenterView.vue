@@ -3,7 +3,7 @@
     <!-- 用户信息卡片 -->
     <div class="user-info-card glass-card">
       <div class="user-avatar">
-        <img v-if="userProfile?.avatar_url" :src="userProfile.avatar_url" :alt="userProfile.display_name || '用户'" />
+        <img v-if="userProfile?.avatar_url && !userAvatarFailed" :src="userProfile.avatar_url" :alt="userProfile.display_name || '用户'" @error="userAvatarFailed = true" />
         <div v-else class="avatar-placeholder">
           {{ (userProfile?.display_name || 'U').charAt(0).toUpperCase() }}
         </div>
@@ -48,6 +48,11 @@
           <div class="stat-value">{{ stats?.total_choices || 0 }}</div>
           <div class="stat-label">选择次数</div>
         </div>
+        <!-- CR-028: 扮演角色数 -->
+        <div class="stat-item" v-if="stats?.characters_played !== undefined">
+          <div class="stat-value">{{ stats.characters_played }}</div>
+          <div class="stat-label">扮演角色</div>
+        </div>
       </div>
     </div>
 
@@ -62,8 +67,9 @@
           </div>
           <div class="quota-separator">/</div>
           <div class="quota-total">
-            <span class="quota-value">{{ dialogueQuota?.total || 0 }}</span>
-            <span class="quota-label">总额度</span>
+            <span class="quota-value" v-if="dialogueQuota?.total === -1">无限额度</span>
+            <span class="quota-value" v-else>{{ dialogueQuota?.total || 0 }}</span>
+            <span class="quota-label" v-if="dialogueQuota?.total !== -1">总额度</span>
           </div>
         </div>
         <div class="quota-progress">
@@ -98,7 +104,7 @@
             <span class="stat-value">{{ asset?.total_spent || 0 }}</span>
           </div>
         </div>
-        <n-button type="primary" size="small" @click="router.push('/shards')">
+        <n-button type="primary" size="small" @click="router.push('/subscribe')">
           充值碎片
         </n-button>
       </div>
@@ -143,13 +149,77 @@
       </div>
     </div>
 
+    <!-- CR-025 S017: 每日任务卡片 -->
+    <div class="daily-tasks-card glass-card">
+      <div class="card-header">
+        <h3 class="card-title">📋 每日任务</h3>
+        <div class="reset-info">每日 0:00 刷新</div>
+        <div class="all-complete-btn">
+          <n-button
+            v-if="allTasksCompleted && !allCompleteClaimed"
+            type="success"
+            size="small"
+            @click="claimAllTasks"
+          >
+            🎁 全完成奖励
+          </n-button>
+          <n-tag v-else-if="allCompleteClaimed" type="success" size="small">已领取</n-tag>
+          <n-button v-else size="small" disabled>🎁 全完成奖励</n-button>
+        </div>
+      </div>
+      <div class="tasks-list">
+        <div v-for="task in dailyTasks" :key="task.id" class="task-item">
+          <div class="task-info">
+            <div class="task-title">{{ task.icon }} {{ task.title }}</div>
+            <div class="task-desc">{{ task.description }}</div>
+            <div class="task-progress">
+              <n-progress 
+                type="line" 
+                :percentage="Math.min(100, (task.progress / task.target) * 100)" 
+                :show-indicator="false" 
+                :height="6" 
+              />
+              <span class="progress-text">{{ task.progress }}/{{ task.target }}</span>
+            </div>
+          </div>
+          <div class="task-reward">
+            <span class="reward-amount">💎 +{{ task.reward_amount }}</span>
+            <n-button 
+              v-if="task.completed && !task.claimed" 
+              size="tiny" 
+              type="primary"
+              @click="claimTask(task)"
+            >
+              领取
+            </n-button>
+            <n-tag v-else-if="task.claimed" type="success" size="small">已领取</n-tag>
+            <n-button 
+              v-else 
+              size="tiny" 
+              :disabled="true"
+            >
+              领取
+            </n-button>
+          </div>
+        </div>
+        <n-empty v-if="dailyTasks.length === 0" description="暂无任务" />
+      </div>
+    </div>
+
     <!-- 继续游玩卡片 -->
     <div class="continue-card glass-card" v-if="latestSave">
       <h3 class="card-title">🎮 继续游玩</h3>
       <div class="continue-content">
+        <!-- CR-028: 角色头像展示 -->
+        <div v-if="latestSave.character_avatar || latestSave.character_name" class="continue-character">
+          <div class="continue-avatar">
+            <img v-if="latestSave.character_avatar && !continueAvatarFailed" :src="latestSave.character_avatar" :alt="latestSave.character_name || '角色'" @error="continueAvatarFailed = true" />
+            <span v-else>{{ (latestSave.character_name || '?').charAt(0) }}</span>
+          </div>
+        </div>
         <div class="save-info">
           <div class="script-name">{{ latestSave.script_name }}</div>
-          <div class="character-name">{{ latestSave.character_name }}</div>
+          <div class="character-name" v-if="latestSave.character_name">🎮 {{ latestSave.character_name }}</div>
           <div class="save-time">
             {{ new Date(latestSave.updated_at).toLocaleString('zh-CN') }}
           </div>
@@ -160,98 +230,16 @@
       </div>
     </div>
 
-    <!-- AI 记忆卡片 -->
-    <div class="memory-card glass-card">
-      <h3 class="card-title">
-        🧠 AI 记忆
-        <span class="tooltip-icon" title="展示 AI 记住的对话内容">?</span>
-      </h3>
-      <div class="memory-content">
-        <div class="memory-summary">
-          <span class="memory-count">{{ memorySummary?.total_memories || 0 }}</span>
-          <span class="memory-label">条记忆</span>
-        </div>
-        
-        <!-- FE-FEAT-025: 分类展示记忆 -->
-        <div class="memory-categories">
-          <!-- 用户偏好 -->
-          <div class="memory-category" v-if="memorySummary?.preferences && memorySummary.preferences.length > 0">
-            <h4 class="category-title">🎯 用户偏好</h4>
-            <div class="memory-list">
-              <div 
-                v-for="pref in memorySummary.preferences.slice(0, 3)" 
-                :key="pref.id"
-                class="memory-item"
-              >
-                <div class="memory-text">{{ pref.description }}</div>
-                <div class="memory-time">{{ formatDate(pref.created_at) }}</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 角色羁绊 -->
-          <div class="memory-category" v-if="memorySummary?.bonds && memorySummary.bonds.length > 0">
-            <h4 class="category-title">💕 角色羁绊</h4>
-            <div class="memory-list">
-              <div 
-                v-for="bond in memorySummary.bonds.slice(0, 3)" 
-                :key="bond.id"
-                class="memory-item"
-              >
-                <div class="memory-character">{{ bond.character_name }}</div>
-                <div class="memory-text">{{ bond.description }}</div>
-                <div class="memory-time">{{ formatDate(bond.created_at) }}</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 重要事件 -->
-          <div class="memory-category" v-if="memorySummary?.events && memorySummary.events.length > 0">
-            <h4 class="category-title">✨ 重要事件</h4>
-            <div class="memory-list">
-              <div 
-                v-for="event in memorySummary.events.slice(0, 3)" 
-                :key="event.id"
-                class="memory-item"
-              >
-                <div class="memory-text">{{ event.description }}</div>
-                <div class="memory-time">{{ formatDate(event.created_at) }}</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 默认显示最近记忆 -->
-          <div class="recent-memories" v-if="!hasCategorizedMemories && memorySummary?.recent && memorySummary.recent.length > 0">
-            <div 
-              v-for="memory in memorySummary.recent.slice(0, 3)" 
-              :key="memory.id"
-              class="memory-item"
-            >
-              <div class="memory-character">{{ memory.character_name }}</div>
-              <div class="memory-text">{{ memory.content }}</div>
-              <div class="memory-time">{{ formatDate(memory.created_at) }}</div>
-            </div>
-          </div>
-        </div>
-        
-        <n-empty v-if="!hasAnyMemories" description="暂无记忆" />
-        <n-button 
-          type="primary" 
-          size="small" 
-          @click="router.push('/memory')"
-          :disabled="!memorySummary?.is_full_available"
-        >
-          查看完整记忆
-        </n-button>
-      </div>
-    </div>
-
     <!-- 角色羁绊卡片 -->
     <div class="bond-card glass-card">
       <h3 class="card-title">💕 角色羁绊</h3>
-      <div class="bond-list">
+      <div 
+        class="bond-list" 
+        ref="bondListRef"
+        @scroll="handleBondScroll"
+      >
         <div 
-          v-for="character in bondList?.characters || []" 
+          v-for="character in bondCharacters" 
           :key="character.id"
           class="bond-item"
         >
@@ -266,7 +254,14 @@
             {{ character.affection_value }}/{{ character.max_affection }}
           </div>
         </div>
-        <n-empty v-if="!bondList?.characters || bondList.characters.length === 0" description="暂无羁绊" />
+        <div v-if="bondLoading" class="bond-loading">
+          <n-spin size="small" />
+          <span>加载中...</span>
+        </div>
+        <div v-if="bondNoMore && bondCharacters.length > 0" class="bond-no-more">
+          没有更多了
+        </div>
+        <n-empty v-if="!bondLoading && bondCharacters.length === 0" description="暂无羁绊" />
       </div>
     </div>
 
@@ -293,16 +288,16 @@
     </div>
 
     <!-- 新解锁结局卡片 -->
-    <div class="recent-endings-card glass-card" v-if="recentEndings?.recent_endings && recentEndings.recent_endings.length > 0">
+    <div class="continue-card glass-card" v-if="recentEndings?.recent_endings && recentEndings.recent_endings.length > 0">
       <h3 class="card-title">✨ 新解锁结局</h3>
-      <div class="recent-endings-list">
+      <div class="recent-endings-scroll">
         <div 
           v-for="ending in recentEndings.recent_endings" 
           :key="ending.id"
           class="recent-ending-item"
         >
           <div class="ending-info">
-            <div class="ending-title">{{ ending.ending_title }}</div>
+            <div class="ending-title">{{ cleanEndingTitle(ending.ending_title) }}</div>
             <div class="ending-meta">
               {{ ending.script_name }} · {{ ending.character_name }}
             </div>
@@ -313,6 +308,84 @@
         </div>
       </div>
     </div>
+
+    <!-- AI 记忆卡片 -->
+    <div class="memory-card glass-card">
+      <h3 class="card-title">
+        🧠 AI 记忆
+        <span class="tooltip-icon" title="展示 AI 记住的对话内容">?</span>
+      </h3>
+      <div class="memory-content">
+        <div class="memory-summary">
+          <span class="memory-count">{{ memorySummary?.total_memories || 0 }}</span>
+          <span class="memory-label">条记忆</span>
+        </div>
+        
+        <!-- FE-FEAT-025: 分类展示记忆 -->
+        <div class="memory-categories">
+          <!-- 用户偏好 -->
+          <div class="memory-category" v-if="memorySummary?.preferences && memorySummary.preferences.length > 0">
+            <h4 class="category-title">🎯 用户偏好 ({{ memorySummary.preferences.length }})</h4>
+            <div class="memory-list">
+              <div 
+                v-for="pref in memorySummary.preferences" 
+                :key="pref.id"
+                class="memory-item"
+              >
+                <div class="memory-text">{{ pref.description }}</div>
+                <div class="memory-time">{{ formatDate(pref.created_at) }}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 角色羁绊 -->
+          <div class="memory-category" v-if="memorySummary?.bonds && memorySummary.bonds.length > 0">
+            <h4 class="category-title">💕 角色羁绊 ({{ memorySummary.bonds.length }})</h4>
+            <div class="memory-list">
+              <div 
+                v-for="bond in memorySummary.bonds" 
+                :key="bond.id"
+                class="memory-item"
+              >
+                <div class="memory-character">{{ bond.character_name }}</div>
+                <div class="memory-text">{{ bond.description }}</div>
+                <div class="memory-time">{{ formatDate(bond.created_at) }}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 重要事件 -->
+          <div class="memory-category" v-if="memorySummary?.events && memorySummary.events.length > 0">
+            <h4 class="category-title">✨ 重要事件 ({{ memorySummary.events.length }})</h4>
+            <div class="memory-list">
+              <div 
+                v-for="event in memorySummary.events" 
+                :key="event.id"
+                class="memory-item"
+              >
+                <div class="memory-text">{{ event.description }}</div>
+                <div class="memory-time">{{ formatDate(event.created_at) }}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 默认显示最近记忆 -->
+          <div class="recent-memories" v-if="!hasCategorizedMemories && memorySummary?.recent && memorySummary.recent.length > 0">
+            <div 
+              v-for="memory in memorySummary.recent" 
+              :key="memory.id"
+              class="memory-item"
+            >
+              <div class="memory-character">{{ memory.character_name }}</div>
+              <div class="memory-text">{{ memory.content }}</div>
+              <div class="memory-time">{{ formatDate(memory.created_at) }}</div>
+            </div>
+          </div>
+        </div>
+        
+        <n-empty v-if="!hasAnyMemories" description="暂无记忆" />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -321,9 +394,10 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage, NButton, NEmpty } from 'naive-ui';
 import { api } from '@/api/http';
+import { gameApi } from '@/api/game';
 import { getMe, getMySubscription, getMyStats, getMyAsset, getSignInfo, getLatestSave, getMemorySummary, getCharacterBond, getMyEndings, getRecentEndings } from '@/api/user';
 import type { UserProfile, SubscriptionStatus } from '@/types/user';
-import type { UserStats, UserAsset, SignInfo, LatestSave, MemorySummary, BondList, EndingsList, RecentEndings } from '@/types/personal-center';
+import type { UserStats, UserAsset, SignInfo, LatestSave, MemorySummary, EndingsList, RecentEndings } from '@/types/personal-center';
 
 const router = useRouter();
 const message = useMessage();
@@ -334,11 +408,59 @@ const stats = ref<UserStats | null>(null);
 const asset = ref<UserAsset | null>(null);
 const signInfo = ref<SignInfo | null>(null);
 const latestSave = ref<LatestSave | null>(null);
+const userAvatarFailed = ref(false);
+const continueAvatarFailed = ref(false);
 const memorySummary = ref<MemorySummary | null>(null);
-const bondList = ref<BondList | null>(null);
+const bondCharacters = ref<any[]>([]);
+const bondOffset = ref(0);
+const bondLimit = 10;
+const bondTotal = ref(0);
+const bondLoading = ref(false);
+const bondNoMore = ref(false);
+const bondListRef = ref<HTMLElement | null>(null);
 const endingsList = ref<EndingsList | null>(null);
 const recentEndings = ref<RecentEndings | null>(null);
 const dialogueQuota = ref<{ used: number; total: number; is_subscriber: boolean; remaining?: number; lifecycle_stage?: string } | null>(null);
+
+// CR-025 S017: 每日任务
+const dailyTasks = ref<any[]>([]);
+const showCelebration = ref(false);
+const allTasksCompleted = computed(() => dailyTasks.value.length > 0 && dailyTasks.value.every(t => t.completed));
+const allCompleteClaimed = ref(false);
+
+async function loadDailyTasks() {
+  try {
+    const response = await gameApi.getDailyTasks();
+    dailyTasks.value = response.tasks || [];
+    allCompleteClaimed.value = response.all_complete_claimed || false;
+  } catch (err) {
+    console.error('Failed to load daily tasks:', err);
+  }
+}
+
+async function claimTask(task: any) {
+  try {
+    await gameApi.claimDailyTask(task.id);
+    message.success(`领取成功！+${task.reward_amount} 碎片`);
+    await loadDailyTasks();
+    await loadAsset();
+  } catch (err: any) {
+    message.error(err?.message || '领取失败');
+  }
+}
+
+async function claimAllTasks() {
+  try {
+    await gameApi.claimAllDailyTasks();
+    message.success('🎉 全完成奖励领取成功！+5 碎片');
+    showCelebration.value = true;
+    setTimeout(() => { showCelebration.value = false; }, 2000);
+    await loadDailyTasks();
+    await loadAsset();
+  } catch (err: any) {
+    message.error(err?.message || '领取失败');
+  }
+}
 
 // FE-FEAT-025: 检查是否有分类记忆
 const hasCategorizedMemories = computed(() => {
@@ -356,6 +478,12 @@ function formatDate(dateString: string | null | undefined): string {
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return '';
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+function cleanEndingTitle(title: string | null | undefined): string {
+  if (!title) return '';
+  // 移除 "- good ending", "- bad ending" 等后缀
+  return title.replace(/\s*-\s*(good|bad|normal|true|hidden)\s*ending/i, '').trim();
 }
 
 async function loadUserData() {
@@ -415,19 +543,42 @@ async function loadMemorySummary() {
 function getAffectionLevelLabel(level: string): string {
   const levelMap: Record<string, string> = {
     acquaintance: '相识',
-    ambiguous: '暖昧',
-    trust: '信任',
+    ambiguous: '暧昧',
+    trust: '信赖',
     bond: '羁绊',
-    love: '挚爱'
+    love: '挚友'
   };
   return levelMap[level] || level;
 }
 
-async function loadBondList() {
+async function loadBondList(reset = false) {
+  if (reset) {
+    bondOffset.value = 0;
+    bondCharacters.value = [];
+    bondNoMore.value = false;
+  }
+  if (bondLoading.value || bondNoMore.value) return;
+  
+  bondLoading.value = true;
   try {
-    bondList.value = await getCharacterBond();
+    const response = await getCharacterBond(bondOffset.value, bondLimit);
+    bondTotal.value = response.total;
+    bondCharacters.value = [...bondCharacters.value, ...response.characters];
+    bondOffset.value += response.characters.length;
+    bondNoMore.value = !response.has_more;
   } catch (error) {
     console.error('加载角色羁绊失败:', error);
+  } finally {
+    bondLoading.value = false;
+  }
+}
+
+function handleBondScroll(e: Event) {
+  const target = e.target as HTMLElement;
+  const { scrollTop, scrollHeight, clientHeight } = target;
+  // 滚动到底部时加载更多
+  if (scrollTop + clientHeight >= scrollHeight - 50) {
+    loadBondList();
   }
 }
 
@@ -453,9 +604,9 @@ async function loadDialogueQuota() {
     const response: any = await api.get('/cr016/dialogue/quota/status');
     dialogueQuota.value = {
       used: response.consumed || 0,
-      total: response.base_quota || 10,
+      total: response.is_exempt ? -1 : (response.base_quota || 10),
       remaining: response.remaining ?? (response.base_quota - response.consumed),
-      is_subscriber: response.is_subscriber || false,
+      is_subscriber: response.is_exempt || false,
       lifecycle_stage: response.lifecycle_stage || 'honeymoon'
     };
   } catch (error) {
@@ -476,7 +627,10 @@ async function handleCheckin() {
 
 function continueGame() {
   if (latestSave.value) {
-    router.push(`/game?session=${latestSave.value.session_id}`);
+    const sessionId = latestSave.value.session_id;
+    const characterId = latestSave.value.character_id;
+    // CR-032: 传递 character_id 确保继续游戏时角色正确
+    router.push(`/game?session=${sessionId}${characterId ? `&character_id=${characterId}` : ''}`);
   }
 }
 
@@ -491,6 +645,7 @@ onMounted(() => {
   loadEndingsList();
   loadRecentEndings();
   loadDialogueQuota();
+  loadDailyTasks();
 });
 </script>
 
@@ -754,14 +909,44 @@ onMounted(() => {
 /* 继续游玩卡片 */
 .continue-content {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: 16px;
+}
+
+.continue-character {
+  flex-shrink: 0;
+}
+
+.continue-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.3), rgba(236, 72, 153, 0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid rgba(167, 139, 250, 0.3);
+}
+
+.continue-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.continue-avatar span {
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
 }
 
 .save-info {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
 }
 
 .script-name {
@@ -781,6 +966,10 @@ onMounted(() => {
 }
 
 /* AI 记忆卡片 */
+.memory-card {
+  grid-column: 1 / -1;
+}
+
 .memory-content {
   display: flex;
   flex-direction: column;
@@ -844,6 +1033,38 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.bond-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.bond-list::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.3);
+  border-radius: 2px;
+}
+
+.bond-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+}
+
+.bond-no-more {
+  text-align: center;
+  padding: 12px;
+  color: var(--text-muted, #9ca3af);
+  font-size: 13px;
+}
+
+.bond-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .bond-item {
@@ -934,15 +1155,23 @@ onMounted(() => {
   color: var(--brand-primary, #a78bfa);
 }
 
-/* 新解锁结局卡片 */
-.recent-endings-card {
-  grid-column: 1 / -1;
-}
-
-.recent-endings-list {
+/* 新解锁结局滚动 */
+.recent-endings-scroll {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.recent-endings-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.recent-endings-scroll::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.3);
+  border-radius: 2px;
 }
 
 .recent-ending-item {
@@ -971,6 +1200,7 @@ onMounted(() => {
 }
 
 .ending-type {
+  align-self: flex-start;
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
@@ -986,7 +1216,6 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.2);
   color: #ef4444;
 }
-
 /* 对话额度卡片 */
 .quota-content {
   display: flex;
@@ -1064,5 +1293,108 @@ onMounted(() => {
   .user-badges {
     justify-content: center;
   }
+}
+
+/* CR-025 S017: 每日任务卡片样式 */
+.daily-tasks-card {
+  margin-top: 16px;
+}
+
+.card-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.card-header .card-title {
+  margin: 0;
+  justify-self: start;
+}
+
+.reset-info {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  justify-self: center;
+}
+
+.all-complete-btn {
+  justify-self: end;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.task-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+}
+
+.task-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 40px;
+}
+
+.task-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 70px;
+}
+
+.reward-amount {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.celebration-content {
+  text-align: center;
+  padding: 20px;
+}
+
+.celebration-emoji {
+  font-size: 64px;
+  animation: bounce 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
 }
 </style>

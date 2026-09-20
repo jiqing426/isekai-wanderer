@@ -39,7 +39,7 @@
           
           <div class="avatar-section">
             <div class="avatar-preview">
-              <img v-if="userAvatar" :src="userAvatar" alt="Avatar" />
+              <img v-if="userAvatar && !avatarFailed" :src="userAvatar" alt="Avatar" @error="avatarFailed = true" />
               <span v-else class="avatar-placeholder">{{ userInitial }}</span>
             </div>
             <label class="upload-btn">
@@ -124,33 +124,31 @@
           </div>
 
           <div class="setting-group" v-if="playSettings.auto_play">
-            <label>自动播放延迟 ({{ playSettings.auto_play_delay_ms }}ms)</label>
+            <label>自动播放延迟 ({{ localAutoPlayDelay }}ms)</label>
             <input 
               type="range" 
-              v-model.number="playSettings.auto_play_delay_ms"
+              v-model.number="localAutoPlayDelay"
               min="1000"
               max="10000"
               step="500"
-              @change="savePlaySettings"
             />
           </div>
 
           <div class="setting-group">
-            <label>BGM 音量 ({{ playSettings.bgm_volume }}%)</label>
+            <label>BGM 音量 ({{ localBgmVolume }}%)</label>
             <input 
               type="range" 
-              v-model.number="playSettings.bgm_volume"
+              v-model.number="localBgmVolume"
               min="0"
               max="100"
-              @change="savePlaySettings"
             />
           </div>
 
           <div class="setting-group">
-            <label>音效音量 ({{ playSettings.sfx_volume }}%)</label>
+            <label>音效音量 ({{ localSfxVolume }}%)</label>
             <input 
               type="range" 
-              v-model.number="playSettings.sfx_volume"
+              v-model.number="localSfxVolume"
               min="0"
               max="100"
             />
@@ -202,21 +200,6 @@
 
             <div class="notify-item">
               <div class="notify-info">
-                <span class="notify-label">结局解锁</span>
-                <span class="notify-desc">解锁新结局时通知</span>
-              </div>
-              <label class="toggle-switch">
-                <input 
-                  type="checkbox" 
-                  v-model="notifySettings.ending_unlock"
-                  @change="saveNotifySettings"
-                />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-
-            <div class="notify-item">
-              <div class="notify-info">
                 <span class="notify-label">签到推送</span>
                 <span class="notify-desc">每日签到提醒</span>
               </div>
@@ -224,21 +207,6 @@
                 <input 
                   type="checkbox" 
                   v-model="notifySettings.checkin_push"
-                  @change="saveNotifySettings"
-                />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-
-            <div class="notify-item">
-              <div class="notify-info">
-                <span class="notify-label">好感度变化</span>
-                <span class="notify-desc">角色好感度变化时通知</span>
-              </div>
-              <label class="toggle-switch">
-                <input 
-                  type="checkbox" 
-                  v-model="notifySettings.affection_change"
                   @change="saveNotifySettings"
                 />
                 <span class="toggle-slider"></span>
@@ -320,8 +288,8 @@
           <div class="member-card">
             <div class="member-header">
               <div class="member-tier">
-                <span class="tier-icon">{{ getTierIcon(memberInfo?.tier) }}</span>
-                <span class="tier-name">{{ getTierName(memberInfo?.tier) }}</span>
+                <span class="tier-icon">{{ getTierIcon(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
+                <span class="tier-name">{{ getTierName(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
               </div>
               <span class="member-status" :class="memberInfo?.status">
                 {{ getStatusText(memberInfo?.status) }}
@@ -369,21 +337,6 @@
               <button class="secondary-btn" @click="router.push('/fragment')">
                 碎片商城
               </button>
-            </div>
-          </div>
-
-          <div class="billing-section" v-if="memberInfo?.recent_bills && memberInfo.recent_bills.length > 0">
-            <h4>最近账单</h4>
-            <div class="billing-list">
-              <div v-for="bill in memberInfo.recent_bills" :key="bill.id" class="billing-item">
-                <div class="billing-info">
-                  <div class="billing-desc">{{ formatBillingDescription(bill.description) }}</div>
-                  <div class="billing-date">{{ formatDate(bill.created_at) }}</div>
-                </div>
-                <div class="billing-amount">
-                  {{ bill.currency === 'CNY' ? '¥' : '$' }}{{ bill.amount }}
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -441,6 +394,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useSubscriptionStore } from '@/stores/subscription';
+import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useMessage } from 'naive-ui';
@@ -484,6 +439,7 @@ const tabs = computed(() => [
 // 个人资料
 const userProfile = ref<UserProfile | null>(null);
 const userAvatar = ref('');
+const avatarFailed = ref(false);
 const userNickname = ref('');
 const userSignature = ref('');
 const userEmail = ref('');
@@ -503,6 +459,11 @@ const playSettings = ref<PlaySetting>({
   sfx_volume: 100,
 });
 
+// 本地状态（用于range input，避免实时更新触发保存）
+const localAutoPlayDelay = ref(playSettings.value.auto_play_delay_ms);
+const localBgmVolume = ref(playSettings.value.bgm_volume);
+const localSfxVolume = ref(playSettings.value.sfx_volume);
+
 // 通知设置
 const notifySettings = ref<NotifySetting>({
   update_notify: true,
@@ -518,6 +479,9 @@ const devices = ref<LoginDevice[]>([]);
 const loggingOutDevice = ref<string | null>(null);
 
 // 会员信息
+const subscriptionStore = useSubscriptionStore();
+// authStore for subscription_tier display (may be more recent than memberInfo)
+const authStore = useAuthStore();
 const memberInfo = ref<MemberInfo | null>(null);
 
 // 修改密码
@@ -606,6 +570,10 @@ async function loadPlaySettings() {
 async function savePlaySettings() {
   savingPlaySettings.value = true;
   try {
+    // 同步本地状态到 playSettings
+    playSettings.value.auto_play_delay_ms = localAutoPlayDelay.value;
+    playSettings.value.bgm_volume = localBgmVolume.value;
+    playSettings.value.sfx_volume = localSfxVolume.value;
     await updatePlaySetting(playSettings.value);
     message.success('保存成功');
   } catch (err) {
@@ -719,35 +687,13 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('zh-CN');
 }
 
-function formatBillingDescription(description: string): string {
-  const descMap: Record<string, string> = {
-    'dialogue_quota_purchase': '碎片兑换对话',
-    'daily_checkin': '每日签到',
-    'daily_task_reward': '任务奖励',
-    'achievement_reward': '成就奖励',
-    'shop_purchase': '商城购买',
-    'gift_send': '赠送礼物',
-    'refund': '退款',
-    'admin_adjustment': '系统调整',
-    'subscription': '订阅费用',
-  };
-  // Check if description matches a known key
-  if (descMap[description]) return descMap[description];
-  // Check if description contains a key pattern like "dialogue_quota_purchase:2"
-  for (const [key, value] of Object.entries(descMap)) {
-    if (description.includes(key)) {
-      const match = description.match(/:(\d+)/);
-      return match ? `${value} × ${match[1]}` : value;
-    }
-  }
-  return description;
-}
 
 function getTierIcon(tier?: string): string {
   const icons: Record<string, string> = {
     free: '🆓',
-    standard: '⭐',
-    premium: '💎',
+    basic: '⭐',
+    standard: '💎',
+    premium: '👑',
   };
   return icons[tier || 'free'] || '🆓';
 }
@@ -755,6 +701,7 @@ function getTierIcon(tier?: string): string {
 function getTierName(tier?: string): string {
   const names: Record<string, string> = {
     free: '免费版',
+    basic: '基础版',
     standard: '标准版',
     premium: '高级版',
   };
@@ -788,6 +735,8 @@ onMounted(() => {
   loadNotifySettings();
   loadDevices();
   loadMemberInfo();
+  // CR-043 FIX: 刷新订阅状态，确保 tier 是最新值
+  subscriptionStore.fetchSubscriptionStatus();
 });
 </script>
 
@@ -1392,51 +1341,6 @@ input:checked + .toggle-slider:before {
 
 .secondary-btn:hover {
   background: var(--bg-hover);
-}
-
-/* 账单部分 */
-.billing-section h4 {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main);
-  margin: 0 0 12px 0;
-}
-
-.billing-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.billing-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-
-.billing-info {
-  flex: 1;
-}
-
-.billing-desc {
-  font-size: 14px;
-  color: var(--text-main);
-  margin-bottom: 4px;
-}
-
-.billing-date {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.billing-amount {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--brand-primary);
 }
 
 /* 弹窗样式 */

@@ -354,23 +354,71 @@ Write engaging, immersive narrative text that advances the story based on player
         character_name: str,
     ) -> list[str]:
         """Extract memorable facts from dialogue for long-term memory."""
-        system_prompt = """You are a memory extraction system. Identify key facts, emotions, and events from dialogue that should be remembered long-term.
+        # BUG-029-007: 使用中文 prompt 生成中文记忆
+        system_prompt = """你是一个记忆提取系统。从对话中识别需要长期记忆的关键事实、情感和事件。
 
-Return as JSON array of strings, each representing a memorable fact."""
+返回 JSON 数组格式，每个元素代表一个需要记住的事实。
+
+重要：必须使用中文返回记忆内容。"""
         
         messages = [
             LLMMessage(role="system", content=system_prompt),
-            LLMMessage(role="user", content=f"Character: {character_name}\n\nDialogue:\n{dialogue}\n\nExtract memorable facts:"),
+            LLMMessage(role="user", content=f"角色: {character_name}\n\n对话内容:\n{dialogue}\n\n提取需要记住的事实（用中文）:"),
         ]
         
         response = await self.provider.complete(messages, temperature=0.3, max_tokens=500)
         
         # Parse JSON response
+        # BUG-029-008: 防御性解析，确保返回 list[str]
         try:
             memories = json.loads(response.content)
-            return memories if isinstance(memories, list) else []
-        except json.JSONDecodeError:
+            if not isinstance(memories, list):
+                return []
+            # 提取字符串，处理 LLM 可能返回 dict 的情况
+            result = []
+            for m in memories:
+                if isinstance(m, str):
+                    if m.strip():
+                        result.append(m)
+                elif isinstance(m, dict):
+                    # 尝试从常见键中提取字符串
+                    text = m.get('fact') or m.get('text') or m.get('memory') or m.get('content') or ''
+                    if isinstance(text, str) and text.strip():
+                        result.append(text)
+                elif m:
+                    # 其他类型转为字符串
+                    text = str(m)
+                    if text.strip():
+                        result.append(text)
+            return result
+        except (json.JSONDecodeError, TypeError):
             return []
+
+    async def generate_with_system(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.8,
+        max_tokens: int = 500,
+    ) -> str:
+        """Generate response using explicit system and user prompts.
+
+        CR-027: Used by PromptBuilder-based NarrativeEngine to send
+        pre-assembled 6-layer system prompts.
+        """
+        messages = [
+            LLMMessage(role="system", content=system_prompt),
+            LLMMessage(role="user", content=user_prompt),
+        ]
+
+        try:
+            response = await self.provider.complete(
+                messages, temperature=temperature, max_tokens=max_tokens
+            )
+            return response.content
+        except Exception as e:
+            logger.warning(f"generate_with_system failed: {e}")
+            raise
 
 
 # Global gateway instance

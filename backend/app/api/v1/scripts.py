@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.exceptions import AppException, ErrorCode
 from app.models.script import Script, Route, Node
 from app.api.v1.auth import get_current_user_id
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/scripts", tags=["scripts"])
 
@@ -38,15 +39,23 @@ async def list_scripts(
     size: Optional[int] = Query(None, ge=1, le=100, description="每页数量"),
     limit: Optional[int] = Query(None, ge=1, le=100, description="每页数量（size 的别名，向后兼容）"),
     db: AsyncSession = Depends(get_db),
+    user_id: Optional[str] = Depends(None),  # Optional auth — public endpoint
 ):
-    """List scripts with search, filter, sort and pagination (public — no auth required).
+    """List scripts with search, filter, sort and pagination (public — auth optional).
     
-    CR-post-page: 
-    - 支持 size 参数（limit 向后兼容）
-    - 返回 categoryList, totalPage
-    - 每个 script 返回 hot_value 字段
-    - 二级稳定排序: score DESC + script_id ASC, 或 hot_value DESC + script_id ASC
+    CR-043 AC-009: When user is authenticated, each script includes is_accessible field.
+    When not authenticated, is_accessible is omitted (frontend can compute from free tier).
     """
+    # CR-043: Try to get user_id from JWT if provided
+    actual_user_id = None
+    try:
+        from app.api.v1.auth import get_current_user_id as _get_uid
+        from fastapi import Request
+        # user_id may be passed via dependency injection if token present
+        # For simplicity, we accept it as optional parameter
+        actual_user_id = user_id
+    except Exception:
+        pass
     # Resolve size: prefer size, fallback to limit, default 12
     effective_size = size if size is not None else (limit if limit is not None else 12)
     # Clamp size to [10, 40] per BE-D4 spec
@@ -116,6 +125,20 @@ async def list_scripts(
     result = await db.execute(base_stmt)
     scripts = list(result.unique().scalars().all())
 
+    # CR-043: Compute is_accessible for authenticated users
+    tier = "free"
+    script_access = "trial_only"
+    if actual_user_id:
+        try:
+            sub_service = SubscriptionService(db)
+            tier = await sub_service.get_user_tier(UUID(actual_user_id))
+            perms = await sub_service.get_tier_permissions(tier)
+            script_access = perms.script_access
+        except Exception:
+            pass
+    
+    from app.api.v1.game import _compute_script_accessible
+    
     return {
         "categoryList": CATEGORY_LIST,
         "scripts": [
@@ -129,6 +152,8 @@ async def list_scripts(
                 "route_count": len(s.routes) if s.routes else 0,
                 "hot_value": s.hot_value or 0,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "engine_type": "corvus",
+                "is_accessible": _compute_script_accessible(script_access, s) if actual_user_id else None,
             }
             for s in scripts
         ],
@@ -147,7 +172,10 @@ async def get_script(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get script details with routes, characters, endings and CG previews (BE-FEAT-023)."""
+    """Get script details with routes, characters, endings and CG previews (BE-FEAT-023).
+    
+    CR-028: Added playable_characters array with is_unlocked calculation.
+    """
     try:
         script_uuid = UUID(script_id)
         user_uuid = UUID(user_id)
@@ -171,13 +199,69 @@ async def get_script(
     char_result = await db.execute(char_stmt)
     characters = char_result.scalars().all()
     
+    # CR-028: Load playable characters with unlock status
+    playable_char_stmt = (
+        select(Character)
+        .where(
+            Character.script_id == script_uuid,
+            Character.playable == True,
+            Character.playable_route_id != None
+        )
+    )
+    playable_char_result = await db.execute(playable_char_stmt)
+    playable_characters = playable_char_result.scalars().all()
+    
+    # CR-028: Load user's unlocked characters
+    from app.models.user_character_unlock import UserCharacterUnlock
+    from app.models.user import User
+    
+    # Get user subscription tier for unlock calculation
+    user_stmt = select(User).where(User.id == user_uuid)
+    user_result = await db.execute(user_stmt)
+    user = user_result.scalar_one_or_none()
+    subscription_tier = user.subscription_tier if user else "free"
+    
+    # Get user's unlocked characters
+    unlock_stmt = select(UserCharacterUnlock.character_id).where(
+        UserCharacterUnlock.user_id == user_uuid
+    )
+    unlock_result = await db.execute(unlock_stmt)
+    unlocked_character_ids = {str(row[0]) for row in unlock_result.fetchall()}
+    
+    # Build playable_characters response with is_unlocked calculation
+    playable_characters_response = []
+    for char in playable_characters:
+        char_id = str(char.id)
+        unlock_type = char.unlock_type or "free"
+        
+        # Calculate is_unlocked
+        if unlock_type == "free":
+            is_unlocked = True
+        elif unlock_type == "paid":
+            is_unlocked = char_id in unlocked_character_ids
+        elif unlock_type == "subscription":
+            is_unlocked = subscription_tier in ["premium", "vip"]
+        else:
+            is_unlocked = False
+        
+        playable_characters_response.append({
+            "id": char_id,
+            "name": char.name,
+            "avatar_url": char.avatar_url,
+            "play_description": char.play_description,
+            "unlock_type": unlock_type,
+            "unlock_price": char.unlock_price or 0,
+            "is_unlocked": is_unlocked,
+        })
+    
     # Load endings for this script
     from sqlalchemy import text
     endings_stmt = text("""
-        SELECT id, title, type, description, unlock_condition, route_id
-        FROM endings
-        WHERE script_id = :script_id
-        ORDER BY type, title
+        SELECT e.id, e.title, e.type, e.description, e.unlock_condition, e.route_id, r.title as route_name, e.image_url
+        FROM endings e
+        LEFT JOIN routes r ON e.route_id = r.id
+        WHERE e.script_id = :script_id
+        ORDER BY e.type, e.title
     """)
     endings_result = await db.execute(endings_stmt, {"script_id": script_uuid})
     endings_rows = endings_result.fetchall()
@@ -262,6 +346,56 @@ async def get_script(
     unlocked_cgs_result = await db.execute(unlocked_cgs_stmt, {"user_id": user_uuid})
     unlocked_cg_ids = {str(row[0]) for row in unlocked_cgs_result.fetchall()}
     
+    # Build explored routes set (routes that user has active or completed sessions for)
+    # CR-033 FIX: Rewrite route unlock logic
+    # Rules:
+    # 1. Sort routes by chapter_number (NULL → 0)
+    # 2. First chapter always unlocked (game entry point)
+    # 3. Chapter N completed → Chapter N+1 unlocked
+    # 4. Active chapter stays unlocked
+    explored_route_ids = set()
+    
+    # 1. Sort routes by chapter_number
+    sorted_routes = sorted(
+        script.routes,
+        key=lambda r: (r.chapter_number if r.chapter_number is not None else 0, r.created_at)
+    )
+    
+    if not sorted_routes:
+        pass  # no routes, nothing to unlock
+    else:
+        # 2. First chapter always unlocked
+        first_route = sorted_routes[0]
+        explored_route_ids.add(str(first_route.id))
+        
+        # 3. Build a map: route_id → session status (best status per route)
+        route_session_status: dict[str, str] = {}
+        for session in user_sessions:
+            rid = str(session.route_id)
+            existing = route_session_status.get(rid)
+            # Priority: active > completed > abandoned
+            if existing is None:
+                route_session_status[rid] = session.status
+            elif session.status == 'active' and existing != 'active':
+                route_session_status[rid] = 'active'
+            # Keep 'active' if already set
+        
+        # 4. Walk through sorted routes sequentially
+        for i, route in enumerate(sorted_routes):
+            route_id_str = str(route.id)
+            status = route_session_status.get(route_id_str)
+            
+            if status == 'active':
+                # Active chapter stays unlocked
+                explored_route_ids.add(route_id_str)
+            elif status == 'completed':
+                # Completed chapter is unlocked, and unlocks next chapter
+                explored_route_ids.add(route_id_str)
+                if i + 1 < len(sorted_routes):
+                    explored_route_ids.add(str(sorted_routes[i + 1].id))
+            # else: no session or abandoned → only unlocked if it's the first chapter
+            #       (already handled above)
+    
     return {
         "id": str(script.id),
         "slug": script.slug,
@@ -269,7 +403,7 @@ async def get_script(
         "description": script.description,
         "genre": script.genre,
         "cover_image_url": script.cover_image_url,
-        "author": getattr(script, 'author', None) or "剧本作者",
+        "author": script.author or "美澜",
         "hot_value": script.hot_value or 0,
         "routes": [
             {
@@ -277,6 +411,11 @@ async def get_script(
                 "title": r.title,
                 "description": r.description,
                 "node_count": len(r.nodes),
+                "is_unlocked": str(r.id) in explored_route_ids,
+                "is_completed": any(
+                    s.route_id == r.id and s.status == 'completed' 
+                    for s in user_sessions
+                ),
             }
             for r in script.routes
         ],
@@ -290,6 +429,7 @@ async def get_script(
                 "unlock_condition": row[4] or "",
                 "route_id": str(row[5]) if row[5] else None,
                 "is_unlocked": f"{str(row[5]) if row[5] else ''}-{row[2]}" in unlocked_endings,
+                "image_url": row[7] if len(row) > 7 else None,
             }
             for row in endings_rows
         ],
@@ -300,9 +440,11 @@ async def get_script(
                 "name": row[1],
                 "image_url": row[2],
                 "route_id": str(row[3]) if row[3] else None,
+                "chapter": f"第{idx + 1}章" if idx < len(chapters) else None,
+                "description": chapters[idx].get("description", "") if idx < len(chapters) else "",
                 "is_unlocked": str(row[0]) in unlocked_cg_ids,
             }
-            for row in cg_rows
+            for idx, row in enumerate(cg_rows)
         ],
         "characters": [
             {
@@ -319,10 +461,13 @@ async def get_script(
             }
             for char in characters
         ],
+        # CR-028: Playable characters for role selection
+        "playable_characters": playable_characters_response,
         "chapters": chapters,
         "totalNodes": total_nodes,
         "unlockedNodes": unlocked_nodes,
         "completionRate": completion_rate,
+        "engine_type": "corvus",
     }
 
 
@@ -490,6 +635,13 @@ async def get_script_routes(
         routes_response.append({
             "id": str(route.id),
             "name": route.title,
+            "chapter_type": route.chapter_type,
+            "chapter_type_label": {
+                'encounter': '相遇',
+                'daily': '日常',
+                'conflict': '冲突',
+                'convergence': '收束',
+            }.get(route.chapter_type, route.chapter_type) if route.chapter_type else None,
             "chapters": chapters,
         })
 
@@ -519,7 +671,7 @@ async def get_script_endings(
     # Query endings from database
     from sqlalchemy import text
     endings_stmt = text("""
-        SELECT e.id, e.title, e.type, e.description, e.unlock_condition, e.route_id, r.title as route_name
+        SELECT e.id, e.title, e.type, e.description, e.unlock_condition, e.route_id, r.title as route_name, e.image_url
         FROM endings e
         LEFT JOIN routes r ON e.route_id = r.id
         WHERE e.script_id = :script_id
@@ -555,7 +707,7 @@ async def get_script_endings(
     # Build response
     endings = []
     for row in endings_rows:
-        ending_id, title, ending_type, description, unlock_condition, route_id, route_name = row
+        ending_id, title, ending_type, description, unlock_condition, route_id, route_name, image_url = row
         route_id_str = str(route_id) if route_id else ""
         ending_key = f"{route_id_str}-{ending_type}"
         is_unlocked = ending_key in unlocked_endings
@@ -565,11 +717,12 @@ async def get_script_endings(
             "title": title,
             "type": ending_type,
             "description": description or "",
-            "unlockCondition": unlock_condition or "",
-            "routeId": route_id_str,
-            "routeName": route_name or "",
+            "unlock_condition": unlock_condition or "",
+            "route_id": route_id_str,
+            "route_name": route_name or "",
             "unlocked": is_unlocked,
-            "unlockDate": unlock_dates[ending_key].strftime("%Y-%m-%d") if is_unlocked and ending_key in unlock_dates else None,
+            "image_url": image_url,
+            "unlock_date": unlock_dates[ending_key].strftime("%Y-%m-%d") if is_unlocked and ending_key in unlock_dates else None,
         })
 
     unlocked_count = sum(1 for e in endings if e["unlocked"])
@@ -785,9 +938,66 @@ async def get_script_detail(
         "title": script.title,
         "cover": script.cover_image_url or "",
         "description": script.description or "",
-        "author": "剧本作者",  # TODO: Add author field to Script model
+        "author": script.author or "美澜",
         "chapters": chapters,
         "totalNodes": total_nodes,
         "unlockedNodes": unlocked_nodes,
         "completionRate": completion_rate
+    }
+
+
+# ── CR-030 章节列表 API ──────────────────────────────────────────────
+
+
+@router.get("/{script_id}/chapters")
+async def get_script_chapters(
+    script_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """CR-030: Get chapter list for a script, ordered by chapter_number."""
+    try:
+        script_uuid = UUID(script_id)
+    except ValueError:
+        raise AppException(ErrorCode.INVALID_SCRIPT_ID, 400, "Invalid script_id format")
+
+    # Verify script exists
+    stmt = select(Script).where(Script.id == script_uuid)
+    result = await db.execute(stmt)
+    script = result.scalar_one_or_none()
+    if not script:
+        raise AppException(ErrorCode.SCRIPT_NOT_FOUND, 404, "Script not found")
+
+    # Query routes with chapter info
+    route_stmt = (
+        select(Route)
+        .where(Route.script_id == script_uuid)
+        .order_by(Route.chapter_number.asc().nullslast(), Route.created_at.asc())
+    )
+    route_result = await db.execute(route_stmt)
+    routes = route_result.scalars().all()
+
+    # Map chapter_type to Chinese title
+    chapter_type_title_map = {
+        'encounter': '相遇',
+        'daily': '日常',
+        'conflict': '冲突',
+        'convergence': '收束',
+    }
+
+    chapters = []
+    for route in routes:
+        chapter_title = None
+        if route.chapter_type:
+            chapter_title = chapter_type_title_map.get(route.chapter_type, route.chapter_type)
+        
+        chapters.append({
+            "chapter_number": route.chapter_number,
+            "chapter_type": route.chapter_type,
+            "title": chapter_title,
+            "route_id": str(route.id),
+            "route_title": route.title,
+        })
+
+    return {
+        "chapters": chapters,
     }

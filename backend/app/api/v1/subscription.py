@@ -124,18 +124,28 @@ async def create_order(
     
     amount = price_map[request.planId][request.cycleType]
     
-    # Generate mock order ID
+    # Generate order ID
     import uuid
     order_id = f"order_{uuid.uuid4().hex[:12]}"
     
-    # Mock payment URL (in production, integrate with real payment gateway)
-    pay_url = f"https://payment.example.com/pay?order_id={order_id}"
+    # Directly activate subscription (no mock payment gateway)
+    from datetime import datetime, timezone, timedelta
+    
+    if request.cycleType == "monthly":
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    else:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+    subscription_service = SubscriptionService(db)
+    await subscription_service.on_subscription_created(uid, request.planId, expires_at)
+    await db.commit()
     
     return {
         "orderId": order_id,
-        "payUrl": pay_url,
+        "payUrl": None,
         "amount": amount,
-        "currency": "USD"
+        "currency": "USD",
+        "status": "success",
+        "message": "订阅成功"
     }
 
 
@@ -408,3 +418,21 @@ async def run_subscription_expiry_check(db: AsyncSession) -> int:
 
     await db.commit()
     return downgraded
+
+
+async def run_monthly_fragment_grant(db: AsyncSession) -> int:
+    """
+    Cron job: Grant monthly fragments to active subscribers.
+    
+    Call this daily to check and grant fragments for subscriptions
+    that are due for their monthly grant.
+    
+    Returns:
+        Number of users granted fragments.
+    """
+    from app.services.subscription_service import SubscriptionService
+    
+    service = SubscriptionService(db)
+    granted_count = await service.process_monthly_grants()
+    
+    return granted_count

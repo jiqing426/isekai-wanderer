@@ -74,36 +74,58 @@
             <!-- Action Buttons -->
             <div class="hero-actions">
               <button class="cta-primary" @click="startGame">
-                🎮 开始游戏
+                {{ startGameButtonText }}
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 2. Character Selection Section -->
+      <!-- 2. Character Selection Section (CR-028: integrated playable badges + lock overlay) -->
       <section class="character-selection-section">
+        <h2 class="section-title">👥 角色图鉴</h2>
+        <p v-if="playableCharacters.length > 0" class="section-desc">点击可扮演角色选择扮演身份，体验不同的故事线</p>
         <div class="character-grid">
           <CharacterDetailCard
             v-for="character in characters"
             :key="character.id"
             :character="character"
-            :isSelected="selectedCharacterId === character.id"
-            @select="selectCharacter(character.id)"
+            :isSelected="isCharacterSelected(character.id)"
+            :isPlayable="isCharacterPlayable(character.id)"
+            :isUnlocked="isCharacterUnlocked(character.id)"
+            :unlockType="getCharacterUnlockType(character.id)"
+            :unlockPrice="getCharacterUnlockPrice(character.id)"
+            @select="handleCharacterSelect(character.id)"
           />
         </div>
       </section>
 
+      <!-- CR-028: 锁定角色解锁弹窗 -->
+      <LockedCharacterOverlay
+        :visible="showLockedOverlay"
+        :character="lockedCharacter"
+        @close="closeLockedOverlay"
+        @unlock="handleUnlockCharacter"
+      />
+
+      <!-- CR-038: Corvus player candidate selection modal -->
+      <PlayerCandidateModal
+        v-model="showCandidateModal"
+        :script-id="scriptId"
+        :script-characters="characters"
+        @selected="handleCandidateSelected"
+      />
+
       <!-- 3. Route Tree Section -->
       <section class="route-tree-section">
         <h2 class="section-title">🗺️ 路线探索</h2>
-        <RouteTree :chapters="routeChapters" />
+        <RouteTree :chapters="routeChapters" @chapter-click="handleChapterClick" />
       </section>
 
       <!-- 4. Ending List Section -->
       <section class="ending-list-section">
         <h2 class="section-title">🏆 结局收集</h2>
-        <EndingList :unlocked-endings="unlockedEndings" :locked-count="lockedEndingCount" />
+        <EndingList :chapter-endings="chapterEndings" :locked-count="lockedEndingCount" />
       </section>
 
       <!-- 5. CG Preview Grid Section -->
@@ -126,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { api } from '@/api/http';
@@ -134,6 +156,9 @@ import CharacterDetailCard from '@/components/CharacterDetailCard.vue';
 import RouteTree from '@/components/RouteTree.vue';
 import EndingList from '@/components/EndingList.vue';
 import CGPreviewGrid from '@/components/CGPreviewGrid.vue';
+import LockedCharacterOverlay from '@/components/LockedCharacterOverlay.vue';
+import PlayerCandidateModal from '@/components/PlayerCandidateModal.vue';
+import type { PlayableCharacter } from '@/components/LockedCharacterOverlay.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -148,10 +173,30 @@ const scriptDetail = ref<any>(null);
 const characters = ref<any[]>([]);
 const selectedCharacterId = ref<string | null>(null);
 
+// CR-028: 可扮演角色相关（集成到角色图鉴）
+const playableCharacters = ref<PlayableCharacter[]>([]);
+const selectedPlayableCharacterId = ref<string | null>(null);
+const showLockedOverlay = ref(false);
+const lockedCharacter = ref<PlayableCharacter | null>(null);
+
+// CR-038: Candidate selection flow
+const showCandidateModal = ref(false);
+
+// CR-038: Handle candidate selection from PlayerCandidateModal
+// CR-039 T-039-FE-002: 传递 initial_scene 到 GameView
+function handleCandidateSelected(sessionId: string, initialScene?: any) {
+  if (initialScene) {
+    sessionStorage.setItem(`corvus_initial_scene_${sessionId}`, JSON.stringify(initialScene));
+  }
+  // Navigate to game page with the Corvus session
+  router.push(`/game?session=${sessionId}`);
+}
+
 // 路线树相关
 const routeChapters = ref<any[]>([]);
 
-// 结局列表相关
+// 结局列表相关（按章节分组）
+const chapterEndings = ref<any[]>([]);
 const unlockedEndings = ref<any[]>([]);
 const lockedEndingCount = ref(0);
 
@@ -162,16 +207,125 @@ const cgPreviews = ref<any[]>([]);
 const routesCount = ref(0);
 const endingsCount = ref(0);
 
-function selectCharacter(characterId: string) {
-  selectedCharacterId.value = characterId;
+// CR-028: 角色图鉴集成可扮演逻辑
+function isCharacterPlayable(characterId: string): boolean {
+  return playableCharacters.value.some(c => c.id === characterId);
 }
+
+function isCharacterUnlocked(characterId: string): boolean {
+  const pc = playableCharacters.value.find(c => c.id === characterId);
+  return pc ? pc.is_unlocked : false;
+}
+
+function getCharacterUnlockType(characterId: string): string {
+  const pc = playableCharacters.value.find(c => c.id === characterId);
+  return pc ? pc.unlock_type : 'free';
+}
+
+function getCharacterUnlockPrice(characterId: string): number | null | undefined {
+  const pc = playableCharacters.value.find(c => c.id === characterId);
+  return pc ? pc.unlock_price : undefined;
+}
+
+function isCharacterSelected(characterId: string): boolean {
+  return selectedPlayableCharacterId.value === characterId;
+}
+
+function handleCharacterSelect(characterId: string) {
+  // 检查是否可扮演角色
+  const playableChar = playableCharacters.value.find(c => c.id === characterId);
+  if (playableChar) {
+    if (!playableChar.is_unlocked) {
+      // 锁定角色，显示解锁弹窗
+      lockedCharacter.value = playableChar;
+      showLockedOverlay.value = true;
+      return;
+    }
+    // 已解锁角色，切换选中状态
+    if (selectedPlayableCharacterId.value === characterId) {
+      selectedPlayableCharacterId.value = null;
+    } else {
+      selectedPlayableCharacterId.value = characterId;
+    }
+  } else {
+    // 非可扮演角色，仅更新图鉴选中状态（原有逻辑）
+    selectedCharacterId.value = characterId;
+  }
+}
+
+// CR-028: 关闭锁定弹窗
+function closeLockedOverlay() {
+  showLockedOverlay.value = false;
+  lockedCharacter.value = null;
+}
+
+// CR-028: 解锁角色
+async function handleUnlockCharacter(characterId: string) {
+  try {
+    await api.post(`/characters/${characterId}/unlock`);
+    // 解锁成功后更新本地状态
+    const char = playableCharacters.value.find(c => c.id === characterId);
+    if (char) {
+      char.is_unlocked = true;
+    }
+    // 关闭弹窗并自动选中
+    showLockedOverlay.value = false;
+    lockedCharacter.value = null;
+    selectedPlayableCharacterId.value = characterId;
+  } catch (err) {
+    console.error('解锁角色失败:', err);
+    throw err;
+  }
+}
+
+// CR-028: 开始游戏按钮文案
+const startGameButtonText = computed(() => {
+  if (selectedPlayableCharacterId.value) {
+    const selectedChar = playableCharacters.value.find(c => c.id === selectedPlayableCharacterId.value);
+    if (selectedChar) {
+      return `🎮 开始游戏（以${selectedChar.name}身份）`;
+    }
+  }
+  return '🎮 开始游戏';
+});
 
 function startGame() {
   if (!auth.isAuthenticated) {
     router.push(`/login?redirect=/scripts/${scriptId}`);
     return;
   }
-  router.push(`/game?script=${scriptId}`);
+
+  // CR-038: For Corvus engine scripts, show candidate selection modal
+  // instead of directly navigating to /game
+  // Use the scriptDetail response which contains engine_type from GET /scripts/{id}
+  const isCorvus = (scriptDetail.value as any)?.engine_type === 'corvus';
+  
+  if (isCorvus) {
+    // Show PlayerCandidateModal for Corvus scripts
+    showCandidateModal.value = true;
+    return;
+  }
+
+  // Legacy flow: navigate directly to /game
+  const characterId = selectedPlayableCharacterId.value;
+  const currentChapter = routeChapters.value.find(ch => ch.isCurrent);
+  if (currentChapter) {
+    const routeParam = `&route=${currentChapter.routeId}`;
+    const charParam = characterId ? `&character_id=${characterId}` : '';
+    router.push(`/game?script=${scriptId}${routeParam}${charParam}`);
+  } else {
+    const charParam = characterId ? `&character_id=${characterId}` : '';
+    router.push(`/game?script=${scriptId}${charParam}`);
+  }
+}
+
+function handleChapterClick(chapter: any) {
+  if (!auth.isAuthenticated) {
+    router.push(`/login?redirect=/scripts/${scriptId}`);
+    return;
+  }
+  // 从指定章节开始游戏
+  router.push(`/game?script=${scriptId}&route=${chapter.routeId || chapter.id}`);
 }
 
 async function loadScript() {
@@ -188,10 +342,11 @@ async function loadScript() {
       title: response.title,
       description: response.description,
       cover: response.cover_image_url,
-      author: '未知作者', // 后端未提供 author 字段
+      author: response.author || '美澜',
       completionRate: response.completionRate || 0,
       unlockedNodes: response.unlockedNodes || 0,
       totalNodes: response.totalNodes || 0,
+      engine_type: response.engine_type || 'legacy', // CR-038: store engine_type
     };
     
     // FE-FEAT-023: 更新统计数据
@@ -205,19 +360,151 @@ async function loadScript() {
       characters.value = [];
     }
     
-    // 路线数据
+    // CR-028: 可扮演角色数据
+    if (response.playable_characters && Array.isArray(response.playable_characters)) {
+      playableCharacters.value = response.playable_characters.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        avatar_url: c.avatar_url,
+        play_description: c.play_description,
+        unlock_type: c.unlock_type || 'free',
+        unlock_price: c.unlock_price,
+        is_unlocked: c.is_unlocked ?? false,
+      }));
+    } else {
+      playableCharacters.value = [];
+    }
+    // 重置选中状态
+    selectedPlayableCharacterId.value = null;
+    
+    // 路线数据 - 转换为 RouteTree 需要的格式
     if (response.routes && Array.isArray(response.routes)) {
-      routeChapters.value = response.routes;
+      routeChapters.value = response.routes.map((route: any, index: number) => {
+        // 优先使用 chapter_type_label（和游戏内一致），fallback 到 route.title
+        const chapterLabel = route.chapter_type_label || route.title || `第${index + 1}章`;
+        const chapterNum = route.chapter_number || index + 1;
+        const title = route.chapter_type_label ? `第${chapterNum}章：${chapterLabel}` : chapterLabel;
+        return {
+          id: route.id,
+          routeId: route.id,
+          title: title,
+          description: route.description,
+          isCompleted: route.is_completed || false,
+          isCurrent: route.is_unlocked && !route.is_completed, // 已解锁但未完成 = 当前章节
+          isLocked: !route.is_unlocked,
+          lockReason: !route.is_unlocked ? '未解锁' : '',
+        };
+      });
     } else {
       routeChapters.value = [];
     }
     
-    // 结局数据（后端只提供数量，不提供详细列表）
-    unlockedEndings.value = [];
-    lockedEndingCount.value = response.endings_count || 0;
+    // 结局数据 - 按章节分组，每章一个结局（展示解锁状态）
+    // 使用 route_id 作为 chapterMap 的 key，避免 title 重复或 fallback 不一致导致重复章节
+    if (response.endings && Array.isArray(response.endings)) {
+      // 构建 route_id → route info 映射
+      const routeInfoMap = new Map<string, { title: string; index: number }>();
+      if (response.routes && Array.isArray(response.routes)) {
+        response.routes.forEach((route: any, index: number) => {
+          routeInfoMap.set(route.id, {
+            title: route.title || `第${index + 1}章`,
+            index: index
+          });
+        });
+      }
+      
+      // 用 route_id 作为 key 分组结局
+      const chapterMap = new Map<string, {
+        chapter: string;
+        chapterIndex: number;
+        endings: any[];
+        hasUnlocked: boolean;
+      }>();
+      
+      // 先初始化所有章节（用 route_id 作为 key）
+      if (response.routes && Array.isArray(response.routes)) {
+        response.routes.forEach((route: any, index: number) => {
+          chapterMap.set(route.id, {
+            chapter: route.title || `第${index + 1}章`,
+            chapterIndex: index,
+            endings: [],
+            hasUnlocked: false
+          });
+        });
+      }
+      
+      // 填充结局数据
+      response.endings.forEach((ending: any) => {
+        const isUnlocked = ending.unlocked || ending.is_unlocked || false;
+        const routeId = ending.route_id;
+        
+        if (routeId && chapterMap.has(routeId)) {
+          // 正常情况：route_id 匹配到已知 route
+          const chapterData = chapterMap.get(routeId)!;
+          chapterData.endings.push({
+            id: ending.id,
+            name: ending.title,
+            type: ending.type,
+            description: ending.description || '',
+            unlockCondition: ending.unlock_condition || '',
+            unlocked: isUnlocked,
+            image_url: ending.image_url || `/assets/cg/${ending.title}.jpg`
+          });
+          if (isUnlocked) {
+            chapterData.hasUnlocked = true;
+          }
+        } else if (routeId) {
+          // route_id 存在但不在 routes 数组中，创建新条目
+          chapterMap.set(routeId, {
+            chapter: `未知章节`,
+            chapterIndex: chapterMap.size,
+            endings: [{
+              id: ending.id,
+              name: ending.title,
+              type: ending.type,
+              description: ending.description || '',
+              unlockCondition: ending.unlock_condition || '',
+              unlocked: isUnlocked,
+              image_url: ending.image_url || `/assets/cg/${ending.title}.jpg`
+            }],
+            hasUnlocked: isUnlocked
+          });
+        }
+        // 如果没有 route_id，忽略这个 ending
+      });
+      
+      // CR-031 T-031-04: 转换为数组，按章节排序，传递所有章节结局（不再只取一个）
+      chapterEndings.value = Array.from(chapterMap.values())
+        .filter(ch => ch.endings.length > 0) // 过滤掉没有结局的章节
+        .sort((a, b) => a.chapterIndex - b.chapterIndex)
+        .map(ch => ({
+          chapter: ch.chapter,
+          chapterIndex: ch.chapterIndex,
+          endings: ch.endings,
+          unlockedCount: ch.endings.filter((e: any) => e.unlocked).length
+        }));
+      lockedEndingCount.value = chapterEndings.value.reduce(
+        (sum: number, c: any) => sum + (c.endings.length - c.unlockedCount), 0
+      );
+    } else {
+      chapterEndings.value = [];
+      lockedEndingCount.value = response.endings_count || 0;
+    }
     
-    // CG 预览（后端未提供）
-    cgPreviews.value = [];
+    // CG 预览
+    if (response.cg_previews && Array.isArray(response.cg_previews)) {
+      cgPreviews.value = response.cg_previews.map((cg: any) => ({
+        id: cg.id,
+        title: cg.name,
+        image_url: cg.image_url,
+        thumbnail_url: cg.image_url,
+        chapter: cg.chapter,
+        description: cg.description,
+        isLocked: !cg.is_unlocked
+      }));
+    } else {
+      cgPreviews.value = [];
+    }
     
   } catch (err) {
     console.error('加载剧本详情失败:', err);
@@ -542,6 +829,12 @@ onMounted(() => {
   margin: 0 0 20px;
 }
 
+.section-desc {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 20px;
+}
+
 /* Chapters Section */
 .chapters-section {
   margin-bottom: 48px;
@@ -640,6 +933,8 @@ onMounted(() => {
   }
 }
 
+/* CR-028: 可扮演角色选择区域 - REMOVED, integrated into character gallery */
+
 /* CG Preview Section */
 .cg-preview-section {
   margin-bottom: 48px;
@@ -726,6 +1021,130 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.6);
   font-size: 16px;
   margin: 0 0 24px;
+}
+
+/* Chapter Selector Modal */
+.chapter-selector-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.chapter-selector-content {
+  background: #1a1a2e;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.chapter-selector-title {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+.chapter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.chapter-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chapter-item.unlocked:hover {
+  background: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.4);
+  transform: translateY(-2px);
+}
+
+.chapter-item.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chapter-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.chapter-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.chapter-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.chapter-name {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.chapter-desc {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-status {
+  color: rgba(167, 139, 250, 0.8);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.close-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Responsive */

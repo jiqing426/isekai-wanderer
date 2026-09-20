@@ -14,6 +14,30 @@
 | Browser Interaction E2E | `tests/e2e/`、Playwright/Puppeteer/浏览器插件 | 用真实浏览器执行用户动作并验证 UI/API 状态 | 存在前端验收项时必跑 |
 | 冒烟测试 | `tests/` 或部署平台 | 验证环境可用 | 每次部署 |
 
+## CR-043 测试要求
+
+### 验证类型映射
+
+| AC 编号 | 验证类型 | 说明 |
+| --- | --- | --- |
+| AC-001, AC-004, AC-005, AC-006, AC-007, AC-008, AC-009, AC-018, AC-019 | API/DB 契约验证 | 后端权限检查逻辑、is_accessible 字段返回、GameSession 创建/拒绝、member-info 数据源修复 |
+| AC-002, AC-003, AC-010, AC-011, AC-012, AC-013, AC-016, AC-017, AC-020 | Browser Interaction E2E | 前端锁/升级提示展示、订阅状态同步、登录后自动加载、用户交互行为验证 |
+| AC-015 | API 安全测试 | API 层面绕过风险验证（Security 阶段） |
+| AC-014, AC-021 | 代码审查 + Browser E2E | 前端复用 useSubscriptionStore 验证、TypeScript 类型修复验证 |
+
+### 测试数据准备
+
+- 需要 4 个不同订阅等级的测试用户账号：free、basic、standard、premium
+- 需要至少 2 个剧本：1 个试用剧本（对 free 可用）、1 个非试用剧本
+- 需要至少 1 个独家剧本（对 basic/standard 不可用，对 premium 可用）
+- 需要至少 1 个已通过剧情解锁的 CG 和 1 个未解锁的 CG
+
+### 测试约束
+
+- **不得使用 mock 作为发布证据**：权限检查必须在真实后端验证，不可用 mock API 替代
+- **Security 阶段必审**：AC-015 API 安全测试由 Security Agent 在 SECURITY 阶段执行
+- **Browser E2E 必跑**：AC-002/003/010/011/012/013 涉及前端用户交互，必须用真实浏览器验证
+
 ## 证据等级
 
 | 等级 | 名称 | 说明 | 典型示例 |

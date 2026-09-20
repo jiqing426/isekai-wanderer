@@ -10,7 +10,7 @@ from uuid import UUID
 from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +21,8 @@ from app.core.exceptions import AppException, ErrorCode
 from app.core.security import verify_password, get_password_hash
 from app.api.v1.auth import get_current_user_id
 from app.models.user import User
-from app.models.gallery import Achievement, Collection
+from app.models.gallery import Achievement
+from app.models.asset import UnlockedCG
 from app.models.payment import Fragment, FragmentTransaction
 from app.models.daily import DailyCheckin, StreakRecord
 from app.models.save import SaveSnapshot
@@ -86,6 +87,7 @@ def _user_to_profile(user: User) -> dict:
         "preferred_genre": user.preferred_genre,
         "locale": user.locale,
         "onboarding_completed": user.onboarding_completed,
+        "is_admin": getattr(user, "is_admin", False),
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -304,15 +306,36 @@ async def get_achievements(
     result = await db.execute(stmt)
     unlocked_achievements = {a.achievement_id: a for a in result.scalars().all()}
 
-    # Fetch collection count for progress calculation (table may not exist yet)
-    collection_count = 0
-    try:
-        coll_count_stmt = select(func.count()).select_from(Collection).where(Collection.user_id == uid)
-        coll_count_result = await db.execute(coll_count_stmt)
-        collection_count = coll_count_result.scalar() or 0
-    except Exception:
-        # collections table may not exist; skip gracefully
-        collection_count = 0
+    # Fetch unlocked CG count for progress calculation
+    cg_count_stmt = select(func.count()).select_from(UnlockedCG).where(UnlockedCG.user_id == uid)
+    cg_count_result = await db.execute(cg_count_stmt)
+    collection_count = cg_count_result.scalar() or 0
+
+    # Fetch streak data for achievement progress
+    streak_stmt = select(StreakRecord).where(StreakRecord.user_id == uid)
+    streak_result = await db.execute(streak_stmt)
+    streak = streak_result.scalar_one_or_none()
+    current_streak = streak.current_streak if streak else 0
+
+    # Fetch dialogue count
+    dialogue_stmt = select(func.sum(UserDialogueCount.dialogue_count)).where(
+        UserDialogueCount.user_id == uid
+    )
+    dialogue_result = await db.execute(dialogue_stmt)
+    total_dialogues = dialogue_result.scalar() or 0
+
+    # Fetch completed scripts count
+    completed_stmt = select(func.count(func.distinct(GameSession.script_id))).where(
+        GameSession.user_id == uid,
+        GameSession.status == "completed"
+    )
+    completed_result = await db.execute(completed_stmt)
+    scripts_completed = completed_result.scalar() or 0
+
+    # Fetch max affection
+    max_affection_stmt = select(func.max(Affection.value)).where(Affection.user_id == uid)
+    max_affection_result = await db.execute(max_affection_stmt)
+    max_affection = max_affection_result.scalar() or 0
 
     # Build achievement cards
     achievements = []
@@ -332,15 +355,19 @@ async def get_achievements(
             progress_current = master["target"]
         else:
             claimed = False
-            # Estimate progress based on related data
+            # Calculate progress based on related data
             if ach_id == "ach_first_dialogue":
-                progress_current = 0  # Would need dialogue count
+                progress_current = min(1, total_dialogues)
             elif ach_id == "ach_bond_60":
-                progress_current = 0  # Would need max affection
+                progress_current = min(60, max_affection)
             elif ach_id == "ach_explorer":
-                progress_current = 0  # Would need completed scripts count
+                progress_current = min(3, scripts_completed)
             elif ach_id == "ach_collector":
                 progress_current = min(collection_count, master["target"])
+            elif ach_id == "ach_daily_30":
+                progress_current = min(30, current_streak)
+            elif ach_id == "ach_bond_100":
+                progress_current = min(100, max_affection)
             else:
                 progress_current = 0
 
@@ -409,19 +436,18 @@ async def get_user_stats(
     endings_result = await db.execute(endings_stmt)
     endings_unlocked = endings_result.scalar() or 0
     
-    # CGs collected (from collections table)
+    # CGs collected (from unlocked_cgs table — the real gallery data source)
     cgs_collected = 0
     try:
-        cgs_stmt = select(func.count()).select_from(Collection).where(
-            Collection.user_id == uid,
-            Collection.item_type == "cg"
+        cgs_stmt = select(func.count()).select_from(UnlockedCG).where(
+            UnlockedCG.user_id == uid
         )
         cgs_result = await db.execute(cgs_stmt)
         cgs_collected = cgs_result.scalar() or 0
     except Exception:
         pass
     
-    # Total dialogues (from user_dialogue_counts)
+    # Total dialogues: prefer user_dialogue_counts, fallback to dialogue_history count
     total_dialogues = 0
     try:
         dialogues_stmt = select(func.sum(UserDialogueCount.dialogue_count)).where(
@@ -432,12 +458,29 @@ async def get_user_stats(
     except Exception:
         pass
     
+    # Fallback: count from dialogue_history if user_dialogue_counts is empty
+    if total_dialogues == 0:
+        try:
+            from app.models.game import DialogueHistory
+            history_stmt = select(func.count()).select_from(DialogueHistory).where(
+                DialogueHistory.user_id == uid,
+                DialogueHistory.role == "assistant"
+            )
+            history_result = await db.execute(history_stmt)
+            total_dialogues = history_result.scalar() or 0
+        except Exception:
+            pass
+    
+    # Total choices (sum of choice_history lengths from all sessions)
+    total_choices = sum(len(s.choice_history or []) for s in sessions)
+    
     return {
         "scripts_completed": scripts_completed,
         "total_play_time_minutes": total_play_time,
         "endings_unlocked": endings_unlocked,
         "cgs_collected": cgs_collected,
         "total_dialogues": total_dialogues,
+        "total_choices": total_choices,
     }
 
 
@@ -519,10 +562,24 @@ async def get_latest_save(
         script = script_result.scalar_one_or_none()
         script_name = script.title if script else None
         
-        # Get first character from script
-        char_stmt = select(Character).where(Character.script_id == session.script_id).limit(1)
-        char_result = await db.execute(char_stmt)
-        character = char_result.scalar_one_or_none()
+        # BUG-031-001 fix: Use session.character_id (the player's chosen character),
+        # NOT the first character of the script. Fallback to is_main, then to first.
+        character = None
+        if session.character_id:
+            char_stmt = select(Character).where(Character.id == session.character_id)
+            char_result = await db.execute(char_stmt)
+            character = char_result.scalar_one_or_none()
+        if not character:
+            char_stmt = select(Character).where(
+                Character.script_id == session.script_id,
+                Character.is_main == True
+            ).limit(1)
+            char_result = await db.execute(char_stmt)
+            character = char_result.scalar_one_or_none()
+        if not character:
+            char_stmt = select(Character).where(Character.script_id == session.script_id).limit(1)
+            char_result = await db.execute(char_stmt)
+            character = char_result.scalar_one_or_none()
         if character:
             character_name = character.name
             character_avatar = character.avatar_url
@@ -605,13 +662,22 @@ async def get_memory_summary(
     bonds_result = await db.execute(bonds_stmt)
     bonds_rows = bonds_result.all()
     
+    # 好感度等级中文映射
+    level_labels = {
+        "acquaintance": "相识",
+        "ambiguous": "暧昧",
+        "trust": "信赖",
+        "bond": "羁绊",
+        "love": "挚友"
+    }
+    
     bonds = [
         {
             "character_id": str(char.id),
             "character_name": char.name,
             "bond_level": aff.level,
             "bond_value": aff.value,
-            "description": f"与{char.name}建立了{aff.level}关系"
+            "description": f"与{char.name}建立了{level_labels.get(aff.level, aff.level)}关系"
         }
         for aff, char in bonds_rows
     ]
@@ -621,7 +687,7 @@ async def get_memory_summary(
         {
             "event_id": str(mem.id),
             "event_type": "dialogue_memory",
-            "description": mem.memory_text,
+            "description": f"与{char.name}：{mem.memory_text}" if char else mem.memory_text,
             "created_at": mem.created_at.isoformat() if mem.created_at else None
         }
         for mem, char in rows
@@ -651,16 +717,29 @@ async def get_memory_summary(
 @router.get("/characters/bond")
 async def get_characters_bond(
     user_id: str = Depends(get_current_user_id),
+    offset: int = Query(0, ge=0, description="分页偏移"),
+    limit: int = Query(10, ge=1, le=50, description="每页数量"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get character affection/bond list."""
+    """Get character affection/bond list with pagination and sorting."""
     uid = UUID(user_id)
     
-    # Get all affection records for user
+    # Get total count
+    count_stmt = (
+        select(func.count(Affection.id))
+        .where(Affection.user_id == uid)
+    )
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar() or 0
+    
+    # Get affection records with pagination, sorted by value descending
     stmt = (
         select(Affection, Character)
         .join(Character, Character.id == Affection.character_id)
         .where(Affection.user_id == uid)
+        .order_by(Affection.value.desc())
+        .offset(offset)
+        .limit(limit)
     )
     result = await db.execute(stmt)
     rows = result.all()
@@ -677,7 +756,10 @@ async def get_characters_bond(
             }
             for aff, char in rows
         ],
-        "total": len(rows),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + limit < total,
     }
 
 

@@ -25,7 +25,7 @@ const tabs = [
   { route: '/discover', icon: '🔍', label: '发现' },
   { route: '/game', icon: '🎮', label: '游戏' },
   { route: '/community', icon: '👥', label: '社区' },
-  { route: '/profile', icon: '👤', label: '我的' },
+  { route: '/personal-center', icon: '👤', label: '我的' },
 ];
 
 // GameView 隐藏 TabBar（沉浸模式）

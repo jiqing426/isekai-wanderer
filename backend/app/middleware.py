@@ -32,7 +32,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         key = f"rate_limit:{client_ip}:{request.url.path}"
 
         # Determine rate limit
-        limit = settings.llm_rate_limit if "/llm/" in request.url.path or "/dialogue" in request.url.path else settings.api_rate_limit
+        # Only actual LLM generation endpoints (stream, free-chat, custom-input, onboarding) get the strict limit.
+        # Reading dialogue state (/dialogue GET) is a DB read, not an LLM call — use normal limit.
+        is_llm_write = (
+            "/llm/" in request.url.path
+            or "/dialogue/stream" in request.url.path
+            or "/free-chat" in request.url.path
+            or "/custom-input" in request.url.path
+            or "/onboarding" in request.url.path
+        )
+        limit = settings.llm_rate_limit if is_llm_write else settings.api_rate_limit
         window = 60  # 1 minute
 
         # Check rate limit

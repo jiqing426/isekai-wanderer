@@ -154,7 +154,7 @@ def has_backfilled_red_marker(value: Optional[str]) -> bool:
     return any(marker in text for marker in BACKFILLED_RED_MARKERS)
 
 
-def parse_scalar(value: str) -> str | bool | int:
+def parse_scalar(value: str) -> "str | bool | int":
     text = value.strip()
     if text.lower() == "true":
         return True
@@ -167,9 +167,9 @@ def parse_scalar(value: str) -> str | bool | int:
     return text
 
 
-def parse_real_test_config(path: Path, failures: List[str]) -> Dict[str, str | bool | int]:
+def parse_real_test_config(path: Path, failures: List[str]) -> Dict[str, "str | bool | int"]:
     content = read_text(path)
-    config: Dict[str, str | bool | int] = dict(DEFAULT_REAL_TEST_CONFIG)
+    config: Dict[str, "str | bool | int"] = dict(DEFAULT_REAL_TEST_CONFIG)
     if content is None:
         failures.append("缺少 workflow/execution.config.yaml，无法读取真实测试验证配置")
         return config
@@ -416,29 +416,107 @@ def run_recorded_command(
     command: str,
     project_root: Path,
     timeout_seconds: int,
-) -> subprocess.CompletedProcess[str] | subprocess.TimeoutExpired:
-    return subprocess.run(
+) -> "subprocess.CompletedProcess[str] | subprocess.TimeoutExpired":
+    import tempfile, os, signal, tty, pty
+    stdout_fd, stdout_path = tempfile.mkstemp(prefix="readiness_stdout_")
+    stderr_fd, stderr_path = tempfile.mkstemp(prefix="readiness_stderr_")
+    os.close(stdout_fd)
+    os.close(stderr_fd)
+    master_fd, slave_fd = pty.openpty()
+    stdout_file = open(stdout_path, "w")
+    stderr_file = open(stderr_path, "w")
+    proc = subprocess.Popen(
         command,
-        cwd=project_root,
+        cwd=str(project_root),
         shell=True,
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds,
-        check=False,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        stdin=slave_fd,
+        close_fds=True,
+        preexec_fn=os.setsid,
+    )
+    os.close(slave_fd)
+    import select
+    output_buf = []
+    start_time = __import__("time").time()
+    timed_out = False
+    while True:
+        elapsed = __import__("time").time() - start_time
+        if elapsed > timeout_seconds:
+            timed_out = True
+            break
+        rlist, _, _ = select.select([master_fd], [], [], 1.0)
+        if rlist:
+            try:
+                data = os.read(master_fd, 4096)
+                if not data:
+                    break
+                text = data.decode("utf-8", errors="replace")
+                output_buf.append(text)
+                stdout_file.write(text)
+                stdout_file.flush()
+            except OSError:
+                break
+        result_code = proc.poll()
+        if result_code is not None:
+            # Drain remaining output
+            while True:
+                rlist, _, _ = select.select([master_fd], [], [], 0.5)
+                if not rlist:
+                    break
+                try:
+                    data = os.read(master_fd, 4096)
+                    if not data:
+                        break
+                    text = data.decode("utf-8", errors="replace")
+                    output_buf.append(text)
+                    stdout_file.write(text)
+                    stdout_file.flush()
+                except OSError:
+                    break
+            break
+    if timed_out:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except Exception:
+                pass
+    try:
+        os.close(master_fd)
+    except OSError:
+        pass
+    stdout_file.close()
+    stderr_file.close()
+    output_text = "".join(output_buf)
+    try:
+        os.unlink(stdout_path)
+        os.unlink(stderr_path)
+    except OSError:
+        pass
+    if timed_out:
+        raise subprocess.TimeoutExpired(command, timeout_seconds, output=output_text, stderr="")
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=proc.returncode if proc.returncode is not None else -1,
+        stdout=output_text,
+        stderr="",
     )
 
 
-def bool_config(config: Dict[str, str | bool | int], key: str, default: bool) -> bool:
+def bool_config(config: Dict[str, "str | bool | int"], key: str, default: bool) -> bool:
     value = config.get(key, default)
     return value if isinstance(value, bool) else default
 
 
-def int_config(config: Dict[str, str | bool | int], key: str, default: int) -> int:
+def int_config(config: Dict[str, "str | bool | int"], key: str, default: int) -> int:
     value = config.get(key, default)
     return value if isinstance(value, int) and not isinstance(value, bool) else default
 
 
-def command_exit_matches(expected: str | bool | Optional[int], returncode: int) -> bool:
+def command_exit_matches(expected: "str | bool | Optional[int]", returncode: int) -> bool:
     if isinstance(expected, int) and not isinstance(expected, bool):
         return returncode == expected
     if isinstance(expected, str) and expected.casefold() == "non_zero":

@@ -72,7 +72,6 @@ def _(*a, **k): return {"achievements": [
     {"id":"ach-008","name":"大师","description":"解锁所有成就","icon":"👑","unlocked":False,"unlocked_at":None,"claimed":False},
     {"id":"ach-009","name":"选择困难","description":"累计100次选择","icon":"🤔","unlocked":True,"unlocked_at":"2026-07-18T09:00:00Z","claimed":True},
     {"id":"ach-010","name":"碎片猎人","description":"累计1000碎片","icon":"💎","unlocked":True,"unlocked_at":"2026-07-18T15:00:00Z","claimed":False},
-    {"id":"ach-011","name":"社交达人","description":"发布10条帖子","icon":"📝","unlocked":False,"unlocked_at":None,"claimed":False},
     {"id":"ach-012","name":"回忆录","description":"完成5个结局","icon":"📖","unlocked":False,"unlocked_at":None,"claimed":False},
 ]}
 
@@ -262,10 +261,10 @@ def _(*a, **k): return {"subscription_id":None,"tier":"standard","status":"activ
 def _(*a, **k): return {"status":"cancelled","message":"订阅已取消"}
 
 @R("/user/profile")
-def _(*a, **k): return {"id":"bd7f90f9-f543-4fb0-98eb-b9c2a42410a2","email":"demo@isekai.dev","display_name":"星辰旅者","avatar_url":None,"subscription_tier":"standard","created_at":"2026-07-01T00:00:00Z"}
+def _(*a, **k): return {"id":"bd7f90f9-f543-4fb0-98eb-b9c2a42410a2","email":"demo@isekai.dev","display_name":"星辰旅者","avatar_url":None,"subscription_tier":"standard","is_admin":True,"created_at":"2026-07-01T00:00:00Z"}
 
 @R("/user/profile", "PUT")
-def _(*a, **k): return {"id":"bd7f90f9-f543-4fb0-98eb-b9c2a42410a2","email":"demo@isekai.dev","display_name":"星辰旅者","avatar_url":None,"subscription_tier":"standard","created_at":"2026-07-01T00:00:00Z"}
+def _(*a, **k): return {"id":"bd7f90f9-f543-4fb0-98eb-b9c2a42410a2","email":"demo@isekai.dev","display_name":"星辰旅者","avatar_url":None,"subscription_tier":"standard","is_admin":True,"created_at":"2026-07-01T00:00:00Z"}
 
 @R("/user/preferences")
 def _(*a, **k): return {"language":"zh-CN","theme":"dark","notifications":True,"sound_effects":True,"auto_save":True,"text_speed":"normal"}

@@ -1,8 +1,11 @@
 <template>
   <div class="chapter-progress">
     <div class="chapter-info">
-      <span class="chapter-label">章节</span>
-      <span class="chapter-title">{{ chapter || '序章' }}</span>
+      <transition name="chapter-fade" mode="out-in">
+        <span class="chapter-title" :key="chapterDisplay">
+          {{ chapterDisplay }}
+        </span>
+      </transition>
       <span v-if="convergencePoint" class="convergence-point">
         <span class="cp-dot"></span>
         {{ convergencePoint }}
@@ -27,11 +30,24 @@ import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{
   chapter?: string;
+  chapterNumber?: number | null;
+  chapterTitle?: string | null;
   convergencePoint?: string;
   progress?: number;
 }>(), {
   chapter: '序章',
+  chapterNumber: null,
+  chapterTitle: null,
   progress: 0,
+});
+
+// CR-030: 优先使用 chapterNumber + chapterTitle 显示 "第X章：章节名"
+const chapterDisplay = computed(() => {
+  if (props.chapterNumber != null && props.chapterTitle) {
+    return `第${props.chapterNumber}章：${props.chapterTitle}`;
+  }
+  // 向后兼容：旧 session 返回 chapter_number=null，使用 chapter prop 或默认值
+  return props.chapter || '序章';
 });
 
 const clampedProgress = computed(() => {
@@ -105,5 +121,21 @@ const progressColor = computed(() => {
   font-variant-numeric: tabular-nums;
   min-width: 32px;
   text-align: right;
+}
+
+/* CR-030: 章节切换过渡动画 */
+.chapter-fade-enter-active,
+.chapter-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.chapter-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.chapter-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

@@ -1,6 +1,6 @@
 """聊天相关的Pydantic模型"""
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 
@@ -12,6 +12,7 @@ class ChatMessageCreate(BaseModel):
 
 class ChatMessageResponse(BaseModel):
     """聊天消息响应"""
+    id: str  # Frontend expects 'id' field
     message_id: str
     character_id: str
     sender_type: str
@@ -32,6 +33,7 @@ class ChatMessageListResponse(BaseModel):
 
 class ChatTopicResponse(BaseModel):
     """推荐话题响应"""
+    id: str  # Frontend expects 'id' field
     topic_id: str
     character_id: str
     topic_text: str
@@ -39,3 +41,14 @@ class ChatTopicResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class ChatTopicListResponse(BaseModel):
+    """推荐话题列表响应"""
+    topics: List[ChatTopicResponse]
+
+
+class ChatSendResponse(BaseModel):
+    """发送消息响应（包含用户消息和 NPC 回复）"""
+    message: ChatMessageResponse
+    npc_message: Optional[ChatMessageResponse] = None

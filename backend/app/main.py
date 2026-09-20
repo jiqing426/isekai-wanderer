@@ -23,8 +23,35 @@ async def lifespan(app: FastAPI):
         print("   Set JWT_SECRET environment variable for production!", file=sys.stderr)
         print("="*70 + "\n", file=sys.stderr)
     
+    # Start daily cron tasks
+    import asyncio
+    from app.core.database import async_session_factory
+    from app.api.v1.subscription import run_subscription_expiry_check, run_monthly_fragment_grant
+    
+    async def daily_tasks():
+        """Run daily subscription checks."""
+        while True:
+            await asyncio.sleep(86400)  # 24 hours
+            try:
+                async with async_session_factory() as session:
+                    # Check expired subscriptions
+                    downgraded = await run_subscription_expiry_check(session)
+                    if downgraded:
+                        print(f"[CRON] Downgraded {downgraded} expired subscriptions")
+                    
+                    # Grant monthly fragments
+                    granted = await run_monthly_fragment_grant(session)
+                    if granted:
+                        print(f"[CRON] Granted monthly fragments to {granted} users")
+            except Exception as e:
+                print(f"[CRON] Error in daily tasks: {e}")
+    
+    task = asyncio.create_task(daily_tasks())
+    
     yield
+    
     # Shutdown
+    task.cancel()
     await close_redis()
 
 
@@ -44,9 +71,13 @@ setup_cors(app)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(LoggingMiddleware)
 
-# Mock 数据中间件（优先于真实路由）
-from app.mock_middleware import MockMiddleware
-app.add_middleware(MockMiddleware)
+# Mock 中间件 — 仅开发环境加载，生产环境(APP_ENV=production)自动跳过
+from app.mock_middleware import MockMiddleware, MOCK_ENABLED
+if MOCK_ENABLED:
+    app.add_middleware(MockMiddleware)
+    print("[Startup] MockMiddleware enabled — mock routes active")
+else:
+    print("[Startup] MockMiddleware skipped — production mode")
 
 # Routes
 app.include_router(api_router)

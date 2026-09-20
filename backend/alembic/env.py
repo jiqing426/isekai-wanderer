@@ -28,7 +28,7 @@ from app.models.asset import (
     UserPreference, EmailVerification,
 )
 from app.models.share import ShareCard
-from app.models.gallery import Collection, Achievement, UserAchievementClaim, ActivityChestClaim
+from app.models.gallery import Achievement, UserAchievementClaim, ActivityChestClaim
 from app.models.save import SaveSnapshot
 from app.models.shard import Fragment, FragmentTransaction  # noqa: F811 re-export
 from app.models.convergence_point import ConvergencePoint  # v4.4
@@ -38,6 +38,11 @@ from app.models.user_persona import UserPersona  # v4.4
 from app.models.subscription import Subscription as CR016Subscription  # noqa: F401
 from app.models.dialogue_quota import DialogueQuota  # noqa: F401
 from app.models.paywall_event import PaywallEvent  # noqa: F401
+
+# CR-037 Corvus-Story-Core models
+from app.models.corvus import (  # noqa: F401
+    PlayerCandidate, CorvusGameSession, SessionNpc, InventoryItem, StoryFlag,
+)
 
 config = context.config
 if config.config_file_name is not None:

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 # 图片存储根目录
-UPLOAD_DIR = Path("/root/isekai-wanderer/backend/static/images")
+UPLOAD_DIR = Path("/app/static/images")
 
 
 def get_category(filename: str) -> str:

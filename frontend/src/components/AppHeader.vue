@@ -47,7 +47,7 @@
           <n-dropdown :options="userOptions" @select="handleUserSelect">
             <n-button quaternary size="small" class="tool-btn user-btn">
               <div class="user-avatar-small">
-                <img v-if="auth.user?.avatar" :src="auth.user.avatar" :alt="userInitial" class="user-avatar-img" />
+                <img v-if="auth.user?.avatar && !headerAvatarFailed" :src="auth.user.avatar" :alt="userInitial" class="user-avatar-img" @error="headerAvatarFailed = true" />
                 <span v-else>{{ userInitial }}</span>
               </div>
             </n-button>
@@ -119,6 +119,7 @@ const auth = useAuthStore();
 
 const isScrolled = ref(false);
 const mobileMenuOpen = ref(false);
+const headerAvatarFailed = ref(false);
 
 const isAuthenticated = computed(() => auth.isAuthenticated);
 const userInitial = computed(() => {
@@ -129,7 +130,6 @@ const userInitial = computed(() => {
 // FE-O26: 导航 tabs 配置
 const navTabs = computed(() => [
   { path: '/discover', icon: '📚', label: t('nav.scripts'), requiresAuth: false },
-  { path: '/characters', icon: '👥', label: t('nav.characters'), requiresAuth: true },
   { path: '/character-chat', icon: '💬', label: '角色聊天', requiresAuth: true },
   { path: '/gallery', icon: '🖼️', label: t('nav.gallery'), requiresAuth: true },
   { path: '/fragment', icon: '💠', label: t('nav.fragment'), requiresAuth: true },

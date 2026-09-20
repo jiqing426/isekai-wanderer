@@ -2,17 +2,26 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.subscription import Subscription, SubscriptionTier, SubscriptionStatus
-from app.models.payment import Subscription as LegacySubscription
+from app.models.payment import Subscription as LegacySubscription, Fragment, FragmentTransaction
 from app.models.user import User
 from app.schemas.subscription import TierPermissions
 
 logger = logging.getLogger(__name__)
+
+
+# Tier fragment quotas (monthly)
+TIER_FRAGMENT_QUOTAS: Dict[str, int] = {
+    SubscriptionTier.free.value: 0,
+    SubscriptionTier.basic.value: 300,
+    SubscriptionTier.standard.value: 600,
+    SubscriptionTier.premium.value: 1200,
+}
 
 
 # Tier permission definitions
@@ -184,6 +193,9 @@ class SubscriptionService:
             status=SubscriptionStatus.active.value,
             started_at=datetime.now(timezone.utc),
             expires_at=expires_at,
+            fragment_quota=TIER_FRAGMENT_QUOTAS.get(tier, 0),
+            last_fragment_grant_at=datetime.now(timezone.utc),
+            next_fragment_grant_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         self.db.add(subscription)
         
@@ -237,6 +249,9 @@ class SubscriptionService:
             )
         else:
             logger.info(f"Subscription created: user={user_id}, tier={tier}")
+        
+        # Grant initial fragments for this month
+        await self._grant_fragments(user_id, tier)
         
         return subscription
 
@@ -312,3 +327,78 @@ class SubscriptionService:
             ).order_by(Subscription.started_at.desc())
         )
         return result.scalar_one_or_none()
+
+    async def _grant_fragments(
+        self,
+        user_id: uuid.UUID,
+        tier: str
+    ) -> None:
+        """Grant monthly fragments to user.
+        
+        Args:
+            user_id: User UUID
+            tier: Subscription tier
+        """
+        amount = TIER_FRAGMENT_QUOTAS.get(tier, 0)
+        if amount <= 0:
+            return
+        
+        # Get or create fragment balance
+        result = await self.db.execute(
+            select(Fragment).where(Fragment.user_id == user_id)
+        )
+        fragment = result.scalar_one_or_none()
+        
+        if fragment:
+            fragment.balance += amount
+        else:
+            fragment = Fragment(user_id=user_id, balance=amount)
+            self.db.add(fragment)
+        
+        # Record transaction
+        transaction = FragmentTransaction(
+            user_id=user_id,
+            amount=amount,
+            reason=f"subscription_grant:{tier}",
+        )
+        self.db.add(transaction)
+        
+        await self.db.flush()
+        logger.info(f"Granted {amount} fragments to user {user_id} ({tier})")
+
+    async def process_monthly_grants(self) -> int:
+        """Process monthly fragment grants for all active subscriptions.
+        
+        This should be called by a daily cron job to check and grant
+        fragments for subscriptions that are due.
+        
+        Returns:
+            Number of users granted fragments
+        """
+        now = datetime.now(timezone.utc)
+        
+        # Find all active subscriptions due for grant
+        result = await self.db.execute(
+            select(Subscription).where(
+                Subscription.status == SubscriptionStatus.active.value,
+                Subscription.next_fragment_grant_at <= now
+            )
+        )
+        subscriptions = result.scalars().all()
+        
+        granted_count = 0
+        for sub in subscriptions:
+            # Grant fragments
+            await self._grant_fragments(sub.user_id, sub.tier)
+            
+            # Update grant timestamps
+            sub.last_fragment_grant_at = now
+            sub.next_fragment_grant_at = now + timedelta(days=30)
+            
+            granted_count += 1
+            logger.info(
+                f"Monthly grant processed: user={sub.user_id}, tier={sub.tier}"
+            )
+        
+        await self.db.commit()
+        return granted_count

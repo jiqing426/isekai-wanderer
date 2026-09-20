@@ -11,6 +11,7 @@ from typing import List, Optional
 from app.core.database import get_db
 from app.models.script import Character
 from app.models.affection import Affection
+from app.models.user_character_unlock import UserCharacterUnlock
 from app.api.v1.auth import get_current_user_id
 
 router = APIRouter(prefix="/characters", tags=["characters"])
@@ -425,18 +426,65 @@ async def get_character_voices(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     
-    # Voice data matching frontend expected format: {id, label, icon}
-    all_voices = [
-        {"id": f"voice-{character.id}-1", "label": "打招呼", "icon": "👋"},
-        {"id": f"voice-{character.id}-2", "label": "日常对话", "icon": "💬"},
-        {"id": f"voice-{character.id}-3", "label": "告白", "icon": "💕"},
-        {"id": f"voice-{character.id}-4", "label": "生气", "icon": "😤"},
-    ]
+    # Voice data matching frontend expected format: {id, label, icon, text}
+    from app.services.tts.service import VOICE_CONFIG
+    
+    all_voices = []
+    for emotion, config in VOICE_CONFIG.items():
+        icon_map = {"打招呼": "👋", "日常对话": "💬", "告白": "💕", "生气": "😤"}
+        all_voices.append({
+            "id": f"voice-{character.id}-{emotion}",
+            "label": emotion,
+            "icon": icon_map.get(emotion, "🎤"),
+            "text": config["text"].format(character_name=character.name),
+        })
 
     return {
         "character_id": str(character.id),
         "voices": all_voices
     }
+
+
+@router.post("/{character_id}/voices/synthesize")
+async def synthesize_voice(
+    character_id: UUID,
+    emotion: str = "打招呼",
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id)
+):
+    """CR-036: Real-time voice synthesis using CosyVoice API."""
+    from app.services.tts.service import tts_service, VOICE_CONFIG
+    from fastapi.responses import Response
+    
+    # Get character
+    char_result = await db.execute(
+        select(Character).where(Character.id == character_id)
+    )
+    character = char_result.scalar_one_or_none()
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Get text for emotion
+    if emotion not in VOICE_CONFIG:
+        emotion = "打招呼"
+    
+    text = VOICE_CONFIG[emotion]["text"].format(character_name=character.name)
+    
+    # Synthesize audio
+    audio_bytes = await tts_service.synthesize(
+        text=text,
+        voice_model="flash",
+    )
+    
+    if not audio_bytes:
+        raise HTTPException(status_code=500, detail="Voice synthesis failed")
+    
+    return Response(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": "attachment; filename=voice.mp3"}
+    )
 
 
 # ──────────────────────────────────────────────
@@ -628,3 +676,86 @@ async def validate_dialogue(
         issues=issues,
         suggestions=suggestions
     )
+
+
+# ──────────────────────────────────────────────
+# CR-028: Character Unlock API
+# ──────────────────────────────────────────────
+
+
+@router.post("/{character_id}/unlock")
+async def unlock_character(
+    character_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    CR-028: Unlock a playable character for role-playing.
+    
+    This endpoint allows users to unlock characters that require
+    payment or subscription to play as. Free characters don't
+    need to be unlocked.
+    
+    Idempotent: calling multiple times has no additional effect.
+    """
+    # Check if character exists
+    result = await db.execute(
+        select(Character).where(Character.id == character_id)
+    )
+    character = result.scalar_one_or_none()
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Check if character is playable
+    if not character.playable:
+        raise HTTPException(status_code=400, detail="Character is not playable")
+    
+    # Check unlock type
+    unlock_type = character.unlock_type or "free"
+    
+    if unlock_type == "free":
+        # Free characters don't need unlocking
+        return {
+            "success": True,
+            "message": "Character is free and already available",
+            "character_id": str(character_id),
+            "is_unlocked": True
+        }
+    
+    # Check if already unlocked (idempotent)
+    user_uuid = UUID(user_id)
+    existing_result = await db.execute(
+        select(UserCharacterUnlock).where(
+            UserCharacterUnlock.user_id == user_uuid,
+            UserCharacterUnlock.character_id == character_id
+        )
+    )
+    existing_unlock = existing_result.scalar_one_or_none()
+    
+    if existing_unlock:
+        # Already unlocked, return success (idempotent)
+        return {
+            "success": True,
+            "message": "Character already unlocked",
+            "character_id": str(character_id),
+            "is_unlocked": True,
+            "unlocked_at": existing_unlock.unlocked_at.isoformat()
+        }
+    
+    # Create unlock record
+    new_unlock = UserCharacterUnlock(
+        user_id=user_uuid,
+        character_id=character_id
+    )
+    db.add(new_unlock)
+    await db.commit()
+    await db.refresh(new_unlock)
+    
+    return {
+        "success": True,
+        "message": "Character unlocked successfully",
+        "character_id": str(character_id),
+        "is_unlocked": True,
+        "unlocked_at": new_unlock.unlocked_at.isoformat()
+    }

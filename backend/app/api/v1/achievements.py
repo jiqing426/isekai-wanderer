@@ -120,17 +120,6 @@ ACHIEVEMENT_CATALOG = {
         "condition": {"type": "all_achievements_unlocked", "value": 1},
         "progress_target": 1,
     },
-    "ACH-009": {
-        "id": "ACH-009",
-        "name": "社交达人",
-        "description": "添加 5 个好友",
-        "icon": "🤝",
-        "rarity": "common",
-        "reward_type": "fragments",
-        "reward_amount": 30,
-        "condition": {"type": "friends_count", "value": 5},
-        "progress_target": 5,
-    },
     "ACH-010": {
         "id": "ACH-010",
         "name": "月度玩家",
@@ -214,6 +203,135 @@ class UnlockAchievementRequest(BaseModel):
 # ──────────────────────────────────────────────
 
 
+async def _calculate_progress(
+    condition_type: str,
+    user_id: uuid.UUID,
+    db: AsyncSession,
+) -> int:
+    """
+    根据成就条件类型计算用户当前进度。
+    """
+    from app.models.gallery import Achievement
+    from app.models.script import Character
+    from app.models.affection import Affection
+    from app.models.gift_record import GiftRecord
+    
+    if condition_type == "streak":
+        # 连续签到天数
+        from app.models.daily import DailyCheckin
+        from datetime import date, timedelta
+        
+        # 获取所有签到记录，按日期倒序
+        result = await db.execute(
+            select(DailyCheckin.date)
+            .where(DailyCheckin.user_id == user_id)
+            .order_by(DailyCheckin.date.desc())
+        )
+        dates = [row[0] for row in result.all()]
+        
+        if not dates:
+            return 0
+        
+        # 计算连续签到天数（从今天往前推）
+        today = date.today()
+        streak = 0
+        expected_date = today
+        
+        for d in dates:
+            if d == expected_date:
+                streak += 1
+                expected_date = expected_date - timedelta(days=1)
+            elif d < expected_date:
+                # 断签了，停止计算
+                break
+        
+        return streak
+    
+    elif condition_type == "dialogue_count":
+        # 对话次数（从 game_sessions 统计）
+        from app.models.game import GameSession
+        result = await db.execute(
+            select(func.count(GameSession.id))
+            .where(GameSession.user_id == user_id)
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "affection":
+        # 最高好感度
+        result = await db.execute(
+            select(func.max(Affection.value))
+            .where(Affection.user_id == user_id)
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "completed_scripts":
+        # 完成的剧本数（有 completed_at 的 session）
+        from app.models.game import GameSession
+        result = await db.execute(
+            select(func.count(GameSession.id))
+            .where(
+                GameSession.user_id == user_id,
+                GameSession.completed_at.isnot(None)
+            )
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "gifts_sent":
+        # 送出礼物总数
+        result = await db.execute(
+            select(func.sum(GiftRecord.quantity))
+            .where(GiftRecord.user_id == user_id)
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "characters_unlocked":
+        # 解锁角色数（有好感度记录的视为解锁）
+        result = await db.execute(
+            select(func.count(func.distinct(Affection.character_id)))
+            .where(Affection.user_id == user_id)
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "choice_count":
+        # 选择次数（从 game_progress 统计）
+        from app.models.game import GameProgress, GameSession
+        result = await db.execute(
+            select(func.count(GameProgress.id))
+            .where(
+                GameProgress.session_id.in_(
+                    select(GameSession.id).where(GameSession.user_id == user_id)
+                ),
+                GameProgress.choice_id.isnot(None)
+            )
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "branches_explored":
+        # 探索的分支数（不同 node_id 的数量）
+        from app.models.game import GameProgress, GameSession
+        result = await db.execute(
+            select(func.count(func.distinct(GameProgress.node_id)))
+            .where(
+                GameProgress.session_id.in_(
+                    select(GameSession.id).where(GameSession.user_id == user_id)
+                )
+            )
+        )
+        return result.scalar() or 0
+    
+    elif condition_type == "cg_count":
+        # 收集的CG数量
+        from app.models.asset import UnlockedCG
+        result = await db.execute(
+            select(func.count(UnlockedCG.id))
+            .where(UnlockedCG.user_id == user_id)
+        )
+        return result.scalar() or 0
+    
+    # 其他条件类型暂时返回 0
+    return 0
+
+
 @router.get("")
 async def list_achievements(
     user_id: str = Depends(get_current_user_id),
@@ -221,6 +339,7 @@ async def list_achievements(
 ):
     """
     CR3-020: List all achievement definitions with user unlock/claim state.
+    自动解锁进度已达标的成就。
     """
     uid = uuid.UUID(user_id)
 
@@ -237,15 +356,33 @@ async def list_achievements(
     claimed = {c.achievement_id.upper(): c for c in claimed_result.scalars().all()}
 
     items = []
+    auto_unlocked = []  # 记录本次自动解锁的成就
+    
     for ach_id, defn in ACHIEVEMENT_CATALOG.items():
         user_ach = unlocked.get(ach_id)
         user_claim = claimed.get(ach_id)
         
-        # Calculate progress (for now, return 0 for unlocked, target for completed)
-        # TODO: Implement actual progress tracking based on condition type
-        progress = 0
+        # 计算真实进度
+        condition_type = defn["condition"]["type"]
+        progress = await _calculate_progress(condition_type, uid, db)
+        
+        # 如果已解锁，进度至少是目标值
         if user_ach:
-            progress = defn["progress_target"]
+            progress = max(progress, defn["progress_target"])
+        
+        # 自动解锁：进度达标且未解锁
+        if not user_ach and progress >= defn["progress_target"] and defn["progress_target"] > 0:
+            # 自动解锁这个成就
+            new_achievement = Achievement(
+                user_id=uid,
+                achievement_id=ach_id,
+                title=defn["name"],
+                description=defn["description"],
+                icon_url=defn["icon"],
+            )
+            db.add(new_achievement)
+            auto_unlocked.append(ach_id)
+            user_ach = new_achievement  # 更新引用，后续逻辑可以正确处理
         
         items.append({
             "id": ach_id,
@@ -264,15 +401,36 @@ async def list_achievements(
             },
             "isUnlocked": user_ach is not None,
             "isClaimed": user_claim is not None,
-            "unlockedAt": user_ach.unlocked_at.isoformat() if user_ach else None,
+            "unlockedAt": user_ach.unlocked_at.isoformat() if user_ach and hasattr(user_ach, 'unlocked_at') and user_ach.unlocked_at else None,
             "claimedAt": user_claim.claimed_at.isoformat() if user_claim else None,
         })
+
+    # 提交自动解锁的记录
+    if auto_unlocked:
+        await db.commit()
+        # 刷新新添加的记录以获取 unlocked_at
+        for ach_id in auto_unlocked:
+            refreshed = await db.execute(
+                select(Achievement).where(
+                    Achievement.user_id == uid,
+                    Achievement.achievement_id == ach_id
+                )
+            )
+            refreshed_ach = refreshed.scalar_one_or_none()
+            if refreshed_ach:
+                # 更新 items 中的 unlockedAt
+                for item in items:
+                    if item["id"] == ach_id:
+                        item["isUnlocked"] = True
+                        item["unlockedAt"] = refreshed_ach.unlocked_at.isoformat()
+                        break
 
     return {
         "achievements": items,
         "total": len(items),
-        "unlocked_count": len(unlocked),
+        "unlocked_count": len([i for i in items if i["isUnlocked"]]),
         "claimed_count": len(claimed),
+        "auto_unlocked": auto_unlocked,  # 返回本次自动解锁的成就列表
     }
 
 

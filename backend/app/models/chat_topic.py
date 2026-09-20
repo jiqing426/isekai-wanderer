@@ -16,6 +16,7 @@ class ChatTopic(Base):
     
     def to_dict(self):
         return {
+            "id": str(self.id),  # Frontend expects 'id' field
             "topic_id": str(self.id),
             "character_id": str(self.character_id),
             "topic_text": self.topic_text,

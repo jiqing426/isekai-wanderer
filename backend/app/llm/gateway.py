@@ -183,12 +183,12 @@ class LLMGateway:
 
         This is the compatibility interface used by memory_service.
         """
-        memories = await self.extract_memories(dialogue)
+        memories = await self.extract_memories(dialogue, character_name=character_name)
         return [m.content for m in memories if m.content]
 
-    async def extract_memories(self, conversation: str) -> List[Memory]:
+    async def extract_memories(self, conversation: str, character_name: str = "") -> List[Memory]:
         """Extract memories from conversation text (returns Memory objects)."""
-        prompt = build_memory_extract_prompt(conversation)
+        prompt = build_memory_extract_prompt(conversation, character_name=character_name)
 
         for attempt in range(self.max_retries + 1):
             try:

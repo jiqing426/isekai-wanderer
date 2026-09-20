@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- 背景渐变 - 夜空 -->
+  <defs>
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#16213e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f3460;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 月光光晕 -->
+    <radialGradient id="moonGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#fff9e6;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#fff9e6;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#fff9e6;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="800" height="600" fill="url(#skyGradient)"/>
+  
+  <!-- 月亮 -->
+  <circle cx="600" cy="120" r="60" fill="#fff9e6" opacity="0.9"/>
+  <circle cx="600" cy="120" r="80" fill="url(#moonGlow)"/>
+  
+  <!-- 星星 -->
+  <circle cx="150" cy="80" r="2" fill="#ffffff" opacity="0.8"/>
+  <circle cx="250" cy="120" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="350" cy="60" r="2" fill="#ffffff" opacity="0.7"/>
+  <circle cx="450" cy="100" r="1.5" fill="#ffffff" opacity="0.5"/>
+  <circle cx="700" cy="200" r="2" fill="#ffffff" opacity="0.6"/>
+  <circle cx="100" cy="180" r="1.5" fill="#ffffff" opacity="0.7"/>
+  
+  <!-- 竹林剪影 -->
+  <g opacity="0.3">
+    <rect x="50" y="200" width="8" height="400" fill="#1a1a2e"/>
+    <rect x="120" y="180" width="10" height="420" fill="#1a1a2e"/>
+    <rect x="200" y="220" width="8" height="380" fill="#1a1a2e"/>
+    <rect x="650" y="190" width="9" height="410" fill="#1a1a2e"/>
+    <rect x="720" y="210" width="8" height="390" fill="#1a1a2e"/>
+  </g>
+  
+  <!-- 地面 -->
+  <ellipse cx="400" cy="580" rx="400" ry="40" fill="#0f3460" opacity="0.5"/>
+  
+  <!-- 萤火虫 -->
+  <circle cx="200" cy="350" r="3" fill="#fff9e6" opacity="0.8">
+    <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="300" cy="400" r="2.5" fill="#fff9e6" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="500" cy="380" r="3" fill="#fff9e6" opacity="0.7">
+    <animate attributeName="opacity" values="0.7;0.3;0.7" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="600" cy="420" r="2.5" fill="#fff9e6" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.8s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- 文字提示 -->
+  <text x="400" y="300" font-family="serif" font-size="36" fill="#fff9e6" text-anchor="middle" opacity="0.9">
+    月下初遇
+  </text>
+  <text x="400" y="340" font-family="serif" font-size="18" fill="#fff9e6" text-anchor="middle" opacity="0.6">
+    Moonlight Encounter
+  </text>
+</svg>

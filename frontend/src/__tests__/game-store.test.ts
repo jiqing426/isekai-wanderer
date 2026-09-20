@@ -61,7 +61,7 @@ describe('Game Store', () => {
     store.currentDialogue = { type: 'dialogue', node_id: 'n1', text: 'Hi' };
     store.pendingChoices = [{ id: 'c1', text: 'A' }];
     store.choiceHistory.push({ choice_id: 'c1', node_id: 'n1' });
-    store.currentSession = { id: 's1', script_id: 'sc1', current_node_id: 'n1', status: 'active' };
+    store.currentSession = { id: 's1', script_id: 'sc1', current_node_id: 'n1', status: 'active', engine_type: 'legacy' };
     store.reset();
     expect(store.currentDialogue).toBeNull();
     expect(store.pendingChoices).toEqual([]);

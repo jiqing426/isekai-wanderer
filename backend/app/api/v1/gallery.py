@@ -10,8 +10,9 @@ from typing import List, Optional
 from app.core.database import get_db
 from app.core.exceptions import AppException, ErrorCode
 from app.api.v1.auth import get_current_user_id
-from app.models.gallery import Collection, Achievement
+from app.models.gallery import Achievement
 from app.models.memory import CharacterMemory
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/gallery", tags=["gallery"])
 
@@ -38,13 +39,6 @@ MOCK_ACHIEVEMENTS = [
 ]
 
 
-class CollectionItem(BaseModel):
-    item_type: str  # "cg" | "character" | "scene"
-    item_id: str
-    item_name: str
-    image_url: Optional[str] = None
-
-
 class AchievementItem(BaseModel):
     achievement_id: str
     title: str
@@ -52,83 +46,116 @@ class AchievementItem(BaseModel):
     icon_url: Optional[str] = None
 
 
-@router.post("/collections")
-async def add_collection(
-    item: CollectionItem,
-    db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
-):
-    """Add item to user's collection."""
-    collection = Collection(
-        user_id=UUID(user_id),
-        item_type=item.item_type,
-        item_id=item.item_id,
-        item_name=item.item_name,
-        image_url=item.image_url,
-    )
-    db.add(collection)
-    await db.commit()
-    await db.refresh(collection)
-
-    return {
-        "id": str(collection.id),
-        "user_id": str(collection.user_id),
-        "item_type": collection.item_type,
-        "item_id": collection.item_id,
-        "item_name": collection.item_name,
-        "image_url": collection.image_url,
-        "unlocked_at": collection.unlocked_at.isoformat(),
-    }
-
-
 @router.get("/collections")
 async def get_collections(
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Get user's collection list."""
-    result = await db.execute(
-        select(Collection).where(Collection.user_id == UUID(user_id)).order_by(Collection.unlocked_at.desc())
+    """Get user's collection list grouped by script."""
+    from app.models.asset import UnlockedCG, CGAsset
+    from app.models.script import Script, Route
+    
+    # 查询所有剧本及其 CG 总数
+    scripts_result = await db.execute(
+        select(Script, Route, CGAsset)
+        .outerjoin(Route, Route.script_id == Script.id)
+        .outerjoin(CGAsset, CGAsset.route_id == Route.id)
+        .order_by(Script.created_at.desc())
     )
-    collections = result.scalars().all()
-
-    return {
-        "collections": [
-            {
-                "id": str(c.id),
-                "item_type": c.item_type,
-                "item_id": c.item_id,
-                "item_name": c.item_name,
-                "image_url": c.image_url,
-                "unlocked_at": c.unlocked_at.isoformat(),
+    scripts_data = scripts_result.all()
+    
+    # 按剧本分组统计
+    script_stats = {}
+    for script, route, cg_asset in scripts_data:
+        script_id = str(script.id)
+        if script_id not in script_stats:
+            script_stats[script_id] = {
+                "id": script_id,
+                "name": script.title,
+                "description": script.description or "",
+                "cover_url": script.cover_image_url,
+                "items_count": 0,
+                "items_unlocked": 0,
+                "script_id": script_id,
             }
-            for c in collections
-        ]
-    }
+        if cg_asset:
+            script_stats[script_id]["items_count"] += 1
+    
+    # 查询用户解锁的 CG
+    unlocked_result = await db.execute(
+        select(UnlockedCG, CGAsset, Script)
+        .join(CGAsset, UnlockedCG.cg_id == CGAsset.id)
+        .join(Script, CGAsset.script_id == Script.id)
+        .where(UnlockedCG.user_id == UUID(user_id))
+    )
+    unlocked_cgs = unlocked_result.all()
+    
+    for ucg, cg_asset, script in unlocked_cgs:
+        script_id = str(script.id)
+        if script_id in script_stats:
+            script_stats[script_id]["items_unlocked"] += 1
+    
+    # 只返回有 CG 的剧本
+    collection_list = [s for s in script_stats.values() if s["items_count"] > 0]
+    
+    return {"collections": collection_list}
 
 
-@router.delete("/collections/{collection_id}")
-async def delete_collection(
-    collection_id: str,
+@router.get("/collections/{script_id}")
+async def get_collection_items(
+    script_id: str,
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    """Delete item from collection."""
-    result = await db.execute(
-        select(Collection).where(
-            Collection.id == UUID(collection_id),
-            Collection.user_id == UUID(user_id),
-        )
+    """Get all CG items for a specific script with unlock status."""
+    from app.models.asset import UnlockedCG, CGAsset
+    from app.models.script import Script, Route
+    
+    # 查询该剧本的所有CG
+    cg_result = await db.execute(
+        select(CGAsset, Route)
+        .join(Route, CGAsset.route_id == Route.id)
+        .where(Route.script_id == UUID(script_id))
+        .order_by(CGAsset.created_at.asc())
     )
-    collection = result.scalar_one_or_none()
-
-    if not collection:
-        raise AppException(ErrorCode.COLLECTION_NOT_FOUND, 404, "Collection item not found")
-
-    await db.delete(collection)
-    await db.commit()
-
-    return {"status": "deleted"}
+    cg_assets = cg_result.all()
+    
+    if not cg_assets:
+        return {"items": []}
+    
+    # 查询用户解锁的CG ID列表
+    unlocked_result = await db.execute(
+        select(UnlockedCG.cg_id)
+        .where(UnlockedCG.user_id == UUID(user_id))
+    )
+    unlocked_cg_ids = {str(row[0]) for row in unlocked_result.all()}
+    
+    # CR-043: Get user subscription tier for is_accessible calculation
+    sub_service = SubscriptionService(db)
+    tier = await sub_service.get_user_tier(UUID(user_id))
+    tier_allows_full = tier in ("standard", "premium")
+    
+    # 构建返回数据
+    items = []
+    for cg_asset, route in cg_assets:
+        cg_id = str(cg_asset.id)
+        is_unlocked = cg_id in unlocked_cg_ids
+        # CR-043 AC-001: is_accessible = is_unlocked OR tier_allows_full
+        is_accessible = is_unlocked or tier_allows_full
+        
+        items.append({
+            "id": cg_id,
+            "collection_id": script_id,
+            "title": cg_asset.name,
+            "thumbnail_url": cg_asset.image_url,
+            "full_url": cg_asset.image_url,
+            "script_name": route.title if route else "",
+            "unlock_status": "unlocked" if is_unlocked else "locked",
+            "unlock_condition": "完成特定剧情节点" if not is_unlocked else "",
+            "is_accessible": is_accessible,  # CR-043: new field
+        })
+    
+    return {"items": items}
 
 
 @router.post("/achievements")
@@ -240,6 +267,40 @@ achievements_router = APIRouter(prefix="/achievements", tags=["achievements"])
 @achievements_router.get("")
 async def get_achievements_wall(
     user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get achievement wall with unlock status (mock data)."""
-    return {"achievements": MOCK_ACHIEVEMENTS}
+    """Get achievement wall with real progress data."""
+    from app.api.v1.users import get_achievements
+    # Reuse the real achievements logic from /users/me/achievements
+    result = await get_achievements(user_id=user_id, db=db)
+    
+    # Convert snake_case to camelCase for frontend compatibility
+    achievements = []
+    for ach in result["achievements"]:
+        achievements.append({
+            "id": ach["id"],
+            "name": ach["name"],
+            "description": ach["description"],
+            "icon": ach["icon"],
+            "iconUrl": ach.get("icon_url"),
+            "isUnlocked": ach["is_unlocked"],
+            "isClaimed": ach["reward"]["claimed"] if ach.get("reward") else False,
+            "unlockedAt": ach.get("unlocked_at"),
+            "progress": ach.get("progress"),
+            "condition": {
+                "type": ach["id"].replace("ach_", ""),
+                "current": ach["progress"]["current"] if ach.get("progress") else 0,
+                "target": ach["progress"]["target"] if ach.get("progress") else 1,
+            },
+            "reward": {
+                "type": ach["reward"]["type"] if ach.get("reward") else "fragments",
+                "amount": ach["reward"]["amount"] if ach.get("reward") else 0,
+            } if ach.get("reward") else None,
+        })
+    
+    return {
+        "achievements": achievements,
+        "total": result["total"],
+        "unlocked_count": result["unlocked_count"],
+        "claimed_count": result["claimed_count"],
+    }

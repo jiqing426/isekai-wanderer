@@ -9,6 +9,8 @@ export interface UserStats {
   cgs_collected: number;
   total_dialogues: number;
   total_choices: number;
+  // CR-028: 扮演角色数
+  characters_played?: number;
 }
 
 export interface UserAsset {
@@ -35,6 +37,7 @@ export interface LatestSave {
   session_id: string;
   script_id: string;
   script_name: string;
+  character_id: string;  // CR-032: 添加 character_id 用于继续游戏
   character_name: string;
   character_avatar: string;
   current_node_id: string;
@@ -84,6 +87,7 @@ export interface CharacterBond {
 export interface BondList {
   characters: CharacterBond[];
   total: number;
+  has_more?: boolean;
 }
 
 export interface EndingProgress {

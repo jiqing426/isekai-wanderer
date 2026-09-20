@@ -24,6 +24,7 @@ class ChatMessage(Base):
     
     def to_dict(self):
         return {
+            "id": str(self.id),  # Frontend expects 'id' field
             "message_id": str(self.id),
             "character_id": str(self.character_id),
             "sender_type": self.sender_type,

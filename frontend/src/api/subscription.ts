@@ -54,9 +54,11 @@ export function checkPaywall(scene: string): Promise<PaywallCheckResponse> {
  */
 export function createOrder(data: { planId: string; cycleType: 'monthly' | 'yearly' }): Promise<{
   orderId: string;
-  payUrl: string;
+  payUrl: string | null;
   amount: number;
   currency: string;
+  status?: string;
+  message?: string;
 }> {
   return api.post('/order/create', data);
 }

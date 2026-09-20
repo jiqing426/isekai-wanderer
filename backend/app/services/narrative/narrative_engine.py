@@ -69,17 +69,33 @@ class NarrativeEngine:
         current_node = state["current_node"]
 
         if state["is_ended"]:
-            return {
+            # CR-020: 结局时返回最终章节和进度信息
+            from sqlalchemy import select
+            from app.models.script import Route
+            
+            result = {
                 "type": "ending",
                 "ending_type": session.ending_type or "normal",
                 "session_id": str(session_id),
+                "progress": 100.0,  # 结局时进度为 100%
             }
+            
+            # 获取最终章节信息
+            if current_node:
+                route_stmt = select(Route).where(Route.id == current_node.route_id)
+                route_result = await self.db.execute(route_stmt)
+                route = route_result.scalar_one_or_none()
+                if route:
+                    result["chapter"] = route.title
+                    result["chapter_id"] = str(route.id)
+            
+            return result
 
         if not current_node:
             raise AppException(
                 error_code="NARRATIVE_NO_NODE",
                 status_code=400,
-                message="Session has no current node to generate dialogue for",
+                message="No visible narrative node for current session state",
             )
 
         # 2. Check node type
@@ -225,7 +241,8 @@ class NarrativeEngine:
         2. 通过 LLM 生成角色回应
         3. 记录到对话历史
         4. 提取记忆
-        5. 返回角色回应 + 下一步选项
+        5. 推进到下一个节点
+        6. 返回角色回应 + 新节点的选项
         """
         # 1. 获取当前状态
         state = await self.script_service.get_game_session_state(session_id)
@@ -233,11 +250,27 @@ class NarrativeEngine:
         current_node = state["current_node"]
 
         if state["is_ended"]:
-            return {
+            # CR-020: 结局时返回最终章节和进度信息
+            from sqlalchemy import select
+            from app.models.script import Route
+            
+            result = {
                 "type": "ending",
                 "ending_type": session.ending_type or "normal",
                 "session_id": str(session_id),
+                "progress": 100.0,  # 结局时进度为 100%
             }
+            
+            # 获取最终章节信息
+            if current_node:
+                route_stmt = select(Route).where(Route.id == current_node.route_id)
+                route_result = await self.db.execute(route_stmt)
+                route = route_result.scalar_one_or_none()
+                if route:
+                    result["chapter"] = route.title
+                    result["chapter_id"] = str(route.id)
+            
+            return result
 
         if not current_node:
             raise AppException(
@@ -281,9 +314,101 @@ class NarrativeEngine:
             "user_text": user_text,
             "node_id": str(current_node.id),
         })
+        
+        # 5. 推进到下一个节点
+        next_choices = current_node.choices or []
+        if next_choices:
+            # 有选项：使用第一个选项推进剧情
+            first_choice = next_choices[0]
+            await self.script_service.advance_session(session_id, first_choice.id)
+        else:
+            # CR-020 T-002: 没有选项时，检查是否需要进入下一章节
+            from sqlalchemy import select
+            from app.models.script import Node, Route
+            
+            # 先查找子节点
+            child_node_result = await self.db.execute(
+                select(Node).where(Node.parent_id == current_node.id).limit(1)
+            )
+            child_node = child_node_result.scalar_one_or_none()
+            
+            if child_node:
+                # 找到子节点，直接推进
+                session.current_node_id = child_node.id
+            else:
+                # 没有子节点，检查是否应该进入下一章节
+                # 统计当前章节的对话轮数
+                rounds_in_chapter = len([
+                    h for h in (session.choice_history or [])
+                    if h.get("type") == "custom_input"
+                ])
+                
+                # 如果达到10轮，尝试进入下一章节
+                if rounds_in_chapter >= 10:
+                    # 获取当前 route
+                    current_route_result = await self.db.execute(
+                        select(Route).where(Route.id == current_node.route_id)
+                    )
+                    current_route = current_route_result.scalar_one_or_none()
+                    
+                    if current_route:
+                        # 获取同一剧本的所有 routes
+                        all_routes_result = await self.db.execute(
+                            select(Route)
+                            .where(Route.script_id == current_route.script_id)
+                            .order_by(Route.created_at)
+                        )
+                        all_routes = all_routes_result.scalars().all()
+                        
+                        # 找到当前 route 的下一个 route
+                        current_route_index = None
+                        for i, route in enumerate(all_routes):
+                            if route.id == current_route.id:
+                                current_route_index = i
+                                break
+                        
+                        if current_route_index is not None and current_route_index < len(all_routes) - 1:
+                            # 有下一个 route，进入下一章节
+                            next_route = all_routes[current_route_index + 1]
+                            
+                            # 获取下一章节的起始节点
+                            next_starting_node_result = await self.db.execute(
+                                select(Node)
+                                .where(
+                                    Node.route_id == next_route.id,
+                                    Node.parent_id.is_(None)
+                                )
+                                .order_by(Node.id)
+                                .limit(1)
+                            )
+                            next_starting_node = next_starting_node_result.scalar_one_or_none()
+                            
+                            if next_starting_node:
+                                # 推进到下一章节的起始节点
+                                session.current_node_id = next_starting_node.id
+                                # 清空 choice_history 以开始新章节
+                                session.choice_history = []
+                                # 记录章节转换
+                                session.choice_history.append({
+                                    "type": "chapter_transition",
+                                    "from_route_id": str(current_route.id),
+                                    "to_route_id": str(next_route.id),
+                                    "node_id": str(next_starting_node.id),
+                                })
+                                # CR-020: 标记章节转换，让前端显示"继续下一章节"提示
+                                result["chapter_transition"] = {
+                                    "from_chapter": current_route.title,
+                                    "to_chapter": next_route.title,
+                                    "message": f"第{len([r for r in all_routes[:current_route_index+1]])}章结束，即将进入{next_route.title}",
+                                }
+                            # 如果没有起始节点，保持在当前节点
+                        # 如果没有下一个 route，保持在当前节点（等待结局）
+                    # 如果无法获取当前 route，保持在当前节点
+                # 如果未达到10轮且没有子节点，保持在当前节点
+        
         await self.db.commit()
 
-        # 5. 提取记忆
+        # 6. 提取记忆
         if character_id and response_text:
             await self.memory_service.extract_and_store(
                 user_id=user_id,
@@ -292,23 +417,51 @@ class NarrativeEngine:
                 session_id=session_id,
             )
 
-        # 6. 返回结果
-        result = {
-            "type": "dialogue",
-            "text": response_text,
-            "emotion": emotion,
-            "node_id": str(current_node.id),
-            "session_id": str(session_id),
-            "is_custom": True,
-        }
+        # 7. 获取新节点的状态和内容
+        new_state = await self.script_service.get_game_session_state(session_id)
+        new_node = new_state["current_node"]
+
+        # 8. 获取新节点的完整内容（如果是 preset 节点，返回预设文本）
+        if new_node:
+            if new_node.node_type == "preset":
+                # 预设节点：返回预设内容
+                content = new_node.content or {}
+                new_text = content.get("text", "")
+                new_emotion = content.get("emotion", "neutral")
+                result = {
+                    "type": "dialogue",
+                    "text": new_text,
+                    "emotion": new_emotion,
+                    "node_id": str(new_node.id),
+                    "session_id": str(session_id),
+                    "is_custom": True,
+                }
+            else:
+                # 其他节点类型：调用 generate_dialogue 获取内容
+                dialogue_result = await self.generate_dialogue(session_id, user_id)
+                result = dialogue_result
+                result["node_id"] = str(new_node.id)
+                result["is_custom"] = True
+        else:
+            # 没有新节点，返回自定义回应
+            result = {
+                "type": "dialogue",
+                "text": response_text,
+                "emotion": emotion,
+                "node_id": str(current_node.id),
+                "session_id": str(session_id),
+                "is_custom": True,
+            }
 
         if character:
             result["character_id"] = str(character.id)
 
-        # 如果有选项，也返回（让玩家可以继续选择）
-        if current_node.choices:
-            filtered = await self._filter_choices(current_node.choices, session.user_id)
+        # 返回新节点的选项
+        if new_node and new_node.choices:
+            filtered = await self._filter_choices(new_node.choices, session.user_id)
             result["choices"] = self._choices_to_dicts(filtered, session.user_id)
+        else:
+            result["choices"] = []
 
         return result
 
@@ -438,7 +591,15 @@ class NarrativeEngine:
         # Get current state before advancing
         state = await self.script_service.get_game_session_state(session_id)
         current_node = state["current_node"]
-        character_id = self.script_service.get_node_character_id(current_node) if current_node else None
+        session = state["session"]
+        
+        # Get character_id from multiple sources (priority order):
+        # 1. From game session (player's choice takes priority)
+        # 2. From node content (fallback for legacy nodes)
+        # 3. From node's character_id field
+        character_id = session.character_id if session else None
+        if not character_id:
+            character_id = self.script_service.get_node_character_id(current_node) if current_node else None
 
         # Get the choice object
         choice_obj = None
@@ -451,7 +612,9 @@ class NarrativeEngine:
         # Apply affection change
         affection_change = None
         if character_id:
-            affection_change = await self.affection_service.apply_choice_delta(user_id, choice_id)
+            affection_change = await self.affection_service.apply_choice_delta(
+                user_id, choice_id, character_id=character_id
+            )
 
         # Track choice streak (CR3-049)
         streak_event = None
@@ -521,6 +684,41 @@ class NarrativeEngine:
             ending_calc = EndingCalculator(self.db)
             ending_info = await ending_calc.calculate(session_id, user_id, character_id)
             result["ending"] = ending_info
+        else:
+            # CR-020: 检查是否有章节转换（通过选择推进时）
+            if new_state.get("current_node"):
+                new_node = new_state["current_node"]
+                if current_node and new_node.route_id != current_node.route_id:
+                    # 获取章节信息
+                    from sqlalchemy import select
+                    from app.models.script import Route
+                    
+                    old_route_result = await self.db.execute(
+                        select(Route).where(Route.id == current_node.route_id)
+                    )
+                    old_route = old_route_result.scalar_one_or_none()
+                    
+                    new_route_result = await self.db.execute(
+                        select(Route).where(Route.id == new_node.route_id)
+                    )
+                    new_route = new_route_result.scalar_one_or_none()
+                    
+                    if old_route and new_route:
+                        # 获取所有 routes 计算章节号
+                        all_routes_result = await self.db.execute(
+                            select(Route)
+                            .where(Route.script_id == old_route.script_id)
+                            .order_by(Route.created_at)
+                        )
+                        all_routes = all_routes_result.scalars().all()
+                        
+                        old_index = next((i for i, r in enumerate(all_routes) if r.id == old_route.id), 0)
+                        
+                        result["chapter_transition"] = {
+                            "from_chapter": old_route.title,
+                            "to_chapter": new_route.title,
+                            "message": f"第{old_index + 1}章结束，即将进入{new_route.title}",
+                        }
 
         return result
 
@@ -529,8 +727,16 @@ class NarrativeEngine:
     async def _handle_preset_node(
         self, node: Node, session: GameSession
     ) -> Dict[str, Any]:
-        """Handle a preset (scripted) node."""
+        """Handle a preset (scripted) node - return content directly without AI.
+        
+        CR-035 FIX: Removed AI generation call that caused 40-55s latency.
+        Preset nodes now return predefined text immediately.
+        """
         content = node.content or {}
+        
+        # Get character info for response (no AI call)
+        character_id = self.script_service.get_node_character_id(node)
+        
         result = {
             "type": "dialogue",
             "node_type": "preset",
@@ -538,7 +744,7 @@ class NarrativeEngine:
             "text": content.get("text", ""),
             "emotion": content.get("emotion", "neutral"),
             "scene": content.get("scene"),
-            "character_id": content.get("character_id"),
+            "character_id": str(character_id) if character_id else None,
             "background": node.background,
         }
 
@@ -725,6 +931,29 @@ class NarrativeEngine:
             import logging
             logging.getLogger(__name__).warning(f"Failed to record CG unlock: {e}")
         
+        # 同步写入 unlocked_cgs 表，让收藏馆能显示
+        try:
+            from app.models.asset import UnlockedCG
+            from sqlalchemy import select
+            
+            # 检查是否已解锁
+            existing = await self.db.execute(
+                select(UnlockedCG).where(
+                    UnlockedCG.user_id == session.user_id,
+                    UnlockedCG.cg_id == node.id
+                )
+            )
+            if not existing.scalar_one_or_none():
+                unlocked_cg = UnlockedCG(
+                    user_id=session.user_id,
+                    cg_id=node.id
+                )
+                self.db.add(unlocked_cg)
+                await self.db.flush()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to add to unlocked_cgs: {e}")
+        
         result = {
             "type": "dialogue",
             "node_type": "cg_trigger",
@@ -801,12 +1030,16 @@ class NarrativeEngine:
         user_id: UUID,
     ) -> Dict[str, str]:
         """
-        Generate dialogue with LLM, validate via RuleEngine, retry or fallback.
-
+        Generate dialogue with LLM using 6-layer PromptBuilder system.
+        
+        CR-027: Now uses PromptBuilder for structured prompt construction.
+        CR-028: Passes player_character for L3.5 Player Identity layer.
+        Falls back to simple prompt if PromptBuilder fails.
+        
         Flow:
-        1. Recall relevant memories
-        2. Build context + prompt
-        3. Generate via LLM
+        1. Load player character if session.character_id is set (CR-028)
+        2. Build 6-layer prompt via PromptBuilder
+        3. Generate via LLM with system+user prompts
         4. Validate via RuleEngine
         5. If fail → retry (max 2x)
         6. If still fail → use fallback dialogue
@@ -816,6 +1049,93 @@ class NarrativeEngine:
             user_id, character.id
         )
 
+        # CR-028: Load player character for L3.5 Player Identity layer
+        player_character = None
+        if hasattr(session, 'character_id') and session.character_id:
+            try:
+                player_character = await self.script_service.get_character(session.character_id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Failed to load player character {session.character_id}: {e}"
+                )
+
+        # CR-027: Try PromptBuilder first
+        try:
+            from app.services.prompt_builder import PromptBuilder
+            
+            prompt_builder = PromptBuilder(
+                db=self.db,
+                memory_service=self.memory_service
+            )
+            
+            # Build 6-layer prompt with player_character (CR-028)
+            prompt_result = await prompt_builder.build_prompt(
+                user_id=user_id,
+                character=character,
+                node_id=node.id,
+                scene_tags=None,  # Will be fetched from SceneConfig
+                affection_level=affection_value,
+                player_character=player_character  # CR-028: L3.5 Player Identity
+            )
+            
+            system_prompt = prompt_result["system_prompt"]
+            user_prompt = prompt_result["user_prompt"]
+            
+            # Generate + validate loop
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    text = await llm_gateway.generate_with_system(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt
+                    )
+
+                    # Validate
+                    validation = await self.rule_engine.validate_dialogue(
+                        text=text,
+                        character=character,
+                        affection_value=affection_value,
+                        current_node=node,
+                    )
+
+                    if validation.passed:
+                        return {
+                            "text": text,
+                            "emotion": self._infer_emotion(text, node),
+                        }
+
+                except Exception as e:
+                    # LLM failure, log and retry
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        f"PromptBuilder LLM attempt {attempt+1} failed: {e}"
+                    )
+                    pass
+        
+        except Exception as e:
+            # PromptBuilder failure, fall back to simple prompt
+            import logging
+            logging.getLogger(__name__).warning(
+                f"PromptBuilder failed, falling back to simple prompt: {e}"
+            )
+        
+        # Fallback: simple prompt (pre-CR-027 behavior)
+        return await self._generate_simple_dialogue(
+            node, character, session, user_id, affection_value
+        )
+    
+    async def _generate_simple_dialogue(
+        self,
+        node: Node,
+        character: Character,
+        session: GameSession,
+        user_id: UUID,
+        affection_value: int,
+    ) -> Dict[str, str]:
+        """
+        Fallback: Generate dialogue with simple prompt (pre-CR-027 behavior).
+        Used when PromptBuilder fails.
+        """
         # Recall relevant memories
         memory_context = ""
         node_text = (node.content or {}).get("text", "")

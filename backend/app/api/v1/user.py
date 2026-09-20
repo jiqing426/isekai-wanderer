@@ -49,6 +49,7 @@ async def get_profile(
         "preferred_genre": user.preferred_genre,
         "locale": user.locale,
         "onboarding_completed": user.onboarding_completed,
+        "is_admin": user.is_admin,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 

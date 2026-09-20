@@ -11,7 +11,7 @@
 | 项目阶段 | MVP 开发（CR-001） |
 | 负责人 | 待确认 |
 | 主要用户 | 乙女玩家（核心）、冒险者（核心） |
-| 代码仓库 | 待确认 |
+| 代码仓库 | https://github.com/ai-gather/isekai-wanderer |
 | 生产入口 | 待确认（部署平台见 Q-005） |
 
 ## 范围
@@ -58,7 +58,7 @@
 | LLM API | AI 叙事生成（Corvus 引擎走 thoushub 网关 + deepseek-v4-flash） | 生产 | Architect + AI Engineer | 核心体验不可用 |
 | 向量数据库 | 角色记忆存储（PostgreSQL + pgvector, bge-small-zh 512 维） | 生产 | Architect | 跨会话记忆不可用 |
 | Corvus-Story-Core | AI 自由叙事引擎（127.0.0.1:8082, systemd 守护） | 生产 | Admin / Ops | Corvus 引擎不可用，降级旧引擎 |
-| 邮件服务 | 注册验证/密码重置 | 待确认 | 待确认 | 新用户注册流程阻塞 |
+| 邮件服务 | 注册验证/密码重置 | 163 邮箱 SMTP (smtp.163.com) | 待确认 | 新用户注册流程阻塞 |
 | 美术资源 | 立绘/背景/BGM | 待确认（PRE-03） | PL | 视觉体验降级 |
 
 ## 数据分级

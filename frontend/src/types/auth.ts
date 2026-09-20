@@ -25,6 +25,7 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  code: string;  // 邮箱验证码
   display_name?: string;
 }
 

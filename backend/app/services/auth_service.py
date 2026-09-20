@@ -145,9 +145,9 @@ class AuthService:
 
         token = await self.create_reset_token(user.id)
 
-        # Build reset URL
+        # Build reset URL using app_url from config
         from app.core.config import settings
-        reset_url = f"http://localhost:3000/reset-password?token={token}"
+        reset_url = f"{settings.app_url}/reset-password?token={token}"
 
         # Send via mock email
         email_service = get_email_service()

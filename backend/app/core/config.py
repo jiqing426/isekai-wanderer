@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "isekai-wanderer"
     app_env: str = "development"
     app_version: str = "1.0.0"
+    app_url: str = "http://localhost:8081"  # 用于邮件中的重置链接等
     log_level: str = "info"
 
     # Server

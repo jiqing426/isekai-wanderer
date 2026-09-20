@@ -20,6 +20,11 @@ from app.core.config import settings
 class IEmailService:
     """Email service interface — all implementations must satisfy this contract."""
 
+    async def send_verification_code(
+        self, to: str, code: str
+    ) -> bool:
+        raise NotImplementedError
+
     async def send_password_reset_email(
         self, to: str, token: str, reset_url: str
     ) -> bool:
@@ -52,6 +57,19 @@ class MockEmailService(IEmailService):
             "token": token,
             "reset_url": reset_url,
             "subject": "Password Reset Request — Isekai Wanderer",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._append_log(record)
+        return True
+
+    async def send_verification_code(
+        self, to: str, code: str
+    ) -> bool:
+        record = {
+            "type": "verification_code",
+            "to": to,
+            "code": code,
+            "subject": "注册验证码 — 异世界漫游",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         self._append_log(record)
@@ -127,6 +145,20 @@ class SMTPEmailService(IEmailService):
             <p>请点击下方链接重置密码（1 小时内有效）：</p>
             <p><a href="{reset_url}" style="display:inline-block;padding:10px 24px;background:#6b46c1;color:#fff;text-decoration:none;border-radius:6px;">重置密码</a></p>
             <p style="color:#999;font-size:12px;">如果这不是您本人的操作，请忽略此邮件。</p>
+        </div>
+        """
+        return self._send(to, subject, html)
+
+    async def send_verification_code(
+        self, to: str, code: str
+    ) -> bool:
+        subject = "注册验证码 — 异世界漫游"
+        html = f"""
+        <div style="max-width:480px;margin:0 auto;font-family:sans-serif;">
+            <h2 style="color:#6b46c1;">异世界漫游 — 注册验证码</h2>
+            <p>您的验证码是：</p>
+            <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#6b46c1;">{code}</p>
+            <p style="color:#999;font-size:12px;">验证码 5 分钟内有效。如果这不是您本人的操作，请忽略此邮件。</p>
         </div>
         """
         return self._send(to, subject, html)

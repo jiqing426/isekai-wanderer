@@ -79,9 +79,12 @@
         <div v-if="loginError" class="auth-error">{{ loginError }}</div>
       </form>
 
-      <!-- Sign Up Link -->
-      <div class="auth-switch">
-        {{ t('auth.noAccount') }} <a href="#" @click.prevent="goToSignup">{{ t('auth.registerNow') }}</a>
+      <!-- Forgot Password + Sign Up -->
+      <div class="auth-links">
+        <a href="#" class="forgot-link" @click.prevent="goToForgotPassword">忘记密码？</a>
+        <span class="auth-switch">
+          {{ t('auth.noAccount') }} <a href="#" @click.prevent="goToSignup">{{ t('auth.registerNow') }}</a>
+        </span>
       </div>
     </div>
   </div>
@@ -268,6 +271,11 @@ const handleEmailLogin = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+// Go to forgot password
+const goToForgotPassword = () => {
+  router.push('/forgot-password');
 };
 
 // Go to signup
@@ -598,9 +606,27 @@ input.error:focus {
 /* Auth Switch Link */
 .auth-switch {
   text-align: center;
-  margin-top: 24px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.7);
+}
+
+.auth-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.forgot-link {
+  font-size: 13px;
+  color: rgba(192, 132, 252, 0.8);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: rgba(192, 132, 252, 1);
 }
 
 .auth-switch a {

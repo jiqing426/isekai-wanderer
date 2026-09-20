@@ -58,6 +58,30 @@
         </div>
         <div v-if="emailError" class="error-text">{{ emailError }}</div>
 
+        <!-- Verification Code Input + Send Button -->
+        <div class="code-group">
+          <div class="input-group code-input-group">
+            <span class="input-icon">🔢</span>
+            <input
+              type="text"
+              v-model="verifyCode"
+              placeholder="验证码"
+              maxlength="6"
+              :class="{ error: codeError }"
+            />
+          </div>
+          <button
+            type="button"
+            class="send-code-btn"
+            :disabled="!canSendCode || sendingCode"
+            @click="handleSendCode"
+          >
+            <span v-if="sendingCode" class="spinner"></span>
+            <span v-else>{{ codeButtonText }}</span>
+          </button>
+        </div>
+        <div v-if="codeError" class="error-text">{{ codeError }}</div>
+
         <!-- Password Input -->
         <div class="input-group">
           <span class="input-icon">🔒</span>
@@ -132,13 +156,70 @@ const displayName = ref('');
 const email = ref('');
 const password = ref('');
 const confirmPassword = ref('');
+const verifyCode = ref('');
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 const emailError = ref('');
 const passwordError = ref('');
 const confirmPasswordError = ref('');
+const codeError = ref('');
 const registerError = ref('');
 const loading = ref(false);
+const sendingCode = ref(false);
+const codeCountdown = ref(0);
+
+// Countdown timer
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+
+const codeButtonText = computed(() => {
+  if (codeCountdown.value > 0) {
+    return `${codeCountdown.value}s 后重试`;
+  }
+  return '获取验证码';
+});
+
+const canSendCode = computed(() => {
+  const emailValid = email.value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value);
+  return emailValid && codeCountdown.value === 0;
+});
+
+// Start countdown
+const startCountdown = () => {
+  codeCountdown.value = 60;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    codeCountdown.value--;
+    if (codeCountdown.value <= 0) {
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }, 1000);
+};
+
+// Send verification code
+const handleSendCode = async () => {
+  if (!validateEmail()) return;
+  
+  sendingCode.value = true;
+  codeError.value = '';
+  
+  try {
+    await authApi.sendVerifyCode(email.value);
+    message.success('验证码已发送，请查收邮件');
+    startCountdown();
+  } catch (error: any) {
+    const msg = error?.message || '';
+    if (msg.includes('EMAIL_EXISTS') || msg.includes('409')) {
+      codeError.value = '该邮箱已注册';
+    } else if (msg.includes('RATE_LIMIT') || msg.includes('429')) {
+      codeError.value = '请求过于频繁，请稍后再试';
+    } else {
+      codeError.value = '验证码发送失败，请重试';
+    }
+  } finally {
+    sendingCode.value = false;
+  }
+};
 
 // Validation
 const validateEmail = () => {
@@ -185,7 +266,8 @@ const isFormValid = computed(() => {
   const emailValid = email.value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value);
   const passwordValid = password.value && password.value.length >= 6;
   const confirmPasswordValid = confirmPassword.value && confirmPassword.value === password.value;
-  return emailValid && passwordValid && confirmPasswordValid;
+  const codeValid = verifyCode.value && verifyCode.value.length === 6;
+  return emailValid && passwordValid && confirmPasswordValid && codeValid;
 });
 
 // Get redirect path
@@ -281,6 +363,7 @@ const handleEmailRegister = async () => {
     const tokens = await authApi.register({
       email: email.value,
       password: password.value,
+      code: verifyCode.value,
       display_name: displayName.value || undefined,
     });
     authStore.setTokens(tokens.access_token, tokens.refresh_token);
@@ -655,6 +738,43 @@ input.error:focus {
 
 .auth-switch a:hover {
   text-decoration: underline;
+}
+
+/* Verification Code Input */
+.code-group {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.code-input-group {
+  flex: 1;
+}
+
+.send-code-btn {
+  white-space: nowrap;
+  padding: 0 16px;
+  height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+}
+
+.send-code-btn:hover:not(:disabled) {
+  background: rgba(102, 126, 234, 0.4);
+}
+
+.send-code-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Mobile Responsive */

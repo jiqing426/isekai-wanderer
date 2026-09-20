@@ -6,7 +6,11 @@ export const authApi = {
     return api.post('/auth/login', data);
   },
 
-  register(data: RegisterRequest): Promise<AuthTokens & { id: string; email: string; display_name: string }> {
+  sendVerifyCode(email: string): Promise<{ message: string }> {
+    return api.post('/auth/send-code', { email });
+  },
+
+  register(data: RegisterRequest): Promise<AuthTokens & { id: string; email: string; display_name: string; email_verified: boolean }> {
     return api.post('/auth/register', data);
   },
 

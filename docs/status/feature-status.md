@@ -40,6 +40,10 @@
 | 社区与 UGC | Planned（CR-004） | — | — | — | — | CEO 澄清：CR-003 不含，留待 CR-004 |
 | 剧本角色选择与多故事线 | Planned（CR-028 P1） | REQ-PLAY-001~009 | AC-PLAY-001~009 | 剧本详情页/游戏页/存档管理页/个人中心 | Browser E2E + API/DB | 多角色多Route，独立存档 |
 | Corvus-Story-Core 集成 | Planned（CR-037 P1） | REQ-CORVUS-001~009 | AC-001~AC-028 | /game?script={session_id} + /api/game/* | Browser E2E + API/DB + Runtime Smoke | 新旧引擎共存+SSE流式+pgvector向量记忆 |
+| Corvus 前端入口接入 | Planned（CR-038 P1） | REQ-CAP-001~003 + REQ-FE-001~007 | AC-038-001~025 | 前端 game.ts + 选角 UI + GET /scripts | Browser E2E + API/DB | startGame 改造+SSE 分支激活+角色候选 UI+engine_type 全链路补齐 |
+| Corvus 玩家选项功能 | Planned（CR-039 P1） | REQ-GM-001 + REQ-SSE-001 + REQ-FE-001~002 | AC-039-001~009 | Corvus gameMaster.ts + chat.ts + game.py + game.ts | Browser E2E + Delivery E2E | GM 动态生成 2-4 选项+SSE 透传+ChoicePanel 复用+fallback |
+| 非 Corvus 路径 SSE 流式改造 | Planned（CR-042 P1） | REQ-001~005 | AC-001~022 | 后端 game.py 3 端点 + model_router + narrative_engine + 前端 stores/game.ts + FreeChatView.vue + useSSEStream composable | Browser E2E + API/DB/Runtime | Legacy 三路径 SSE 流式+model_router stream_with_fallback+前端 composable 提取+Corvus 回归 |
+| 订阅权益区分与 CG 画廊权限控制 | Planned（CR-043 P1） | REQ-001~004 | AC-001~021 | 后端 gallery.py + game.py + scripts.py + settings.py + 前端 GalleryView.vue + SubscriptionPlans.vue + 剧本列表 + 角色选择组件 | Browser E2E + API/DB + Security | TIER_PERMISSIONS 已定义但未执行，补齐 CG 画廊 is_accessible + script_access 强制检查 + 前端锁/升级提示 + 订阅流程状态同步修复 |
 
 ## CR-003 功能汇总
 

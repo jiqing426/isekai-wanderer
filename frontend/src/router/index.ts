@@ -217,6 +217,11 @@ router.beforeEach(async (to) => {
         emailVerified: profile.email_verified,
         avatar: profile.avatar_url,
       });
+
+      // CR-043 AC-020: 登录/页面刷新后自动加载订阅状态
+      const { useSubscriptionStore } = await import('@/stores/subscription');
+      const subscriptionStore = useSubscriptionStore();
+      await subscriptionStore.fetchSubscriptionStatus();
     } catch (err: any) {
       console.warn('路由守卫验证 Token 失败:', err instanceof Error ? err.message : err);
       // Only clear tokens if it's an auth error (401)

@@ -6,7 +6,7 @@ All API endpoints are served from the FastAPI backend under the base path `/api/
 
 ---
 
-## API Endpoint Table (66 endpoints)
+## API Endpoint Table (67 endpoints)
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -563,9 +563,31 @@ Response adds chapter information fields (same as game status):
 |---|---|---|
 | `assistant-delta` `{"delta":"你"}` | `{"type":"text","content":"你"}` | StoryPanel 逐字渲染 |
 | `assistant-complete` `{"message":{...}}` | `{"type":"done","text":"完整文本","character_id":"uuid-v4","character_name":"白夜","node_id":"uuid-v4"}` | 更新 currentDialogue |
-| `gm-complete`/`state-changed` `{"affinity_delta":5,...}` | `{"type":"gm_update","affinity_delta":5,"inventory_changes":[...],"story_flags":[...]}` | 好感度/道具/标记 UI 更新 |
+| `gm-complete`/`state-changed` `{"affinity_delta":5,...}` | `{"type":"gm_update","affinity_delta":5,"inventory_changes":[...],"story_flags":[...],"choices":[{"id":"0","text":"...","hint":"..."}]}` | 好感度/道具/标记 UI 更新 + ChoicePanel 选项渲染 (CR-039: playerOptions → choices 映射) |
 | `done` `{}` | `{"type":"stream_end"}` | 关闭 SSE 连接 |
 | `error` `{"message":"..."}` | `{"type":"error","message":"..."}` | 显示错误提示 |
+
+#### CR-039 SSE Event Extension: playerOptions
+
+`gm_update` 事件增加 `choices` 字段（来源：Corvus `playerOptions`）：
+
+| Corvus Field | Backend Mapping | Frontend Field | Description |
+|---|---|---|---|
+| `playerOptions[].text` | `choices[].text` | `pendingChoices[].text` | 选项文字 |
+| `playerOptions[].hint` | `choices[].hint` (default `""`) | `pendingChoices[].hint` | 简短提示 |
+| (generated) | `choices[].id` = index string | `pendingChoices[].id` | 序号 ID |
+| `playerOptions` absent/empty | `choices` = `[]` | `pendingChoices` = `[]` | fallback: 纯自由输入 |
+
+No new API endpoints. No new DB tables. `playerOptions` is LLM-generated runtime data, not persisted.
+
+#### CR-039 API / Data / Mock / Runtime Relationships
+
+| Concern | Contract Doc | Runtime Binding |
+|---------|-------------|------------------|
+| API contract (CR-039) | `docs/api/api.md` (this file, SSE event extension) | No new endpoints; SSE on `/api/v1/game/{id}/custom-input` |
+| Database contract (CR-039) | `docs/database/database.md` — Not Required | No DB changes; playerOptions not persisted |
+| Mock policy (CR-039) | no mock API for Delivery E2E or Release evidence | `docs/runtime/runtime-contract.md` |
+| Runtime contract (CR-039) | `docs/runtime/runtime-contract.md` | No new ports/proxy; CR-039 additions appended |
 
 #### CR-037 API / Data / Mock / Runtime Relationships
 
@@ -576,3 +598,232 @@ Response adds chapter information fields (same as game status):
 | Mock policy (CR-037) | **no mock API for Delivery E2E or Release evidence**; unit tests may mock CorvusClient/EmbeddingService | `docs/runtime/runtime-contract.md` |
 | Runtime contract (CR-037) | `docs/runtime/runtime-contract.md` | Corvus `127.0.0.1:8082` (systemd, 公网 DROP); SSE proxy_buffering off |
 | Corvus internal API | `docs/corvus-integration/execution-plan.md` (v3, 真实 API) | Corvus `127.0.0.1:8082`; POST /api/games, POST /api/games/:id/messages (SSE), GET/PATCH /api/games/:id/characters/:npcId |
+
+---
+
+## CR-038 Additions: Corvus Frontend Entry
+
+### New API Endpoint (1 new, total 67)
+
+| Method | Path | Auth | AC | Purpose |
+|---|---|---|---|---|
+| POST | /api/v1/game/player/candidates | Bearer | AC-038-003~006 | 创建角色候选 (name 必填, ≤3 限制) |
+
+**Request body (POST /game/player/candidates)**:
+```json
+{
+  "name": "string (≤100, required)",
+  "personality": "string (optional)",
+  "backstory": "string (optional)",
+  "appearance": "string (optional)"
+}
+```
+
+**Response (create success)**:
+```json
+{
+  "code": 0,
+  "data": {
+    "id": "uuid-v4",
+    "name": "星野",
+    "personality": null,
+    "backstory": null,
+    "appearance": null,
+    "initial_inventory": []
+  }
+}
+```
+
+**Error codes**:
+- 400 VALIDATION_ERROR: name 缺失或超长
+- 400 CANDIDATE_LIMIT_EXCEEDED: 用户已有 3 个候选角色
+- 401 AUTH_TOKEN_EXPIRED: 未认证
+
+### Extended API: GET /scripts and GET /scripts/{id}
+
+| Endpoint | CR-038 Behavior Change |
+|----------|------------------------|
+| `GET /api/v1/scripts` | 每个 script 对象返回 `engine_type: 'corvus'` 字段 (运行时虚拟字段, 不持久化到 DB) |
+| `GET /api/v1/scripts/{script_id}` | script 对象返回 `engine_type: 'corvus'` 字段 |
+
+**实现方式**: 在 `scripts.py` 的返回逻辑中硬编码 `engine_type: 'corvus'`（C3 约束下所有剧本统一为 Corvus）。不修改 `scripts` 表结构。
+
+### Extended API: Frontend Script Interface
+
+前端 `Script` interface 新增 `engine_type: 'legacy' | 'corvus'` 必填字段（C1/C2 约束）。
+前端 `GameSession` interface 的 `engine_type` 从可选 `?` 改为必填（C2 约束）。
+
+### CR-038 API / Data / Mock / Runtime Relationships
+
+| Concern | Contract Doc | Runtime Binding |
+|---------|-------------|------------------|
+| API contract (CR-038) | `docs/api/api.md` (this file, 1 new + 2 extended) | `/api/v1` on `:8000` |
+| Database contract (CR-038) | `docs/database/database.md` | Not Required: 无新增表或列变更。player_candidates 表已在 CR-037 创建。engine_type 为运行时虚拟字段 |
+| Mock policy (CR-038) | **no mock API for Delivery E2E or Release evidence**; unit tests may mock CorvusClient | `docs/runtime/runtime-contract.md` |
+| Runtime contract (CR-038) | `docs/runtime/runtime-contract.md` | CR-038 Additions: browser_e2e_command 扩展 cr038 测试文件 |
+
+---
+
+## CR-042 Additions: Legacy SSE 流式改造
+
+### New API Endpoint (1 new, total 68)
+
+| Method | Path | Auth | AC | Purpose |
+|---|---|---|---|---|
+| POST | /api/v1/game/{session_id}/free-chat/stream | Bearer | AC-011, AC-013, AC-014 | 自由对话 SSE 流式端点（新增）；旧端点 POST /game/{id}/free-chat 保留兼容（deprecated） |
+
+**请求体**:
+```json
+{"message": "string", "topic_id": "string|null"}
+```
+
+**响应**: `text/event-stream`，SSE 事件格式见下方。
+
+**响应头**:
+| Header | Value |
+|-------|-------|
+| Content-Type | text/event-stream |
+| Cache-Control | no-cache |
+| Connection | keep-alive |
+| X-Accel-Buffering | no |
+
+### Modified API: Legacy Branch SSE (2 endpoints modified)
+
+| Endpoint | CR-042 Behavior Change |
+|----------|------------------------|
+| `POST /api/v1/game/{id}/choice` | Legacy 分支：推进节点后检查 next_node.node_type；transition/ai_dialog → 返回 `text/event-stream` SSE；preset/choice → 保持 JSON 响应（不变） |
+| `POST /api/v1/game/{id}/custom-input` | Legacy 分支：改为 `text/event-stream` SSE 流式响应（使用 llm_gateway.stream_dialogue() 替代同步 _generate_custom_response()） |
+
+注意：Corvus 分支行为不变。
+
+### Deprecated API
+
+| Method | Path | Status | Note |
+|---|---|---|---|
+| POST | /api/v1/game/{session_id}/free-chat | Deprecated | CR-042 标记废弃；保留同步 JSON 行为不变；响应头追加 `Deprecation: true`；新端点 `/free-chat/stream` 替代 |
+
+### CR-042 SSE Event Format (Legacy paths)
+
+Legacy SSE 流式端点使用与 Corvus 路径一致的 SSE 事件格式，但不使用 `gm_update` 事件（Legacy 无 GM 循环）。元数据通过 `done` 事件一次性推送：
+
+```
+data: {"type":"text","content":"..."}\n\n          ← 逐字/token 推送
+data: {"type":"emotion","emotion":"happy","character_id":"..."}\n\n  ← 情绪标签（可选，在 text 之前）
+data: {"type":"affection_update","character_id":"...","value":45,"level":"trust"}\n\n  ← 好感度更新（可选）
+data: {"type":"done","session_id":"...","node_id":"...","affection_change":{...},"choices":[...]}\n\n  ← 流结束 + 元数据
+data: {"type":"error","message":"..."}\n\n           ← 错误事件
+```
+
+### CR-042 DB Write Timing
+
+SSE 流期间不执行 `db.commit()`。流结束后在 `finally` 块中通过 `asyncio.create_task()` 异步执行 deferred DB 写入：
+- 对话历史写入 `DialogueHistory` 表
+- 好感度更新写入 `Affection` 表
+- 成就检查和写入
+- 收敛检查
+Deferred task 使用 `async_session_factory()` 创建独立 DB session，不阻塞 SSE 流。
+
+### CR-042 model_router.stream_with_fallback()
+
+新增方法 `stream_with_fallback(scenario, messages, **kwargs) -> AsyncGenerator[str, None]`：
+1. 主模型 `stream_complete()` → 逐 token yield
+2. 主模型失败 → 切换 fallback 链下一个模型
+3. 所有模型失败 → 一次性 yield 场景特定友好提示文本（非流式 fallback）
+
+Fallback 文本（Q-003 确认）：
+- FREE_CHAT: "（微微侧头，轻轻笑了笑）抱歉，我刚才走神了……你说的真有意思，能再和我说说吗？"
+- NARRATIVE: "（故事在这一刻仿佛停滞了片刻，随后又缓缓流淌……）"
+- 默认: "抱歉，暂时无法回应，请稍后再试。"
+
+### CR-042 Frontend Composable
+
+新增 `composables/useSSEStream.ts`，封装 `fetch` + `ReadableStream` reader + SSE 事件解析。三条 Legacy 路径和 Corvus 路径均使用该 composable。
+
+接口：
+```typescript
+function useSSEStream(options: SSEStreamOptions, callbacks: SSEStreamCallbacks): SSEStreamResult
+```
+
+Callbacks: `onText`, `onDone`, `onError`, `onEmotion`, `onAffectionUpdate`, `onGmUpdate`（Corvus 路径使用）
+
+### CR-042 API / Data / Mock / Runtime Relationships
+
+| Concern | Contract Doc | Runtime Binding |
+|---------|-------------|------------------|
+| API contract (CR-042) | `docs/api/api.md` (this file, 1 new + 2 modified + 1 deprecated) | `/api/v1` on `:8000`; SSE on `/api/v1/game/{id}/choice` (Legacy), `/api/v1/game/{id}/custom-input` (Legacy), `/api/v1/game/{id}/free-chat/stream` |
+| Database contract (CR-042) | `docs/database/database.md` — Not Required | No DB changes; deferred writes reuse existing DialogueHistory, Affection, FreeChatSession tables |
+| Mock policy (CR-042) | **no mock API for Delivery E2E or Release evidence**; unit tests may mock LLM Gateway / Provider stream | `docs/runtime/runtime-contract.md` |
+| Runtime contract (CR-042) | `docs/runtime/runtime-contract.md` | No new ports/proxy; CR-042 additions appended |
+
+---
+
+## CR-043 Additions: 订阅权益区分与 CG 画廊权限控制
+
+### Extended API: Gallery / Scripts / Game / Settings
+
+CR-043 不新增 API 端点，扩展现有端点行为：
+
+| Endpoint | CR-043 Behavior Change |
+|----------|------------------------|
+| `GET /api/v1/gallery/collections/{script_id}` | 每个 CG 项新增 `is_accessible: boolean` 字段，基于用户 tier + CG 解锁状态计算 |
+| `GET /api/v1/scripts` | 每个剧本项新增 `is_accessible: boolean` 字段（已认证用户）；未认证用户不返回该字段 |
+| `GET /api/v1/scripts/{script_id}` | 剧本对象新增 `is_accessible: boolean` 字段 |
+| `POST /api/v1/game/start` | 创建 GameSession 前检查 `script_access`，权限不足返回 403 `SCRIPT_ACCESS_DENIED` |
+| `GET /api/v1/users/me/member-info` | `tier` 从 `SubscriptionService.get_user_tier()` 获取；`status`/`expires_at` 从 Subscription 表获取 |
+
+### is_accessible 字段契约
+
+**Gallery API** (`GET /api/v1/gallery/collections/{script_id}`)：
+```json
+{
+  "items": [{
+    "id": "uuid",
+    "is_accessible": true,
+    "unlock_status": "unlocked"
+  }]
+}
+```
+
+计算逻辑：`is_accessible = is_unlocked OR tier in ('standard', 'premium')`
+
+**Scripts API** (`GET /api/v1/scripts`, `GET /api/v1/scripts/{id}`)：
+```json
+{
+  "scripts": [{
+    "id": "uuid",
+    "is_accessible": true
+  }]
+}
+```
+
+计算逻辑（运行时虚拟判定，见 ADR-043-02）：
+- `trial_only` (free): `genre == 'romance' AND hot_value >= 50`
+- `all_normal` (basic/standard): 所有剧本
+- `all_including_exclusive` (premium): 所有剧本
+
+### New Error Code
+
+| Error Code | HTTP Status | Meaning |
+|---|---|---|
+| SCRIPT_ACCESS_DENIED | 403 | 订阅等级不足以游玩此剧本 |
+
+### member-info 数据源修复
+
+`get_member_info()` 修复前后的数据源对比：
+
+| 字段 | 修复前（数据源） | 修复后（数据源） |
+|---|---|---|
+| `tier` | `User.subscription_tier` | `SubscriptionService.get_user_tier()` |
+| `status` | `User.trial_started_at` / `trial_ends_at` | `SubscriptionService.get_user_subscription().status` |
+| `expires_at` | `User.trial_ends_at` | `SubscriptionService.get_user_subscription().expires_at` |
+
+修复后 `member-info` 和 `subscription/status` 两个 API 的 `tier` 值一致，都基于 `SubscriptionService.get_user_tier()`。
+
+### CR-043 API / Data / Mock / Runtime Relationships
+
+| Concern | Contract Doc | Runtime Binding |
+|---------|-------------|------------------|
+| API contract (CR-043) | `docs/api/api.md` (this file, 0 new + 5 extended) | `/api/v1` on `:8000` |
+| Database contract (CR-043) | `docs/database/database.md` — Not Required | 无 DB 表结构变更；is_accessible 为运行时计算字段 |
+| Mock policy (CR-043) | **no mock API for Delivery E2E or Release evidence** | `docs/runtime/runtime-contract.md` |
+| Runtime contract (CR-043) | `docs/runtime/runtime-contract.md` | No new ports/proxy; CR-043 additions appended |

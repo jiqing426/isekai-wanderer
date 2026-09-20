@@ -3,12 +3,45 @@
 - **CR ID**: CR-038
 - **Change Name**: corvus-frontend-entry
 - **Created At**: 2026-08-17T09:00:00+08:00
-- **Status**: intake
+- **Status**: redevelopment
 - **Source**: 用户反馈 — CR-037 后端集成已完成但前端入口未接入，用户实际仍玩 legacy 内置游戏
+- **范围变更 (2026-09-07)**: 用户要求移除自定义角色创建功能，改为直接使用剧本预设角色（Character 表 playable=True 的记录）。CR-038 从 RELEASE_GATE 退回 DEVELOPMENT 改造。
+
+## 改造范围 (2026-09-07)
+
+### 移除
+- 移除 `PlayerCandidateModal.vue` 中的创建表单和"自定义角色"区域
+- 移除 `POST /api/v1/game/player/candidates` 端点（标记 deprecated 或删除）
+- 移除 AC-038-003/004/005/006（创建候选相关验收项）
+- 移除 AC-038-013/014/015（前端创建表单相关验收项）
+
+### 改造
+- `GET /api/v1/game/player/candidates` → 改为 `GET /api/v1/game/scripts/{script_id}/characters`，返回剧本预设可扮演角色列表
+- `POST /api/v1/game/session/select-player` → 改为接收 `character_id`（Character 表 UUID），后端用角色数据组装传给 Corvus
+- `CorvusGameSession` 新增 `selected_character_id` 字段（关联 Character 表），保留 `selected_player_candidate_id` 向后兼容
+- `PlayerCandidateModal.vue` → 改为只展示角色卡片列表，移除创建表单
+- `game.ts` startGame 流程调整：选角时传 `character_id` 而非 `player_candidate_id`
+- `corvus_adapter.py` create_session 改为接收 `character_id`，从 Character 表取角色数据
+
+### 保留
+- `PlayerCandidate` 表保留（向后兼容已创建的用户数据），不再写入新记录
+- Legacy 引擎流程不受影响（CR-028 的角色选择保留）
+- Corvus SSE 对话逻辑不变
+- AC-038-001/002（engine_type 字段）、AC-038-007/008（前端类型）、AC-038-009（会话创建）、AC-038-017~020（SSE 流式）、AC-038-021/022（会话恢复）、AC-038-023~025（剧本分流）全部保留
+
+### 新增/改写 AC
+- AC-038-010 改写：选角列表来源从 player_candidates 改为剧本预设角色（Character 表 playable=True）
+- AC-038-011 改写：选定角色时传 character_id 而非 player_candidate_id
+- AC-038-012 改写：角色展示来源改为剧本预设角色
+- AC-038-016 改写：选定预设角色进入游戏
+- 新增 AC-038-026: GET /game/scripts/{script_id}/characters 返回可扮演角色列表
 
 ## 变更目标
 
 让用户可以在前端通过 Corvus 引擎开始游戏，体验 SSE 流式叙事，而非只能玩 legacy 节点剧本。
+
+- 目标：激活 CR-037 已投入的后端 Corvus 能力，让用户在前端选择 Corvus 剧本开始游戏，体验 SSE 流式叙事
+- 成功标准：用户可在前端选剧本→选角→SSE 流式对话→自由输入→结束；engine_type 全链路必填且为 'corvus'；Legacy 分支保留不激活；Browser E2E 可验证全链路
 
 ## 影响范围
 
@@ -43,9 +76,13 @@
 - SSE 事件正确渲染到前端（text/done/affection 等）
 - Corvus 自由输入模式可用（无预设选项，用户自由输入）
 
-### F4: 角色候选管理
-- 前端可查看/创建/选择角色候选（player_candidates）
-- 与后端 `GET/POST /game/session/{id}/player-candidates` 对接
+### F4: 剧本预设角色选择（2026-09-07 改造）
+- 移除自定义角色创建功能
+- 选角列表来源改为剧本预设可扮演角色（Character 表 playable=True）
+- 前端展示角色卡片（name/description/avatar_url/play_description）
+- 用户选择角色后调用 `POST /game/session/select-player` 传 `character_id`
+- 后端从 Character 表取角色数据组装传给 Corvus
+- 不再使用 `POST /game/player/candidates` 创建自定义候选
 
 ### F5: Feature Flag 联动
 - 后端返回剧本列表时标记哪些剧本走 Corvus 引擎

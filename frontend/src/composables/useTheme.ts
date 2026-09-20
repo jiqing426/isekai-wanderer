@@ -12,12 +12,12 @@ export function toggleTheme() {
   themeMode.value = 'dark';
 }
 
-export function setTheme(mode: ThemeMode) {
+export function setTheme(_mode: ThemeMode) {
   // 强制暗色模式
   themeMode.value = 'dark';
 }
 
-watch(themeMode, (mode) => {
+watch(themeMode, (_mode) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, 'dark');
     localStorage.setItem('theme', 'dark');
@@ -25,7 +25,7 @@ watch(themeMode, (mode) => {
   }
 }, { immediate: true });
 
-function applyTheme(mode: ThemeMode) {
+function applyTheme(_mode: ThemeMode) {
   const root = document.documentElement;
   root.setAttribute('data-theme', 'dark');
   root.classList.add('dark');

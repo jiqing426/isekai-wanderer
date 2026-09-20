@@ -60,6 +60,10 @@ class CorvusGameSession(Base):
     selected_player_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("player_candidates.id"), nullable=True
     )
+    # CR-039 D6: Store character_id from select-player for /game/status
+    character_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("characters.id"), nullable=True
+    )
     initial_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )

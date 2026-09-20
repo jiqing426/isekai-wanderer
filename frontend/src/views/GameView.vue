@@ -67,7 +67,7 @@
             />
             <AffectionDisplay
               :character-id="gameStatus?.character_id || game.currentDialogue?.character_id"
-              :value="gameStatus?.affection_value ?? currentAffection"
+              :value="gameStatus?.affection_value ?? game.currentSession?.affection_value ?? currentAffection"
             />
             <n-button @click="openGiftModal" class="action-btn">🎁 送礼</n-button>
             <n-button @click="goToFreeChat" class="action-btn">💬 自由对话</n-button>
@@ -85,7 +85,7 @@
             />
             <ChoicePanel
               ref="choicePanelRef"
-              v-if="game.hasChoices || game.loading"
+              v-if="game.hasChoices"
               :choices="choiceOptions"
               :loading="game.loading"
               @select="handleChoice"
@@ -101,6 +101,7 @@
               v-if="!game.isEnded"
               :character-id="game.currentDialogue?.character_id"
               :character-name="characterDisplayName"
+              :default-expanded="game.currentSession?.engine_type === 'corvus'"
               @send="handleFreeChat"
               @close="showFreeChat = false"
             />
@@ -358,8 +359,9 @@ async function loadGameStatus() {
       script_name: status.script_name || '',
       character_name: status.character_name || '',
       character_id: status.character_id || '',
-      affection_value: status.affection_value || 0,
-      affection_level: status.affection_level || '相识',
+      // Fix: use ?? to preserve 0 (valid value), and read affinity_level from BE
+      affection_value: status.affection_value ?? 0,
+      affection_level: status.affinity_level ?? '相识',
       chapter_number: status.chapter_number ?? null,
       chapter_type: status.chapter_type ?? null,
       chapter_title: status.chapter_title ?? null,
@@ -488,10 +490,11 @@ const characterTitle = computed(() => {
 });
 
 const choiceOptions = computed(() => {
-  return (game.pendingChoices || []).slice(0, 3).map((c) => ({
+  return (game.pendingChoices || []).slice(0, 4).map((c) => ({
     id: c.id,
     text: c.text,
     affection_delta: c.affection_delta,
+    hint: (c as any).hint,
   }));
 });
 
@@ -500,6 +503,8 @@ const characterDisplayName = computed(() => {
   if (gameStatus.value?.character_name) {
     return gameStatus.value.character_name;
   }
+  // CR-039 D2: 其次使用 gm_update 提取的角色名（Corvus done 事件 characterName=null 时的 fallback）
+  if (game.currentCharacterName) return game.currentCharacterName;
   // 其次使用 currentDialogue 的 character_id 查找
   if (game.currentDialogue?.character_id) {
     const cid = game.currentDialogue.character_id;
@@ -535,6 +540,10 @@ async function initGame() {
           loadGameStatus(),
           loadHistoryFromApi()
         ]);
+        // CR-039 T-039-FE-002: Corvus 会话如果没有初始对话或对话文字为空，自动发送一条初始消息
+        if (game.currentSession.engine_type === 'corvus' && (!game.currentDialogue || !game.currentDialogue.text)) {
+          await game.submitCustomInput('开始游戏');
+        }
       } else {
         phase.value = 'error';
         errorMsg.value = '无法恢复会话，请重新开始游戏';
@@ -613,7 +622,11 @@ async function handleChoice(choiceId: string) {
   const quotaBefore = subscriptionStore.dialogueQuota?.remaining || 0;
   const willExhaustQuota = quotaBefore <= 1 && !subscriptionStore.isSubscriber;
   
-  const result = await game.submitChoice(choiceId);
+  // CR-039: Corvus 引擎选项点击走 submitCustomInput
+  const isCorvus = game.currentSession?.engine_type === 'corvus';
+  const result = isCorvus
+    ? await game.submitCustomInput(choice?.text || '')
+    : await game.submitChoice(choiceId);
   
   // 如果发生错误，重置选择面板状态
   if (result?.error) {
@@ -622,7 +635,7 @@ async function handleChoice(choiceId: string) {
   }
 
   // CR-016: 如果额度用完，不触发好感度动效
-  if (result?.quotaExhausted) {
+  if ((result as any)?.quotaExhausted) {
     // 额度不足，跳过好感度更新
     return;
   }
@@ -681,7 +694,8 @@ function goToFreeChat() {
     return;
   }
   // CR-032 T-032-FE-003: 确保传递 NPC 角色 ID，不传递玩家角色 ID
-  const npcCharacterId = game.currentDialogue?.character_id;
+  // D7: Corvus done 事件 character_id=null，fallback 到 gameStatus
+  const npcCharacterId = game.currentDialogue?.character_id || gameStatus.value?.character_id;
   if (!npcCharacterId) {
     message.warning('当前没有对话角色，无法开启自由对话');
     return;

@@ -12,6 +12,7 @@ from app.core.exceptions import AppException, ErrorCode
 from app.api.v1.auth import get_current_user_id
 from app.models.gallery import Achievement
 from app.models.memory import CharacterMemory
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/gallery", tags=["gallery"])
 
@@ -129,11 +130,18 @@ async def get_collection_items(
     )
     unlocked_cg_ids = {str(row[0]) for row in unlocked_result.all()}
     
+    # CR-043: Get user subscription tier for is_accessible calculation
+    sub_service = SubscriptionService(db)
+    tier = await sub_service.get_user_tier(UUID(user_id))
+    tier_allows_full = tier in ("standard", "premium")
+    
     # 构建返回数据
     items = []
     for cg_asset, route in cg_assets:
         cg_id = str(cg_asset.id)
         is_unlocked = cg_id in unlocked_cg_ids
+        # CR-043 AC-001: is_accessible = is_unlocked OR tier_allows_full
+        is_accessible = is_unlocked or tier_allows_full
         
         items.append({
             "id": cg_id,
@@ -144,6 +152,7 @@ async def get_collection_items(
             "script_name": route.title if route else "",
             "unlock_status": "unlocked" if is_unlocked else "locked",
             "unlock_condition": "完成特定剧情节点" if not is_unlocked else "",
+            "is_accessible": is_accessible,  # CR-043: new field
         })
     
     return {"items": items}

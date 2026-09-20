@@ -397,7 +397,7 @@ import { api } from '@/api/http';
 import { gameApi } from '@/api/game';
 import { getMe, getMySubscription, getMyStats, getMyAsset, getSignInfo, getLatestSave, getMemorySummary, getCharacterBond, getMyEndings, getRecentEndings } from '@/api/user';
 import type { UserProfile, SubscriptionStatus } from '@/types/user';
-import type { UserStats, UserAsset, SignInfo, LatestSave, MemorySummary, BondList, EndingsList, RecentEndings } from '@/types/personal-center';
+import type { UserStats, UserAsset, SignInfo, LatestSave, MemorySummary, EndingsList, RecentEndings } from '@/types/personal-center';
 
 const router = useRouter();
 const message = useMessage();
@@ -411,7 +411,6 @@ const latestSave = ref<LatestSave | null>(null);
 const userAvatarFailed = ref(false);
 const continueAvatarFailed = ref(false);
 const memorySummary = ref<MemorySummary | null>(null);
-const bondList = ref<BondList | null>(null);
 const bondCharacters = ref<any[]>([]);
 const bondOffset = ref(0);
 const bondLimit = 10;

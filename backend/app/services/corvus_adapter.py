@@ -14,6 +14,7 @@ Future scope (DEV-006):
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator
@@ -41,29 +42,32 @@ class CorvusAdapter:
         self,
         user_id: uuid.UUID,
         game_session_id: uuid.UUID,
-        player_candidate_id: uuid.UUID,
+        character_id: uuid.UUID,
     ) -> dict[str, Any]:
-        """Select a player candidate and create a Corvus game.
+        """Select a character and create a Corvus game.
+
+        CR-038 改造 (2026-09-07): 接受 character_id 而非 player_candidate_id。
+        从 Character 表直接获取角色数据。
 
         Steps:
         1. Query the CorvusGameSession by id, verify ownership + status.
-        2. Query the selected PlayerCandidate.
-        3. Call CorvusClient.create_game with ONLY the selected candidate.
-        4. Update the GameSession: selected_player_candidate_id, status=playing,
+        2. Query the selected Character (from characters table, playable=True).
+        3. Call CorvusClient.create_game with the character data.
+        4. Update the GameSession: selected_character_id, status=playing,
            corvus_internal_game_id.
         5. Return initial session data for the frontend.
 
         Args:
             user_id: The authenticated user's UUID.
             game_session_id: The CorvusGameSession UUID (from POST /session/create).
-            player_candidate_id: The selected PlayerCandidate UUID.
+            character_id: The selected Character UUID (from characters table).
 
         Returns:
             dict with game_session_id, status, corvus_game_id, player info.
 
         Raises:
             AppException on session not found, ownership mismatch, wrong status,
-            candidate not found, or Corvus API failure.
+            character not found, or Corvus API failure.
         """
         from app.core.exceptions import AppException
 
@@ -97,29 +101,37 @@ class CorvusAdapter:
                 f"Session status is '{session.status}', expected 'waiting_select_player'",
             )
 
-        # 2. Query selected player candidate
-        stmt = select(PlayerCandidate).where(
-            PlayerCandidate.id == player_candidate_id,
-            PlayerCandidate.user_id == user_id,
+        # 2. Query selected character (CR-038: from characters table, not player_candidates)
+        from app.models.script import Character
+        stmt = select(Character).where(
+            Character.id == character_id,
+            Character.playable == True,
         )
         result = await self.db.execute(stmt)
-        candidate = result.scalar_one_or_none()
+        character = result.scalar_one_or_none()
 
-        if not candidate:
+        if not character:
             raise AppException(
-                "CANDIDATE_NOT_FOUND",
+                "CHARACTER_NOT_FOUND",
                 404,
-                f"Player candidate {player_candidate_id} not found",
+                f"Character {character_id} not found or not playable",
             )
 
-        # 3. Call Corvus create_game — ONLY the selected candidate
-        #    The other two candidates are NOT sent to Corvus.
+        # 3. Call Corvus create_game with character data
         try:
+            # Convert personality dict to string if needed
+            personality_str = ""
+            if character.personality:
+                if isinstance(character.personality, dict):
+                    personality_str = ", ".join(f"{k}: {v}" for k, v in character.personality.items())
+                else:
+                    personality_str = str(character.personality)
+
             corvus_game_id = await self.client.create_game(
-                player_name=candidate.name,
-                backstory=candidate.backstory or "",
-                appearance=candidate.appearance or "",
-                player_inventory=candidate.initial_inventory or [],
+                player_name=character.name,
+                backstory=personality_str or character.description or "",
+                appearance=character.description or "",
+                player_inventory=[],
             )
         except Exception as e:
             logger.error(f"[CorvusAdapter] create_game failed: {e}")
@@ -130,7 +142,9 @@ class CorvusAdapter:
             )
 
         # 4. Update game session
-        session.selected_player_candidate_id = candidate.id
+        # CR-038: 不再写 selected_player_candidate_id（有FK约束到 player_candidates 表）
+        # CR-039 D6: Store character_id for /game/status retrieval
+        session.character_id = character_id
         session.status = "playing"
         session.corvus_internal_game_id = corvus_game_id
         session.updated_at = datetime.utcnow()
@@ -140,62 +154,74 @@ class CorvusAdapter:
 
         logger.info(
             f"[CorvusAdapter] create_session: session={game_session_id}, "
-            f"candidate={candidate.name}, corvus_game={corvus_game_id}"
+            f"character={character.name}, corvus_game={corvus_game_id}"
         )
 
-        # 5. Return frontend-compatible response
+        # 5. Fetch initial scene from Corvus API
+        try:
+            game_state = await self.client.get_game(corvus_game_id)
+            # Extract location/scenes from game state
+            world_state = game_state.get("worldState", {})
+            events = world_state.get("events", [])
+            # Build initial_scene from whatever is available in the Corvus game state
+            initial_scene = {
+                "location": "default",
+                "context": "",
+                "history": events[-5:] if events else [],  # last 5 events
+                "opening_text": events[0].get("message", "") if events and isinstance(events[0], dict) else "",
+            }
+        except Exception as e:
+            logger.warning(f"[CorvusAdapter] get_game failed for initial_scene fallback: {e}")
+            initial_scene = {
+                "location": "default",
+                "context": "",
+                "history": [],
+                "opening_text": "",
+            }
+
+        # 6. Return frontend-compatible response
         return {
             "game_session_id": str(session.id),
             "status": session.status,
             "engine_type": session.engine_type,
             "corvus_game_id": corvus_game_id,
+            "initial_scene": initial_scene,
             "player": {
-                "id": str(candidate.id),
-                "name": candidate.name,
-                "personality": candidate.personality,
-                "backstory": candidate.backstory,
-                "appearance": candidate.appearance,
-                "initial_inventory": candidate.initial_inventory or [],
+                "id": str(character.id),
+                "name": character.name,
+                "personality": personality_str or None,
+                "backstory": character.description,
+                "appearance": character.description,
+                "initial_inventory": [],
             },
         }
 
     async def _resolve_character_id(self, session) -> uuid.UUID:
-        """Resolve the actual character_id from characters table using candidate name.
+        """Resolve the character_id for the Corvus game session.
 
-        Uses an independent DB session to avoid conflicts.
+        CR-038 改造: 不再依赖 selected_player_candidate_id。
+        直接从 Character 表取第一个 playable 角色。
         """
         try:
-            from app.models.corvus import PlayerCandidate
             from app.models.script import Character
             async with async_session_factory() as db:
-                if session.selected_player_candidate_id:
-                    stmt = select(PlayerCandidate).where(PlayerCandidate.id == session.selected_player_candidate_id)
-                    result = await db.execute(stmt)
-                    candidate = result.scalar_one_or_none()
-                    if candidate:
-                        # Find matching character by name
-                        char_stmt = select(Character).where(Character.name == candidate.name).limit(1)
-                        char_result = await db.execute(char_stmt)
-                        character = char_result.scalar_one_or_none()
-                        if character:
-                            logger.info(f"[CorvusAdapter] Resolved character_id: {character.id} for candidate: {candidate.name}")
+                # CR-038: 直接取第一个 playable character
+                char_stmt = select(Character).where(Character.playable == True).limit(1)
+                char_result = await db.execute(char_stmt)
+                character = char_result.scalar_one_or_none()
+                if character:
+                            logger.info(f"[CorvusAdapter] First playable character_id: {character.id}")
                             return character.id
-                        # Fallback: return first character
-                        all_chars = await db.execute(select(Character).limit(1))
-                        first_char = all_chars.scalar_one_or_none()
-                        if first_char:
-                            logger.info(f"[CorvusAdapter] Fallback first character_id: {first_char.id}")
-                            return first_char.id
                 # Fallback: return first character
                 all_chars = await db.execute(select(Character).limit(1))
                 first_char = all_chars.scalar_one_or_none()
                 if first_char:
-                    logger.info(f"[CorvusAdapter] No candidate, first character_id: {first_char.id}")
+                    logger.info(f"[CorvusAdapter] No playable character found, using fallback")
                     return first_char.id
         except Exception as e:
             logger.error(f"[CorvusAdapter] _resolve_character_id failed: {e}")
         # Last resort: return the candidate_id (may fail FK)
-        return session.selected_player_candidate_id or user_id
+        return user_id  # fallback
 
     async def stream_turn(
         self,
@@ -389,6 +415,7 @@ class CorvusAdapter:
 
             # AC-012: Sync affinity
             stat_changes = summary.get("statChanges", [])
+            relationship_changes = summary.get("relationshipChanges", [])
             if stat_changes:
                 await self._sync_affinity(db, game_session_id, stat_changes)
             else:
@@ -396,7 +423,7 @@ class CorvusAdapter:
                 if relationships:
                     await self._sync_affinity_from_relationships(db, game_session_id, relationships, characters)
                 elif characters:
-                    await self._sync_affinity_from_characters(db, game_session_id, characters)
+                    await self._sync_affinity_from_characters(db, game_session_id, characters, relationship_changes)
 
             # AC-013: Sync inventory
             inventory_changes = summary.get("inventoryChanges", [])
@@ -476,15 +503,48 @@ class CorvusAdapter:
 
         game_session_id: uuid.UUID,
         characters: list,
+        relationship_changes: list | None = None,
     ) -> None:
-        """AC-012 fallback: Sync affinity from characters[].relationship.
+        """AC-012 fallback: Sync affinity from characters[].dispositionTowardPlayer.
 
         If no numeric relationship/affinity field exists, fall back to
         dispositionTowardPlayer string heuristics:
-        - friendly/友好 → 30
-        - hostile/敌 → -30
+        - friendly/友好/信任/喜爱 → positive value
+        - hostile/敌/厌恶 → negative value
         - unknown/未知 → 0
+        - complex/复杂/旧识 → small positive (10)
+
+        Also process summary.relationshipChanges (string → delta):
+        - 信任/trust → +10
+        - 友好/friendly → +5
+        - 敌意/hostile → -10
+        - 犹豫/hesitant → +2
         """
+        # AC-014: Process relationshipChanges for delta updates
+        rel_deltas: dict[str, int] = {}
+        if relationship_changes:
+            for rc in relationship_changes:
+                if not isinstance(rc, str):
+                    continue
+                # Format: "character_name: keyword" or "char_id: keyword"
+                parts = rc.split(':', 1)
+                if len(parts) != 2:
+                    continue
+                rc_name = parts[0].strip()
+                rc_keyword = parts[1].strip()
+                delta = 0
+                if any(k in rc_keyword for k in ["信任", "trust"]):
+                    delta = 10
+                elif any(k in rc_keyword for k in ["友好", "friendly", "喜爱"]):
+                    delta = 5
+                elif any(k in rc_keyword for k in ["敌", "hostile", "厌恶"]):
+                    delta = -10
+                elif any(k in rc_keyword for k in ["犹豫", "hesitant"]):
+                    delta = 2
+                elif any(k in rc_keyword for k in ["复杂", "complex"]):
+                    delta = 3
+                rel_deltas[rc_name] = delta
+
         for char in characters:
             if not isinstance(char, dict):
                 continue
@@ -496,8 +556,14 @@ class CorvusAdapter:
             if not relationship:
                 disposition = char.get("dispositionTowardPlayer", "")
                 if isinstance(disposition, str):
-                    if any(k in disposition for k in ["友好", "friend", "trust", "喜爱"]):
+                    if any(k in disposition for k in ["信任", "友好", "友善", "friend", "trust", "喜爱", "感兴趣"]):
                         relationship = 30
+                    elif any(k in disposition for k in ["复杂", "complex"]):
+                        relationship = 10
+                    elif any(k in disposition for k in ["谨慎", "cautious", "curious", "好奇", "interested"]):
+                        relationship = 5
+                    elif any(k in disposition for k in ["未知", "unknown"]):
+                        relationship = 0
                     elif any(k in disposition for k in ["敌", "hostile", "hate", "厌恶"]):
                         relationship = -30
                     else:
@@ -517,18 +583,34 @@ class CorvusAdapter:
                 )
             result = await db.execute(stmt)
             npc = result.scalar_one_or_none()
+
+            base_affinity = int(relationship) if isinstance(relationship, (int, float)) else 0
+
+            # AC-014: Apply relationshipChanges delta on top of existing DB value
+            delta = 0
+            if rel_deltas:
+                # Match by name or corvus_char_id
+                delta = rel_deltas.get(npc_name, rel_deltas.get(corvus_char_id, 0))
+
             if npc:
-                if relationship:
-                    npc.affinity = int(relationship) if isinstance(relationship, (int, float)) else 0
+                # If we have a delta, apply it to existing value
+                if delta:
+                    npc.affinity = (npc.affinity or 0) + delta
+                else:
+                    # Set absolute value from disposition
+                    if base_affinity:
+                        npc.affinity = base_affinity
+                logger.info(f"[CorvusAdapter] NPC affinity: {npc_name} = {npc.affinity} (base={base_affinity}, delta={delta})")
             else:
+                new_affinity = base_affinity + delta
                 new_npc = SessionNpc(
                     game_session_id=game_session_id,
                     name=npc_name,
-                    affinity=int(relationship) if isinstance(relationship, (int, float)) else 0,
+                    affinity=new_affinity,
                     corvus_character_id=str(corvus_char_id) if corvus_char_id else None,
                 )
                 db.add(new_npc)
-            logger.info(f"[CorvusAdapter] NPC from characters: {npc_name}")
+                logger.info(f"[CorvusAdapter] new NPC: {npc_name} affinity={new_affinity} (base={base_affinity}, delta={delta})")
 
     async def _sync_inventory_from_snapshot(
         self,
@@ -911,6 +993,102 @@ class SSETranslator:
     # Corvus event types that are internal and filtered out
     _FILTERED_TYPES = {"user", "context-assembled", "narrator", "gm-start"}
 
+    # CR-039 D1/BUG-039-001: Regex to strip [Narrator]/[Character] and [Character: name] markers from full text
+    _ROLE_MARKER_RE = re.compile(r'\[(Narrator|Character|narrator|character)(\s*:\s*[^\]]*)?\]\s*\n?', re.UNICODE)
+
+    # CR-039 D1/BUG-039-001: Detect start of a role marker in a token chunk (supports optional : name)
+    _ROLE_MARKER_START_RE = re.compile(r'\[(Narrator|Character|narrator|character)(\s*:\s*[^\]]*)?\]', re.UNICODE)
+
+    def __init__(self):
+        # Buffer for accumulating token chunks that may contain partial role markers
+        self._token_buffer = ""
+        self._in_marker = False
+        # CR-039 D1: Track whether we are inside a [Narrator] or [Character] block
+        # When inside, tokens are suppressed until the marker is closed by \n
+        # CR-039 D1: Partial marker detection — buffer up to max marker length + margin
+        # BUG-039-001: Increase to accommodate [Character: name] format
+        self._MAX_MARKER_LEN = len("[Character: 槐枝]") + 2  # +2 for \s*\n?
+
+    def _strip_role_markers(self, text: str) -> str:
+        """Remove [Narrator] and [Character] markers from full text (done event)."""
+        if not text:
+            return text
+        return self._ROLE_MARKER_RE.sub('', text)
+
+    def _process_token_chunk(self, content: str) -> str:
+        """Process a single token chunk, filtering role markers that may span chunks.
+
+n        Strategy: maintain a buffer. When we see a partial '[' that could be
+        the start of a role marker, hold it back until we can determine if it
+        is a [Narrator]/[Character] marker or regular text.
+        """
+        if not content:
+            return content
+
+        result = ""
+        buf = self._token_buffer + content
+        self._token_buffer = ""
+
+        i = 0
+        while i < len(buf):
+            # Check if remaining text could be start of a role marker
+            remaining = buf[i:]
+
+            # Check for '[' that might begin a role marker
+            if remaining[0] == '[':
+                # Try to match a complete role marker
+                marker_match = self._ROLE_MARKER_START_RE.match(remaining)
+                if marker_match:
+                    # Found a complete marker — skip it and trailing whitespace/newline
+                    # NOTE: match end is relative to `remaining`, add i for absolute buf position
+                    end = i + marker_match.end()
+                    # Also consume any trailing \n or whitespace right after
+                    while end < len(buf) and buf[end] in ('\n', '\r', ' '):
+                        end += 1
+                    i = end
+                    continue
+
+                # Check if remaining could be a prefix of a role marker
+                # BUG-039-001: Also handle ':' after [Character for [Character: name] format
+                prefixes = (
+                    '[N', '[n', '[C', '[c',
+                    '[Na', '[na', '[Ca', '[ca',
+                    '[Nar', '[nar', '[Cha', '[cha',
+                    '[Narr', '[narr', '[Char', '[char',
+                    '[Narra', '[narra', '[Chara', '[chara',
+                    '[Narrat', '[narrat', '[Charac', '[charac',
+                    '[Narrato', '[narrato', '[Charact', '[charact',
+                    '[Narrator', '[narrator', '[Character', '[character',
+                    # [Character: name] prefixes — up to and including the colon
+                    '[Character:', '[character:',
+                    '[Narrator:', '[narrator:',
+                )
+                if remaining.startswith(prefixes):
+                    # Hold this in buffer — might be a partial marker
+                    self._token_buffer = buf[i:]
+                    break
+                else:
+                    # Regular '[' — output it
+                    result += buf[i]
+                    i += 1
+                    continue
+            else:
+                result += buf[i]
+                i += 1
+
+        # If buffer is too long (not a marker), flush it
+        if len(self._token_buffer) > self._MAX_MARKER_LEN:
+            result += self._token_buffer
+            self._token_buffer = ""
+
+        return result
+
+    def _flush_token_buffer(self) -> str:
+        """Flush any remaining buffered token content."""
+        result = self._token_buffer
+        self._token_buffer = ""
+        return result
+
     def translate(self, corvus_event: dict) -> list[dict]:
         """Translate a Corvus SSE event to zero or more frontend events.
 
@@ -924,9 +1102,16 @@ class SSETranslator:
 
         if event_type == "token":
             content = corvus_event.get("content", "")
-            return [{"type": "text", "content": content}]
+            # CR-039 D1: Filter [Narrator]/[Character] markers from token events
+            filtered = self._process_token_chunk(content)
+            if filtered:
+                return [{"type": "text", "content": filtered}]
+            return []
 
         if event_type == "done":
+            # Flush any remaining buffered token content first
+            buffered = self._flush_token_buffer()
+
             # Extract full text and character info from done event
             full_text = ""
             character_id = None
@@ -941,12 +1126,19 @@ class SSETranslator:
             elif isinstance(msg, str):
                 full_text = msg
 
-            return [{
+            # CR-039 D1: Filter [Narrator]/[Character] markers from done text
+            full_text = self._strip_role_markers(full_text)
+
+            events = []
+            if buffered:
+                events.append({"type": "text", "content": buffered})
+            events.append({
                 "type": "done",
                 "text": full_text,
                 "character_id": str(character_id) if character_id else None,
                 "character_name": character_name,
-            }]
+            })
+            return events
 
         if event_type == "gm_update":
             # Extract world state changes
@@ -956,14 +1148,115 @@ class SSETranslator:
             relationship_changes = summary.get("relationshipChanges", [])
             new_characters = summary.get("newCharacters", [])
             world_events = summary.get("worldEvents", [])
+            # CR-039: Extract playerOptions and map to frontend choices format
+            player_options = corvus_event.get("playerOptions", [])
+            choices = []
+            if player_options and isinstance(player_options, list):
+                choices = [
+                    {
+                        "id": str(i),
+                        "text": opt.get("text", ""),
+                        "hint": opt.get("hint", ""),
+                    }
+                    for i, opt in enumerate(player_options)
+                    if isinstance(opt, dict)
+                ]
+
+            # CR-039 D2: Extract character_name from Corvus characters array
+            # The first character in the array is the speaker
+            characters = corvus_event.get("characters", [])
+            gm_character_name = None
+            if characters and isinstance(characters, list):
+                for char in characters:
+                    if isinstance(char, dict):
+                        gm_character_name = char.get("revealedName") or char.get("name") or None
+                        if gm_character_name:
+                            break
+
+            # CR-039 D3/AC-014: Extract affinity from player.relationships
+            player = corvus_event.get("player", {})
+            relationships = player.get("relationships", [])
+            affinity_current = None
+            if relationships and isinstance(relationships, list):
+                for rel in relationships:
+                    if not isinstance(rel, dict):
+                        continue
+                    rel_name = rel.get("character", rel.get("name", ""))
+                    rel_affinity = rel.get("affinity", rel.get("value"))
+                    if rel_affinity is not None:
+                        affinity_current = rel_affinity
+                        break
+
+            # CR-039 D3: Fallback — extract disposition from characters array
+            affinity_disposition = None
+            if characters and isinstance(characters, list):
+                for char in characters:
+                    if isinstance(char, dict):
+                        disposition = char.get("dispositionTowardPlayer")
+                        if disposition:
+                            affinity_disposition = disposition
+                            break
+
+            # AC-014: If no numeric affinity from relationships, compute from disposition string
+            if affinity_current is None and affinity_disposition:
+                disp = affinity_disposition
+                if any(k in disp for k in ["信任", "友好", "友善", "friend", "trust", "喜爱", "感兴趣"]):
+                    affinity_current = 30
+                elif any(k in disp for k in ["复杂", "complex"]):
+                    affinity_current = 10
+                elif any(k in disp for k in ["谨慎", "cautious", "curious", "好奇", "interested"]):
+                    affinity_current = 5
+                elif any(k in disp for k in ["未知", "unknown"]):
+                    affinity_current = 0
+                elif any(k in disp for k in ["敌", "hostile", "hate", "厌恶"]):
+                    affinity_current = -30
+                else:
+                    affinity_current = 0
+
+            # AC-014: Also compute delta from relationshipChanges
+            affinity_delta = 0
+            if relationship_changes and isinstance(relationship_changes, list):
+                for rc in relationship_changes:
+                    if not isinstance(rc, str):
+                        continue
+                    parts = rc.split(':', 1)
+                    if len(parts) != 2:
+                        continue
+                    rc_keyword = parts[1].strip()
+                    if any(k in rc_keyword for k in ["信任", "trust"]):
+                        affinity_delta += 10
+                    elif any(k in rc_keyword for k in ["友好", "friendly", "喜爱"]):
+                        affinity_delta += 5
+                    elif any(k in rc_keyword for k in ["敌", "hostile", "厌恶"]):
+                        affinity_delta -= 10
+                    elif any(k in rc_keyword for k in ["犹豫", "hesitant"]):
+                        affinity_delta += 2
+                    elif any(k in rc_keyword for k in ["复杂", "complex"]):
+                        affinity_delta += 3
 
             frontend_event = {
                 "type": "gm_update",
             }
 
+            # CR-039 D2: Add character_name from gm_update characters array
+            if gm_character_name:
+                frontend_event["character_name"] = gm_character_name
+
             # Add affinity deltas if present
             if stat_changes:
                 frontend_event["affinity_deltas"] = stat_changes
+
+            # CR-039 D3/AC-014: Add affinity_current (numeric)
+            if affinity_current is not None:
+                frontend_event["affinity_current"] = affinity_current
+
+            # AC-014: Add affinity_delta (numeric, from relationshipChanges)
+            if affinity_delta:
+                frontend_event["affinity_delta"] = affinity_delta
+
+            # CR-039 D3: Add affinity_disposition from characters array
+            if affinity_disposition:
+                frontend_event["affinity_disposition"] = affinity_disposition
 
             if inventory_changes:
                 frontend_event["inventory_changes"] = inventory_changes
@@ -980,6 +1273,9 @@ class SSETranslator:
 
             if world_events:
                 frontend_event["world_events"] = world_events
+
+            # CR-039: Always include choices (empty array = free-form input)
+            frontend_event["choices"] = choices
 
             # Always yield gm_update even if empty (frontend can handle)
             return [frontend_event]

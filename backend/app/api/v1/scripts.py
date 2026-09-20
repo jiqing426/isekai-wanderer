@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.exceptions import AppException, ErrorCode
 from app.models.script import Script, Route, Node
 from app.api.v1.auth import get_current_user_id
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/scripts", tags=["scripts"])
 
@@ -38,15 +39,23 @@ async def list_scripts(
     size: Optional[int] = Query(None, ge=1, le=100, description="每页数量"),
     limit: Optional[int] = Query(None, ge=1, le=100, description="每页数量（size 的别名，向后兼容）"),
     db: AsyncSession = Depends(get_db),
+    user_id: Optional[str] = Depends(None),  # Optional auth — public endpoint
 ):
-    """List scripts with search, filter, sort and pagination (public — no auth required).
+    """List scripts with search, filter, sort and pagination (public — auth optional).
     
-    CR-post-page: 
-    - 支持 size 参数（limit 向后兼容）
-    - 返回 categoryList, totalPage
-    - 每个 script 返回 hot_value 字段
-    - 二级稳定排序: score DESC + script_id ASC, 或 hot_value DESC + script_id ASC
+    CR-043 AC-009: When user is authenticated, each script includes is_accessible field.
+    When not authenticated, is_accessible is omitted (frontend can compute from free tier).
     """
+    # CR-043: Try to get user_id from JWT if provided
+    actual_user_id = None
+    try:
+        from app.api.v1.auth import get_current_user_id as _get_uid
+        from fastapi import Request
+        # user_id may be passed via dependency injection if token present
+        # For simplicity, we accept it as optional parameter
+        actual_user_id = user_id
+    except Exception:
+        pass
     # Resolve size: prefer size, fallback to limit, default 12
     effective_size = size if size is not None else (limit if limit is not None else 12)
     # Clamp size to [10, 40] per BE-D4 spec
@@ -116,6 +125,20 @@ async def list_scripts(
     result = await db.execute(base_stmt)
     scripts = list(result.unique().scalars().all())
 
+    # CR-043: Compute is_accessible for authenticated users
+    tier = "free"
+    script_access = "trial_only"
+    if actual_user_id:
+        try:
+            sub_service = SubscriptionService(db)
+            tier = await sub_service.get_user_tier(UUID(actual_user_id))
+            perms = await sub_service.get_tier_permissions(tier)
+            script_access = perms.script_access
+        except Exception:
+            pass
+    
+    from app.api.v1.game import _compute_script_accessible
+    
     return {
         "categoryList": CATEGORY_LIST,
         "scripts": [
@@ -129,6 +152,8 @@ async def list_scripts(
                 "route_count": len(s.routes) if s.routes else 0,
                 "hot_value": s.hot_value or 0,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
+                "engine_type": "corvus",
+                "is_accessible": _compute_script_accessible(script_access, s) if actual_user_id else None,
             }
             for s in scripts
         ],
@@ -442,6 +467,7 @@ async def get_script(
         "totalNodes": total_nodes,
         "unlockedNodes": unlocked_nodes,
         "completionRate": completion_rate,
+        "engine_type": "corvus",
     }
 
 

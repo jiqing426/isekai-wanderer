@@ -310,7 +310,7 @@ const canPlayVoice = computed(() => {
 
 import { useCharacterVoice } from '@/composables/useCharacterVoice';
 
-const { speak: speakVoice, stop: stopVoice, setVoiceEnabled } = useCharacterVoice();
+const { setVoiceEnabled } = useCharacterVoice();
 
 // 启用语音功能
 onMounted(() => {

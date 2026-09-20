@@ -40,9 +40,32 @@ class MemoryService:
         1. Use LLM to extract key facts from dialogue
         2. Generate embeddings for each fact
         3. Store in character_memories table
+
+        CR-039 D9: If session_id belongs to a Corvus session (corvus_game_sessions),
+        set source_session_id=None to avoid FK violation (FK → game_sessions table).
         """
         if not dialogue_text or len(dialogue_text.strip()) < 10:
             return []
+
+        # CR-039 D9: Validate session_id belongs to game_sessions (Legacy) table.
+        # Corvus sessions are in corvus_game_sessions, which would violate the FK.
+        if session_id is not None:
+            try:
+                from app.models.game import GameSession
+                sess_check = await self.db.execute(
+                    select(GameSession.id).where(GameSession.id == session_id).limit(1)
+                )
+                if not sess_check.scalar_one_or_none():
+                    # Session not in game_sessions table — likely a Corvus session
+                    import logging
+                    logging.getLogger(__name__).info(
+                        f"[MemoryService] session_id {session_id} not in game_sessions table, "
+                        f"setting source_session_id=None to avoid FK violation"
+                    )
+                    session_id = None
+            except Exception:
+                # If the check itself fails, be safe and set None
+                session_id = None
 
         # Resolve character name to avoid UUID leaking into memory text
         character_name = ""

@@ -70,7 +70,7 @@
 
         <div class="plan-actions">
           <button
-            v-if="plan.is_current"
+            v-if="isCurrentPlan(plan.planId)"
             class="btn-current"
             disabled
           >
@@ -99,9 +99,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useMessage } from 'naive-ui';
 import { getSubscriptionPlans, createOrder } from '@/api/subscription';
+import { useSubscriptionStore } from '@/stores/subscription';
+import { useAuthStore } from '@/stores/auth';
+import { authApi } from '@/api/auth';
 
 interface SubscriptionPlan {
   planId: string;
@@ -115,6 +118,8 @@ interface SubscriptionPlan {
 }
 
 const message = useMessage();
+const subscriptionStore = useSubscriptionStore();
+const authStore = useAuthStore();
 
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -131,6 +136,53 @@ function getTierIcon(planId: string): string {
   };
   return icons[planId] || '🆓';
 }
+
+// CR-043 FIX: 判断当前用户是否已订阅该套餐且周期匹配
+function isCurrentPlan(planId: string): boolean {
+  // 1. API 返回的 is_current 标记
+  const plan = plans.value.find(p => p.planId === planId);
+  if (plan?.is_current) return true;
+  // 2. subscriptionStore 实时状态 — 必须同时匹配 tier 和 billing cycle
+  const subStatus = subscriptionStore.subscriptionStatus;
+  if (subStatus && subStatus.tier === planId) {
+    // 判断当前订阅周期：通过 expires_at - started_at 的天数差
+    if (subStatus.started_at && subStatus.expires_at) {
+      const start = new Date(subStatus.started_at);
+      const expires = new Date(subStatus.expires_at);
+      const daysDiff = Math.round((expires.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      // monthly: ~30 days, yearly: ~365 days
+      const currentCycle = daysDiff > 180 ? 'yearly' : 'monthly';
+      if (currentCycle === billingCycle.value) return true;
+      // 周期不匹配，不是当前选中周期的订阅
+      return false;
+    }
+    // 没有日期信息时只判断 tier
+    return true;
+  }
+  // 3. authStore 中的 subscription_tier
+  if (authStore.user?.subscription_tier === planId) return true;
+  return false;
+}
+
+// CR-043 FIX: 判断用户是否已订阅该 tier（不考虑周期）
+function isSubscribedTier(planId: string): boolean {
+  const subStatus = subscriptionStore.subscriptionStatus;
+  if (subStatus && subStatus.tier === planId) return true;
+  if (authStore.user?.subscription_tier === planId) return true;
+  return false;
+}
+
+// 当前订阅周期标签
+const subscribedCycleLabel = computed(() => {
+  const subStatus = subscriptionStore.subscriptionStatus;
+  if (subStatus?.started_at && subStatus?.expires_at) {
+    const start = new Date(subStatus.started_at);
+    const expires = new Date(subStatus.expires_at);
+    const daysDiff = Math.round((expires.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    return daysDiff > 180 ? '（年付）' : '（月付）';
+  }
+  return '';
+})
 
 function getPrice(plan: SubscriptionPlan): number {
   return billingCycle.value === 'monthly' ? plan.priceMonthly : plan.priceYearly;
@@ -160,11 +212,36 @@ async function handleSubscribe(planId: string) {
       cycleType: billingCycle.value
     });
     
-    if (response.payUrl) {
+    if (response.status === 'success') {
+      message.success('订阅成功！');
+      await loadPlans();
+      // CR-043 AC-016: 刷新订阅状态
+      await subscriptionStore.fetchSubscriptionStatus();
+      // CR-043 AC-017: 刷新用户信息，更新 authStore 中的 tier
+      try {
+        const profile = await authApi.getProfile();
+        authStore.setUser({
+          ...authStore.user,
+          id: profile.id,
+          email: profile.email,
+          displayName: profile.display_name || undefined,
+          emailVerified: profile.email_verified,
+          onboardingCompleted: profile.onboarding_completed,
+          avatar: profile.avatar_url || undefined,
+          subscription_tier: (profile as any).subscription_tier || 'free',
+        } as any);
+      } catch (profileErr) {
+        console.warn('CR-043: Failed to refresh user profile after subscription:', profileErr);
+      }
+    } else if (response.payUrl) {
+      // 支付链接模式：跳转后返回时需要页面重新加载状态
+      // 但在跳转前先预加载订阅状态
+      await subscriptionStore.fetchSubscriptionStatus();
       window.location.href = response.payUrl;
     } else {
       message.success('订阅成功！');
       await loadPlans();
+      await subscriptionStore.fetchSubscriptionStatus();
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : '订阅失败';
@@ -176,6 +253,8 @@ async function handleSubscribe(planId: string) {
 
 onMounted(() => {
   loadPlans();
+  // CR-043 FIX: 加载订阅状态用于实时判断当前套餐
+  subscriptionStore.fetchSubscriptionStatus();
 });
 </script>
 

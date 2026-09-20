@@ -38,12 +38,12 @@
               <p class="cg-collection-desc">{{ activeCollection.description }}</p>
               <n-spin :show="loadingCGItems">
                 <div class="cg-items-grid">
-                  <div v-for="item in cgItems" :key="item.id" class="cg-item-card glass-card" :class="{ locked: item.unlock_status === 'locked' }" @click="item.unlock_status === 'unlocked' ? previewCG(item) : null">
+                  <div v-for="item in cgItems" :key="item.id" class="cg-item-card glass-card" :class="{ locked: item.unlock_status === 'locked' || item.is_accessible === false, 'sub-locked': item.is_accessible === false }" @click="handleCGClick(item)">
                     <div class="cg-item-thumb">
                       <img :src="item.thumbnail_url" class="cg-item-img" />
-                      <div v-if="item.unlock_status === 'locked'" class="cg-lock-overlay">
-                        <span class="cg-lock-icon">🔒</span>
-                        <span class="cg-lock-hint">{{ item.unlock_condition }}</span>
+                      <div v-if="item.unlock_status === 'locked' || item.is_accessible === false" class="cg-lock-overlay">
+                        <span class="cg-lock-icon">{{ item.is_accessible === false ? '🔒' : '🔒' }}</span>
+                        <span class="cg-lock-hint">{{ item.is_accessible === false ? '订阅后可解锁' : item.unlock_condition }}</span>
                       </div>
                     </div>
                     <div class="cg-item-info">
@@ -172,7 +172,7 @@ const route = useRoute();
 const { t } = useI18n();
 
 interface Collection { id: string; name: string; description?: string; items_count: number; items_unlocked: number; cover_url: string; }
-interface CGItem { id: string; collection_id: string; title: string; thumbnail_url: string; script_name: string; unlock_status: string; unlock_condition: string; }
+interface CGItem { id: string; collection_id: string; title: string; thumbnail_url: string; script_name: string; unlock_status: string; unlock_condition: string; is_accessible?: boolean; }
 interface Character { character_id: string; character_name?: string; value: number; }
 interface Achievement { 
   id: string; 
@@ -210,6 +210,30 @@ function formatDate(iso: string | null): string {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 function previewCG(cg: CGItem) { selectedCG.value = cg; showCGModal.value = true; }
+
+// CR-043 DEV-002: CG 点击逻辑——区分解锁状态与订阅权限
+function handleCGClick(item: CGItem) {
+  // is_accessible === false → 订阅权限不足，显示升级提示
+  if (item.is_accessible === false) {
+    showUpgradeHint();
+    return;
+  }
+  // is_accessible === true → 可访问（standard+ 用户可查看未解锁 CG）
+  if (item.is_accessible === true) {
+    previewCG(item);
+    return;
+  }
+  // backward compat: is_accessible 未返回时，使用 unlock_status
+  if (item.unlock_status === 'unlocked') {
+    previewCG(item);
+  }
+  // unlock_status === 'locked' 且无 is_accessible → 不做任何操作（原有行为）
+}
+
+// CR-043 DEV-002: 显示订阅升级提示
+function showUpgradeHint() {
+  message.info('订阅后可解锁全部 CG', { duration: 3000 });
+}
 
 function showProgress(ach: Achievement): boolean {
   if (ach.isUnlocked) return false;
@@ -379,6 +403,8 @@ onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
 .cg-item-card { cursor: pointer; overflow: hidden; padding: 0; transition: all 0.3s ease; }
 .cg-item-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(139, 92, 246, 0.12); }
 .cg-item-card.locked { cursor: default; opacity: 0.7; }
+.cg-item-card.sub-locked { cursor: pointer; }
+.cg-item-card.sub-locked:hover { box-shadow: 0 0 12px rgba(139, 92, 246, 0.3); border-color: rgba(139, 92, 246, 0.4); }
 .cg-item-thumb { width: 100%; aspect-ratio: 16/10; position: relative; overflow: hidden; }
 .cg-item-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
 .cg-item-card:hover .cg-item-img { transform: scale(1.05); }

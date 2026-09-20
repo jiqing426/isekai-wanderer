@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,8 +186,6 @@ class SubscriptionService:
         Returns:
             Created Subscription record
         """
-        from dateutil.relativedelta import relativedelta
-        
         # Create new subscription record (CR-016 table)
         subscription = Subscription(
             user_id=user_id,
@@ -197,7 +195,7 @@ class SubscriptionService:
             expires_at=expires_at,
             fragment_quota=TIER_FRAGMENT_QUOTAS.get(tier, 0),
             last_fragment_grant_at=datetime.now(timezone.utc),
-            next_fragment_grant_at=datetime.now(timezone.utc) + relativedelta(months=1),
+            next_fragment_grant_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         self.db.add(subscription)
         
@@ -377,8 +375,6 @@ class SubscriptionService:
         Returns:
             Number of users granted fragments
         """
-        from dateutil.relativedelta import relativedelta
-        
         now = datetime.now(timezone.utc)
         
         # Find all active subscriptions due for grant
@@ -397,7 +393,7 @@ class SubscriptionService:
             
             # Update grant timestamps
             sub.last_fragment_grant_at = now
-            sub.next_fragment_grant_at = now + relativedelta(months=1)
+            sub.next_fragment_grant_at = now + timedelta(days=30)
             
             granted_count += 1
             logger.info(

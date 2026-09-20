@@ -546,3 +546,146 @@ Engine Dispatcher (backend/app/api/v1/game.py)
 │ + 5 张新表            │                             │ + 文件存储 JSON/JSONL │
 └──────────────────────┘                             └──────────────────────┘
 ```
+
+### CR-038 Additions: Corvus Frontend Entry
+
+#### New Frontend Modules
+
+| Module | Path | Responsibility |
+|--------|------|----------------|
+| PlayerCandidateModal | `frontend/src/components/PlayerCandidateModal.vue` | 角色候选管理 UI：查看列表、创建新候选（name 必填校验）、≤3 限制、选择候选进入游戏 |
+| startGame Corvus 分支 | `frontend/src/stores/game.ts` (改造) | Corvus 剧本走 POST /game/session/create → 选角 Modal → POST /game/session/select-player 流程 |
+| SSE gm_update UI | `frontend/src/stores/game.ts` + `frontend/src/components/StoryPanel.vue` (改造) | SSE gm_update 事件处理：好感度/道具/标记 UI 更新 |
+| resumeSession engine_type | `frontend/src/stores/game.ts` (改造) | 恢复会话时写入 engine_type；旧数据兼容处理（无 engine_type 视为 'legacy'） |
+
+#### Engine Dispatcher (Frontend)
+
+```
+Frontend startGame() Dispatcher (stores/game.ts)
+  ├── engine_type='corvus' → POST /game/session/create → 选角 → POST /game/session/select-player → SSE 对话
+  └── engine_type='legacy' → POST /game/start → 节点式对话 (保留不激活)
+
+Frontend submitChoice/submitCustomInput Dispatcher (stores/game.ts)
+  ├── engine_type='corvus' → SSE 流式分支 (text/done/gm_update/error)
+  └── engine_type='legacy' → POST /game/choice 或 POST /game/custom-input (保留不激活)
+```
+
+#### Legacy 代码保留策略
+
+CR-038 采用**条件分支保留**策略：
+- `submitChoice()` 和 `submitCustomInput()` 中的 `if (isCorvus) { SSE 分支 } else { legacy 分支 }` 原样保留
+- Legacy 分支代码不被删除、不被注释、不被标记
+- C3 约束下所有剧本 `engine_type = 'corvus'`，legacy 分支自然不被执行
+- 未来如需恢复 legacy 引擎，只需将 `engine_type` 改回 `'legacy'`
+
+#### Data Flow: Corvus 前端全链路
+
+```
+用户选择剧本 → startGame()
+  1. loadScripts(): GET /api/v1/scripts → 解析 engine_type='corvus'
+  2. startGame(scriptId): POST /api/v1/game/session/create → 返回 game_session_id
+  3. 选角 Modal 弹出: GET /api/v1/game/player/candidates → 展示候选列表
+  4. 用户选择/创建角色 → POST /api/v1/game/session/select-player
+  5. 页面进入游戏对话界面 → SSE 流式对话
+  6. 用户输入文字 → submitCustomInput() → Corvus SSE 分支
+  7. SSE 事件: text(逐字渲染) → gm_update(好感度/道具) → done(结束) → stream_end(关闭连接)
+  8. resumeSession(): 恢复会话 → 写入 engine_type → 走对应分支
+```
+
+---
+
+## CR-042 Additions: Legacy SSE 流式改造
+
+### Legacy SSE 架构
+
+CR-042 将 Legacy 引擎的三条非流式路径改为 SSE 流式输出，复用 Corvus SSE 基础设施。
+
+#### 新增端点层 SSE 组装函数
+
+| 函数 | 位置 | 用途 |
+|------|------|------|
+| `_stream_legacy_turn()` | `game.py` | Legacy `submit_choice` 推进到 transition/ai_dialog 节点时返回 SSE 流式输出 |
+| `_stream_legacy_custom_input()` | `game.py` | Legacy `submit_custom_input` 改为 SSE 流式输出 |
+| `_run_legacy_deferred()` | `game.py` | Legacy SSE 流后异步 DB 写入（对话历史、好感度、成就、收敛检查） |
+| `_run_legacy_custom_input_deferred()` | `game.py` | Legacy custom_input SSE 流后异步 DB 写入 |
+
+#### 设计决策：端点层组装（ADR-042-01）
+
+SSE 流式逻辑在 `game.py` 端点层组装，不修改 `narrative_engine` 内部方法。与 Corvus 路径的 `_stream_corvus_turn()` 保持架构一致。
+
+#### Legacy submit_choice 条件 SSE 分支
+
+```
+submit_choice()
+  ├── Corvus 分支 → _stream_corvus_turn() (不变)
+  └── Legacy 分支
+       1. process_choice() 推进节点、扣 quota、存对话历史
+       2. 检查 next_node.node_type:
+          ├── preset/choice → 保持 JSON 响应 (AC-002)
+          └── transition/ai_dialog → _stream_legacy_turn() 返回 SSE (AC-001)
+```
+
+#### Legacy submit_custom_input SSE 分支
+
+```
+submit_custom_input()
+  ├── Corvus 分支 → _stream_corvus_turn() (不变)
+  └── Legacy 分支 → _stream_legacy_custom_input() 返回 SSE (使用 llm_gateway.stream_dialogue())
+```
+
+#### model_router stream_with_fallback() 降级策略
+
+```
+stream_with_fallback(scenario, messages, **kwargs) → AsyncGenerator[str, None]
+  1. 主模型 stream_complete() → 逐 token yield
+  2. 主模型失败 → 切换 fallback 链下一个模型
+  3. 所有模型失败 → 一次性 yield 场景特定友好提示文本
+```
+
+#### 前端 useSSEStream() composable 复用模式
+
+```
+useSSEStream(options, callbacks) → { start, abort, isStreaming }
+  ├── submitChoice() Legacy 分支 → 检测 Content-Type: text/event-stream → useSSEStream
+  ├── submitChoice() Corvus 分支 → useSSEStream (with onGmUpdate callback)
+  ├── submitCustomInput() Legacy 分支 → useSSEStream
+  ├── submitCustomInput() Corvus 分支 → useSSEStream (with onGmUpdate callback)
+  └── FreeChatView.vue → useSSEStream (/free-chat/stream 端点)
+```
+
+#### Legacy done 事件一次性推送元数据（ADR-042-02）
+
+Legacy 路径不使用 `gm_update` 事件。所有元数据（好感度变化、下一节点选项）通过 `done` 事件一次性推送。前端在 `onDone` callback 中直接更新 `currentSession.current_node_id` 和 `pendingChoices`，不需要 `fetchDialogue()` 二次请求。
+
+---
+
+## CR-043 Additions: 订阅权益区分与 CG 画廊权限控制
+
+### 权限检查模块依赖
+
+CR-043 在现有 API 端点层增加订阅权益强制检查逻辑，不新增模块或服务。
+
+```
+GalleryAPI (gallery.py)
+  └── SubscriptionService.get_user_tier() → 计算 is_accessible
+
+GameAPI (game.py)
+  └── SubscriptionService.get_user_tier() → 检查 script_access
+  └── _compute_script_accessible(tier, script) → 运行时判定
+
+ScriptsAPI (scripts.py)
+  └── SubscriptionService.get_user_tier() → 计算 is_accessible
+  └── _compute_script_accessible(tier, script) → 运行时判定
+
+SettingsAPI (settings.py)
+  └── SubscriptionService.get_user_tier() → 统一 tier 数据源
+  └── SubscriptionService.get_user_subscription() → status/expires_at
+```
+
+### 权限检查设计
+
+- 权限检查放在 API 端点层（ADR-043-01），不新增中间件
+- `is_accessible` 字段由后端基于 `SubscriptionService.get_user_tier()` 计算，前端不可篡改
+- `script_access` 三档映射采用运行时虚拟判定（ADR-043-02），不修改数据库表结构
+- 403 权限拒绝记录审计日志（user_id, script_id, tier, timestamp）
+- 前端以后端 API 返回的 `is_accessible` 为权威值，不硬编码 tier→permissions 映射

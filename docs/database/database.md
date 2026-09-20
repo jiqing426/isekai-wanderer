@@ -663,3 +663,64 @@ ALTER TABLE character_memories ALTER COLUMN embedding TYPE vector(512);
 | `inventory_items` | CorvusAdapter.sync_world_state (道具同步) | No mock; real DB | `docs/runtime/runtime-contract.md` |
 | `story_flags` | CorvusAdapter.sync_world_state (标记同步) | No mock; real DB | `docs/runtime/runtime-contract.md` |
 | `character_memories` (modified) | CorvusAdapter.write_memory / recall_and_inject, EmbeddingService.recall | No mock; real pgvector 512维 | `docs/runtime/runtime-contract.md` |
+
+---
+
+## CR-038 Additions: Corvus Frontend Entry
+
+### Not Required: 无新增表或列变更
+
+CR-038 不涉及数据库表结构变更：
+- `player_candidates` 表已在 CR-037 创建，本 CR 新增 POST /game/player/candidates 端点向其写入数据
+- `corvus_game_sessions` 表已有 `engine_type` 字段（CR-037 创建时即包含）
+- `GET /scripts` 返回的 `engine_type` 字段为运行时虚拟字段，不持久化到 `scripts` 表
+- `scripts` 表不加 `engine_type` 列（C3 约束下所有剧本统一为 'corvus'，无需数据库级别区分）
+
+### CR-038 Database / API / Mock / Runtime Relationships
+
+| Table | API Consumer | Mock | Runtime |
+|-------|-------------|------|----------|
+| `player_candidates` (CR-037 已建) | GET /api/v1/game/player/candidates, **POST /api/v1/game/player/candidates (CR-038 新增)**, POST /api/v1/game/session/select-player | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `corvus_game_sessions` (CR-037 已建) | POST /api/v1/game/session/create, POST /api/v1/game/session/select-player | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `scripts` (无表结构变更) | GET /api/v1/scripts, GET /api/v1/scripts/{id} (返回虚拟 engine_type) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+
+---
+
+## CR-042 Additions: Legacy SSE 流式改造
+
+### Not Required: 无新增表或列变更
+
+CR-042 不涉及数据库表结构变更：
+- Legacy SSE 流式输出的对话历史写入复用现有 `DialogueHistory` 表
+- 好感度更新复用现有 `Affection` 表
+- free_chat 消息保存复用现有 `FreeChatSession` 表
+- Deferred DB 写入使用 `async_session_factory()` 创建独立 session，不影响现有表结构
+- `model_router.stream_with_fallback()` 不涉及 DB 操作
+
+### CR-042 Database / API / Mock / Runtime Relationships
+
+| Table | API Consumer | Mock | Runtime |
+|-------|-------------|------|----------|
+| `DialogueHistory` (existing) | POST /api/v1/game/{id}/choice (Legacy SSE deferred write), POST /api/v1/game/{id}/custom-input (Legacy SSE deferred write) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `Affection` (existing) | POST /api/v1/game/{id}/choice (Legacy SSE deferred affection update), POST /api/v1/game/{id}/custom-input (Legacy SSE deferred), POST /api/v1/game/{id}/free-chat/stream (deferred) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `FreeChatSession` (existing) | POST /api/v1/game/{id}/free-chat/stream (deferred message save) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+
+---
+
+## CR-043 Additions: 订阅权益区分与 CG 画廊权限控制
+
+### Not Required: 无新增表或列变更
+
+CR-043 不涉及数据库表结构变更：
+- `is_accessible` 字段为运行时计算字段，不持久化到数据库
+- `script_access` 三档映射采用运行时虚拟判定（ADR-043-02），不修改 `scripts` 表
+- `member-info` 数据源修复只改变后端读取逻辑，不修改表结构
+- 试用剧本范围通过 `genre` + `hot_value` 运行时判定，不新增 `is_trial` 字段
+
+### CR-043 Database / API / Mock / Runtime Relationships
+
+| Table | API Consumer | Mock | Runtime |
+|-------|-------------|------|----------|
+| `unlocked_cgs` (existing) | GET /api/v1/gallery/collections/{script_id} (is_accessible 计算) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `subscriptions` (existing) | GET /api/v1/users/me/member-info (tier/status/expires_at 数据源修复) | No mock; real DB | `docs/runtime/runtime-contract.md` |
+| `users.subscription_tier` (existing) | SubscriptionService.get_user_tier() (统一 tier 数据源) | No mock; real DB | `docs/runtime/runtime-contract.md` |

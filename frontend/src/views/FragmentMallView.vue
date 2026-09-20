@@ -197,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMessage, NSpin, NEmpty, NButton, NModal, NSelect, NPagination } from 'naive-ui';
 import { getMyAsset, getShopGoods, exchangeGoods, getFragmentTransactions } from '@/api/fragment';

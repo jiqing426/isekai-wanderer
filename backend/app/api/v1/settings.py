@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.models.login_device import LoginDevice
 from app.models.payment import Fragment, FragmentTransaction
+from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/users/me", tags=["settings"])
 
@@ -261,9 +262,20 @@ async def get_member_info(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get member info with fragment balance and recent bills."""
-    # Get user
-    stmt = select(User).where(User.id == UUID(user_id))
+    """Get member info with fragment balance and recent bills.
+    
+    CR-043 AC-018: tier from SubscriptionService.get_user_tier(), status/expires_at from Subscription table.
+    CR-043 AC-019: tier data source consistent with subscription/status API (both use SubscriptionService).
+    """
+    user_uuid = UUID(user_id)
+    
+    # CR-043: Use SubscriptionService as unified data source for tier
+    sub_service = SubscriptionService(db)
+    tier = await sub_service.get_user_tier(user_uuid)
+    subscription = await sub_service.get_user_subscription(user_uuid)
+    
+    # Get user (for fragment balance and other fields)
+    stmt = select(User).where(User.id == user_uuid)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     
@@ -275,7 +287,7 @@ async def get_member_info(
         )
     
     # Get fragment balance
-    stmt = select(Fragment).where(Fragment.user_id == UUID(user_id))
+    stmt = select(Fragment).where(Fragment.user_id == user_uuid)
     result = await db.execute(stmt)
     fragment = result.scalar_one_or_none()
     fragment_balance = fragment.balance if fragment else 0
@@ -283,7 +295,7 @@ async def get_member_info(
     # Get recent bills (last 5 transactions)
     stmt = (
         select(FragmentTransaction)
-        .where(FragmentTransaction.user_id == UUID(user_id))
+        .where(FragmentTransaction.user_id == user_uuid)
         .order_by(FragmentTransaction.created_at.desc())
         .limit(5)
     )
@@ -304,32 +316,29 @@ async def get_member_info(
         'achievement_reward': '成就奖励',
     }
     
-    # Determine member status
-    now = datetime.now(timezone.utc)
-    member_status = "inactive"
-    if user.subscription_tier == "free":
-        member_status = "inactive"
-    elif user.trial_started_at and user.trial_ends_at:
-        if now < user.trial_ends_at:
-            member_status = "trialing"
-        else:
-            member_status = "inactive"
+    # CR-043: member status and dates from Subscription table
+    if subscription:
+        member_status = "active" if subscription.status == "active" else "inactive"
+        expires_at = subscription.expires_at.isoformat() if subscription.expires_at else None
+        member_since = subscription.started_at.isoformat() if subscription.started_at else None
     else:
-        member_status = "active"
+        member_status = "inactive"
+        expires_at = None
+        member_since = None
     
-    # Benefits based on tier
+    # Benefits based on tier (from SubscriptionService, not User table)
     benefits = []
-    if user.subscription_tier == "standard":
+    if tier == "standard":
         benefits = ["free_chat_enabled", "full_memory_access", "exclusive_cg"]
-    elif user.subscription_tier == "premium":
+    elif tier == "premium":
         benefits = ["free_chat_enabled", "full_memory_access", "exclusive_cg", "priority_support", "custom_avatar"]
     
     return {
-        "tier": user.subscription_tier,
-        "status": member_status,
-        "member_since": user.trial_started_at.isoformat() if user.trial_started_at else None,
-        "expires_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
-        "auto_renew": False,  # Not tracked yet
+        "tier": tier,  # CR-043: from SubscriptionService
+        "status": member_status,  # CR-043: from Subscription table
+        "member_since": member_since,  # CR-043: from Subscription.started_at
+        "expires_at": expires_at,  # CR-043: from Subscription.expires_at
+        "auto_renew": False,
         "fragment_balance": fragment_balance,
         "benefits": benefits,
         "recent_bills": [

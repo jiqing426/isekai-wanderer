@@ -108,6 +108,7 @@ import { useMessage } from 'naive-ui';
 import { useI18n } from 'vue-i18n';
 import { gameApi, type FreeChatMessage, type FreeChatTopic } from '@/api/game';
 import { useAffectionStore } from '@/stores/affection';
+import { useSSEStream } from '@/composables/useSSEStream';
 import CharacterInfo from '@/components/CharacterInfo.vue';
 import AffectionDisplay from '@/components/AffectionDisplay.vue';
 
@@ -234,15 +235,54 @@ async function sendMessage() {
   await scrollToBottom();
 
   loading.value = true;
+
+  // CR-042 AC-016: Use SSE streaming endpoint instead of sync JSON
+  const streamConfig = gameApi.getFreeChatStreamConfig(sessionId, content);
+  const { start } = useSSEStream(
+    {
+      url: streamConfig.url,
+      method: streamConfig.method,
+      body: streamConfig.body,
+    },
+    {
+      onText: (chunk) => {
+        // Add or update assistant message with streaming text
+        const lastMsg = messages.value[messages.value.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          lastMsg.content += chunk;
+        } else {
+          messages.value.push({
+            role: 'assistant',
+            content: chunk,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        scrollToBottom();
+      },
+      onDone: () => {
+        // Stream complete — affection refresh below
+      },
+      onError: (msg) => {
+        message.error(t('freeChat.sendFailed') + ': ' + msg);
+      },
+      onEmotion: () => {},
+      onAffectionUpdate: (data) => {
+        if (data.value !== undefined) {
+          affectionValue.value = data.value;
+        }
+      },
+    }
+  );
+
+  await start();
+
+  // Refresh affection value after each message
   try {
-    const resp = await gameApi.sendFreeChatMessage(sessionId, content, currentTopicId.value);
-    messages.value.push({ role: 'assistant', content: resp.reply, timestamp: new Date().toISOString() });
-    await scrollToBottom();
-  } catch (err) {
-    message.error(t('freeChat.sendFailed'));
-  } finally {
-    loading.value = false;
-  }
+    const status = await gameApi.getGameStatus(sessionId);
+    affectionValue.value = status.affection_value ?? 0;
+  } catch {}
+
+  loading.value = false;
 }
 
 async function scrollToBottom() {
@@ -263,7 +303,7 @@ onMounted(async () => {
     characterName.value = queryCharacterName || status.character_name || t('freeChat.defaultCharacter');
     characterTitle.value = (status as any).character_title || '';
     scriptName.value = status.script_name || (route.query.scriptName as string) || '未知剧本';
-    affectionValue.value = status.affection_value || 0;
+    affectionValue.value = status.affection_value ?? 0;
   } catch {
     characterName.value = queryCharacterName || t('freeChat.defaultCharacter');
     characterTitle.value = '';

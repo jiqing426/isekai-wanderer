@@ -36,7 +36,6 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
 
 interface SubRoute {
   id: string;
@@ -59,7 +58,7 @@ interface Chapter {
   subRoutes?: SubRoute[];
 }
 
-const props = defineProps<{
+defineProps<{
   chapters: Chapter[];
 }>();
 
@@ -67,7 +66,6 @@ const emit = defineEmits<{
   (e: 'chapter-click', chapter: Chapter): void;
 }>();
 
-const router = useRouter();
 
 function handleChapterClick(chapter: Chapter) {
   if (chapter.isLocked) {

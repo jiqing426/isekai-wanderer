@@ -288,8 +288,8 @@
           <div class="member-card">
             <div class="member-header">
               <div class="member-tier">
-                <span class="tier-icon">{{ getTierIcon(memberInfo?.tier) }}</span>
-                <span class="tier-name">{{ getTierName(memberInfo?.tier) }}</span>
+                <span class="tier-icon">{{ getTierIcon(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
+                <span class="tier-name">{{ getTierName(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
               </div>
               <span class="member-status" :class="memberInfo?.status">
                 {{ getStatusText(memberInfo?.status) }}
@@ -394,6 +394,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useSubscriptionStore } from '@/stores/subscription';
+import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useMessage } from 'naive-ui';
@@ -477,6 +479,9 @@ const devices = ref<LoginDevice[]>([]);
 const loggingOutDevice = ref<string | null>(null);
 
 // 会员信息
+const subscriptionStore = useSubscriptionStore();
+// authStore for subscription_tier display (may be more recent than memberInfo)
+const authStore = useAuthStore();
 const memberInfo = ref<MemberInfo | null>(null);
 
 // 修改密码
@@ -686,8 +691,9 @@ function formatDate(dateStr: string): string {
 function getTierIcon(tier?: string): string {
   const icons: Record<string, string> = {
     free: '🆓',
-    standard: '⭐',
-    premium: '💎',
+    basic: '⭐',
+    standard: '💎',
+    premium: '👑',
   };
   return icons[tier || 'free'] || '🆓';
 }
@@ -695,6 +701,7 @@ function getTierIcon(tier?: string): string {
 function getTierName(tier?: string): string {
   const names: Record<string, string> = {
     free: '免费版',
+    basic: '基础版',
     standard: '标准版',
     premium: '高级版',
   };
@@ -728,6 +735,8 @@ onMounted(() => {
   loadNotifySettings();
   loadDevices();
   loadMemberInfo();
+  // CR-043 FIX: 刷新订阅状态，确保 tier 是最新值
+  subscriptionStore.fetchSubscriptionStatus();
 });
 </script>
 

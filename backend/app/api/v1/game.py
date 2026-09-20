@@ -1,5 +1,6 @@
 """Game session API endpoints including SSE streaming dialogue."""
 
+import json
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -9,9 +10,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.exceptions import AppException
+from app.core.exceptions import AppException, ErrorCode
 from app.services.narrative import NarrativeEngine
 from app.services.narrative.script_service import ScriptService
+from app.services.subscription_service import SubscriptionService
 from app.api.v1.auth import get_current_user_id
 from app.models.game import GameSession, GameProgress
 from app.models.script import Script, Route, Node, NodeChoice, Character
@@ -151,6 +153,407 @@ def _stream_corvus_turn(
     )
 
 
+# ---- CR-043 Script access permission helpers ----
+
+def _compute_script_accessible(script_access: str, script) -> bool:
+    """CR-043 AC-005~008: Compute whether a script is accessible based on user's tier.
+    
+    Mapping (ADR-042-02):
+    - trial_only (free): genre == 'romance' AND hot_value >= 50
+    - all_normal (basic/standard): all scripts (no exclusive scripts currently exist)
+    - all_including_exclusive (premium): all scripts
+    """
+    if script_access == "all_including_exclusive":
+        return True
+    if script_access == "all_normal":
+        return True  # Currently no exclusive scripts; future: AND NOT script.is_exclusive
+    if script_access == "trial_only":
+        genre = getattr(script, 'genre', None) or ''
+        hot_value = getattr(script, 'hot_value', None) or 0
+        return genre == 'romance' and hot_value >= 50
+    return False  # Unknown access level — safe deny
+
+
+# ---- CR-042 Legacy SSE streaming helpers ----
+
+import json as _json
+import logging as _logging
+
+_legacy_log = _logging.getLogger(__name__)
+
+
+def _stream_legacy_turn(
+    session_uuid: UUID,
+    user_uuid: UUID,
+    choice_result: dict,
+    next_node: Node,
+    db: AsyncSession,
+) -> StreamingResponse:
+    """CR-042 AC-001: Stream a Legacy engine turn via SSE for transition/ai_dialog nodes.
+
+    Calls llm_gateway.stream_dialogue() to get tokens and wraps them as SSE events.
+    DB writes happen in a deferred task after the stream completes.
+    """
+    from app.services.llm.gateway import llm_gateway
+    import asyncio
+
+    # Pre-extract node data to avoid DB access inside the async generator (greenlet safe)
+    _node_id_str = str(next_node.id) if next_node else None
+    _node_content = dict(next_node.content) if next_node and next_node.content else {}
+    _node_choices = _node_content.get('choices', []) if _node_content else []
+
+    deferred_data = {
+        "session_id": session_uuid,
+        "user_id": user_uuid,
+        "choice_result": choice_result,
+        "next_node_id": next_node.id if next_node else None,
+        "text_chunks": [],
+        "char_id": None,
+        "char_name": None,
+    }
+
+    async def event_generator():
+        try:
+            # Get character info — use db execute which is safe in this context
+            character = await _get_node_character(next_node, db)
+            if character:
+                deferred_data["char_id"] = character.id
+                deferred_data["char_name"] = character.name
+                # Push emotion event
+                yield f'data: {_json.dumps({"type":"emotion","emotion":"neutral","character_id":str(character.id)})}\n\n'
+
+            # Stream dialogue tokens
+            if character:
+                # Get conversation history — use try/except for test env safety
+                try:
+                    conv_history = await _get_conversation_history(db, session_uuid, limit=5)
+                except Exception:
+                    conv_history = []
+
+                async for chunk in llm_gateway.stream_dialogue(
+                    character_name=character.name,
+                    character_personality=str(character.personality or ""),
+                    context=_node_content.get("context", ""),
+                    user_input=choice_result.get("choice_text", ""),
+                    conversation_history=conv_history,
+                ):
+                    deferred_data["text_chunks"].append(chunk)
+                    yield f'data: {_json.dumps({"type":"text","content":chunk})}\n\n'
+            else:
+                # No character — use narrator text from pre-extracted content
+                narrator_text = _node_content.get("text", "")
+                if narrator_text:
+                    # Yield narrator text as a single chunk
+                    deferred_data["text_chunks"].append(narrator_text)
+                    yield f'data: {_json.dumps({"type":"text","content":narrator_text})}\n\n'
+
+            # Done event with metadata
+            done_payload = {
+                "type": "done",
+                "session_id": str(session_uuid),
+                "node_id": _node_id_str,
+            }
+            # Add affection_change if present
+            if choice_result.get("affection_change"):
+                done_payload["affection_change"] = choice_result["affection_change"]
+            # Add choices if available (pre-extracted to avoid lazy-loading)
+            if _node_choices:
+                done_payload["choices"] = _node_choices
+
+            yield f'data: {_json.dumps(done_payload, default=str)}\n\n'
+
+        except Exception as e:
+            _legacy_log.error(f"[Legacy SSE choice] Error: {e}", exc_info=True)
+            yield f'data: {_json.dumps({"type":"error","message":str(e)})}\n\n'
+        finally:
+            # Deferred DB write — happens after stream completes
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(_run_legacy_deferred(deferred_data))
+            except Exception as e:
+                _legacy_log.error(f"[Legacy SSE choice] Failed to schedule deferred: {e}", exc_info=True)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def _get_node_character(node: Node, db: AsyncSession) -> Optional[Character]:
+    """Get the character associated with a node (via route → script → main character)."""
+    try:
+        # Get route to find script_id
+        route_stmt = select(Route).where(Route.id == node.route_id)
+        route_result = await db.execute(route_stmt)
+        route = route_result.scalar_one_or_none()
+        if not route:
+            return None
+
+        # Find main character for this script
+        char_stmt = (
+            select(Character)
+            .where(
+                Character.script_id == route.script_id,
+                Character.is_main == True,
+            )
+            .limit(1)
+        )
+        char_result = await db.execute(char_stmt)
+        return char_result.scalar_one_or_none()
+    except Exception as e:
+        _legacy_log.warning(f"[_get_node_character] Error: {e}")
+        return None
+
+
+async def _get_conversation_history(db: AsyncSession, session_uuid: UUID, limit: int = 5) -> list:
+    """Get recent conversation history for context."""
+    try:
+        from app.models.game import DialogueHistory
+        stmt = (
+            select(DialogueHistory)
+            .where(DialogueHistory.session_id == session_uuid)
+            .order_by(DialogueHistory.created_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+        # Return in chronological order (reversed)
+        messages = list(reversed(messages))
+        return [
+            {"role": m.role, "content": m.content}
+            for m in messages
+        ]
+    except Exception as e:
+        _legacy_log.warning(f"[_get_conversation_history] Error: {e}")
+        return []
+
+
+def _format_legacy_choices(choices) -> list:
+    """Format node choices for SSE done event."""
+    formatted = []
+    if isinstance(choices, list):
+        for c in choices:
+            if isinstance(c, dict):
+                formatted.append(c)
+            elif hasattr(c, 'id') and hasattr(c, 'text'):
+                formatted.append({"id": str(c.id), "text": c.text})
+    return formatted
+
+
+async def _run_legacy_deferred(data: dict) -> None:
+    """CR-042 AC-004: Deferred DB write after Legacy SSE stream completes.
+
+    Writes dialogue history, affection updates, and achievement checks
+    in an independent DB session so it doesn't block the SSE stream.
+    """
+    from app.core.database import async_session_factory
+    from app.models.game import DialogueHistory
+
+    try:
+        async with async_session_factory() as db:
+            session_uuid = data["session_id"]
+            user_uuid = data["user_id"]
+            char_id = data.get("char_id")
+            char_name = data.get("char_name")
+            text_chunks = data.get("text_chunks", [])
+            choice_result = data.get("choice_result", {})
+
+            # Write user choice as dialogue history
+            choice_text = choice_result.get("choice_text", "")
+            if choice_text:
+                db.add(DialogueHistory(
+                    session_id=session_uuid,
+                    user_id=user_uuid,
+                    role="user",
+                    content=choice_text,
+                    character_id=char_id,
+                    character_name=char_name,
+                ))
+
+            # Write assistant response
+            full_text = "".join(text_chunks)
+            if full_text:
+                db.add(DialogueHistory(
+                    session_id=session_uuid,
+                    user_id=user_uuid,
+                    role="assistant",
+                    content=full_text,
+                    character_id=char_id,
+                    character_name=char_name,
+                ))
+
+            # Update affection if change is present
+            affection_change = choice_result.get("affection_change")
+            if affection_change and char_id:
+                try:
+                    from app.services.narrative.affection_service import AffectionService
+                    affection_svc = AffectionService(db)
+                    value = affection_change.get("value", 0)
+                    if value:
+                        await affection_svc.update_affection(
+                            user_id=user_uuid,
+                            character_id=char_id,
+                            change=value,
+                        )
+                except Exception as e:
+                    _legacy_log.warning(f"[Deferred] Affection update failed: {e}")
+
+            # Update session current_node_id
+            next_node_id = data.get("next_node_id")
+            if next_node_id:
+                session_stmt = select(GameSession).where(GameSession.id == session_uuid)
+                session_result = await db.execute(session_stmt)
+                game_session = session_result.scalar_one_or_none()
+                if game_session:
+                    game_session.current_node_id = next_node_id
+
+            await db.commit()
+            _legacy_log.info(f"[Deferred] Legacy choice DB write done for session {session_uuid}")
+
+    except Exception as e:
+        _legacy_log.error(f"[Deferred] Legacy choice failed: {e}", exc_info=True)
+
+
+def _stream_legacy_custom_input(
+    session_uuid: UUID,
+    user_uuid: UUID,
+    user_text: str,
+    node: Node,
+    character: Optional[Character],
+    db: AsyncSession,
+) -> StreamingResponse:
+    """CR-042 AC-006: Stream Legacy custom input response via SSE.
+
+    Uses llm_gateway.stream_dialogue() instead of _generate_custom_response().
+    DB writes happen in a deferred task after the stream completes.
+    """
+    from app.services.llm.gateway import llm_gateway
+    import asyncio
+
+    deferred_data = {
+        "session_id": session_uuid,
+        "user_id": user_uuid,
+        "user_text": user_text,
+        "node_id": node.id if node else None,
+        "text_chunks": [],
+        "char_id": character.id if character else None,
+        "char_name": character.name if character else None,
+    }
+
+    async def event_generator():
+        try:
+            if character:
+                # Push emotion event
+                yield f'data: {_json.dumps({"type":"emotion","emotion":"neutral","character_id":str(character.id)})}\n\n'
+
+                # Get conversation history
+                conv_history = await _get_conversation_history(db, session_uuid, limit=5)
+
+                # AC-007: Use stream_dialogue() instead of _generate_custom_response()
+                async for chunk in llm_gateway.stream_dialogue(
+                    character_name=character.name,
+                    character_personality=str(character.personality or ""),
+                    context=str(node.content.get("context", "")) if node and node.content else "",
+                    user_input=user_text,
+                    conversation_history=conv_history,
+                ):
+                    deferred_data["text_chunks"].append(chunk)
+                    yield f'data: {_json.dumps({"type":"text","content":chunk})}\n\n'
+            else:
+                # No character — use narrator stream via provider
+                from app.services.llm.gateway import LLMMessage
+                messages = [
+                    LLMMessage(role="system", content="You are a narrator in an interactive story."),
+                    LLMMessage(role="user", content=user_text),
+                ]
+                async for chunk in llm_gateway.provider.stream_complete(
+                    messages, temperature=0.7, max_tokens=500
+                ):
+                    deferred_data["text_chunks"].append(chunk)
+                    yield f'data: {_json.dumps({"type":"text","content":chunk})}\n\n'
+
+            # Done event
+            done_payload = {
+                "type": "done",
+                "session_id": str(session_uuid),
+                "node_id": str(node.id) if node else None,
+            }
+            yield f'data: {_json.dumps(done_payload, default=str)}\n\n'
+
+        except Exception as e:
+            _legacy_log.error(f"[Legacy SSE custom-input] Error: {e}", exc_info=True)
+            yield f'data: {_json.dumps({"type":"error","message":str(e)})}\n\n'
+        finally:
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(_run_legacy_custom_input_deferred(deferred_data))
+            except Exception as e:
+                _legacy_log.error(f"[Legacy SSE custom-input] Failed to schedule deferred: {e}", exc_info=True)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def _run_legacy_custom_input_deferred(data: dict) -> None:
+    """CR-042 AC-009: Deferred DB write after Legacy custom-input SSE stream.
+
+    Writes user message and assistant response to DialogueHistory,
+    and updates affection if applicable.
+    """
+    from app.core.database import async_session_factory
+    from app.models.game import DialogueHistory
+
+    try:
+        async with async_session_factory() as db:
+            session_uuid = data["session_id"]
+            user_uuid = data["user_id"]
+            user_text = data.get("user_text", "")
+            text_chunks = data.get("text_chunks", [])
+            char_id = data.get("char_id")
+            char_name = data.get("char_name")
+
+            # Write user message
+            if user_text:
+                db.add(DialogueHistory(
+                    session_id=session_uuid,
+                    user_id=user_uuid,
+                    role="user",
+                    content=user_text,
+                    character_id=char_id,
+                    character_name=char_name,
+                ))
+
+            # Write assistant response
+            full_text = "".join(text_chunks)
+            if full_text:
+                db.add(DialogueHistory(
+                    session_id=session_uuid,
+                    user_id=user_uuid,
+                    role="assistant",
+                    content=full_text,
+                    character_id=char_id,
+                    character_name=char_name,
+                ))
+
+            await db.commit()
+            _legacy_log.info(f"[Deferred] Legacy custom-input DB write done for session {session_uuid}")
+
+    except Exception as e:
+        _legacy_log.error(f"[Deferred] Legacy custom-input failed: {e}", exc_info=True)
+
+
 async def _get_corvus_dialogue(corvus_session, user_id: str):
     """CR-037 DEV-007: Get dialogue for a Corvus session (non-streaming).
     
@@ -241,6 +644,30 @@ async def start_game(
         raise AppException("INVALID_SCRIPT_ID", 400, f"Invalid script_id: {request.script_id}")
     
     script_service = ScriptService(db)
+    
+    # CR-043 AC-005/AC-015: Check script_access permission before starting game
+    sub_service = SubscriptionService(db)
+    user_tier = await sub_service.get_user_tier(UUID(user_id))
+    user_perms = await sub_service.get_tier_permissions(user_tier)
+    script_access = user_perms.script_access
+    
+    # Get script to check accessibility
+    script_stmt = select(Script).where(Script.id == script_uuid)
+    script_result = await db.execute(script_stmt)
+    script_obj = script_result.scalar_one_or_none()
+    
+    if not script_obj:
+        raise AppException("SCRIPT_NOT_FOUND", 404, f"Script {request.script_id} not found")
+    
+    if not _compute_script_accessible(script_access, script_obj):
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[SCRIPT_ACCESS_DENIED] user={user_id}, script={script_uuid}, tier={user_tier}, access={script_access}"
+        )
+        raise AppException(
+            "SCRIPT_ACCESS_DENIED", 403,
+            "当前订阅等级无法游玩此剧本，请升级订阅"
+        )
     
     # CR-028: Handle character_id for role-playing
     character_id = None
@@ -399,9 +826,27 @@ async def start_game(
 
 
 async def _verify_session_ownership(session_id: UUID, user_id: str, db: AsyncSession) -> None:
-    """CRIT-003 fix: Verify current user owns the game session."""
+    """CRIT-003 fix: Verify current user owns the game session.
+
+    CR-039 D8: Also checks CorvusGameSession table for Corvus engine sessions.
+    """
     from app.models.game import GameSession
-    
+    from app.models.corvus import CorvusGameSession
+
+    # First check CorvusGameSession (Corvus engine sessions)
+    corvus_stmt = select(CorvusGameSession).where(
+        CorvusGameSession.id == session_id
+    )
+    corvus_result = await db.execute(corvus_stmt)
+    corvus_session = corvus_result.scalar_one_or_none()
+
+    if corvus_session:
+        # Corvus session found — verify ownership
+        if str(corvus_session.user_id) != user_id:
+            raise AppException("SESSION_FORBIDDEN", 403, "Access denied: you do not own this session")
+        return
+
+    # Fallback: check Legacy GameSession table
     stmt = select(GameSession).where(GameSession.id == session_id)
     result = await db.execute(stmt)
     session = result.scalar_one_or_none()
@@ -419,7 +864,42 @@ async def get_game_session(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get current game session state."""
+    """Get current game session state.
+    
+    CR-038 BUG-038-005: Check both GameSession (legacy) and CorvusGameSession tables.
+    """
+    # CR-038: First check if this is a Corvus engine session
+    from app.models.corvus import CorvusGameSession
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session and corvus_session.engine_type == "corvus":
+            # Verify ownership
+            if corvus_session.user_id != UUID(user_id):
+                raise AppException("AUTH_FORBIDDEN", 403, "Not your session")
+            
+            return {
+                "session_id": str(corvus_session.id),
+                "script_id": None,
+                "character_id": None,
+                "character_name": None,
+                "route_id": None,
+                "status": corvus_session.status,
+                "current_node_id": None,
+                "current_node": None,
+                "is_ended": corvus_session.status == "completed",
+                "ending_type": None,
+                "engine_type": "corvus",
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
+    
+    # Legacy session path
     # CRIT-003: verify ownership
     await _verify_session_ownership(UUID(session_id), user_id, db)
     
@@ -450,6 +930,7 @@ async def get_game_session(
         "current_node": current_node_data,  # BUG-022: 添加完整节点信息
         "is_ended": state["is_ended"],
         "ending_type": session.ending_type,
+        "engine_type": "legacy",
     }
 
 
@@ -733,7 +1214,26 @@ async def submit_choice(
         choice_id=UUID(request.choice_id),
     )
     
-    # CR-021: 存储对话历史（用户选择 + 角色回复）
+    # CR-042 AC-001: Check next node type — transition/ai_dialog → SSE, preset/choice → JSON
+    if result.get("next_node_id"):
+        _next_node_stmt = select(Node).where(Node.id == UUID(result["next_node_id"]))
+        _next_node_res = await db.execute(_next_node_stmt)
+        _next_node = _next_node_res.scalar_one_or_none()
+        if _next_node and _next_node.node_type in ("transition", "ai_dialog"):
+            # AC-001: Return SSE streaming response for transition/ai_dialog nodes
+            return _stream_legacy_turn(
+                session_uuid=UUID(session_id),
+                user_uuid=UUID(user_id),
+                choice_result={
+                    **result,
+                    "choice_text": _choice_text,
+                },
+                next_node=_next_node,
+                db=db,
+            )
+    
+    # AC-002: preset/choice node — keep JSON response (fall through)
+    
     try:
         _next_text = ""
         if result.get("next_node_id"):
@@ -992,12 +1492,138 @@ async def free_chat(
 ):
     """
     CR-002 AC-058: Free-form conversation endpoint.
+    
+    CR-042 AC-015: This endpoint is deprecated. Use POST /game/{id}/free-chat/stream instead.
+    Behavior is unchanged — still returns synchronous JSON. Deprecation header added.
 
     Accepts a user message and returns a contextual AI response with emotion tag.
+    CR-039 D8: Support Corvus engine sessions (CorvusGameSession table).
     """
     from app.services.free_chat_service import get_free_chat_service
     from app.models.game import GameSession
+    from app.models.corvus import CorvusGameSession
 
+    # CR-039 D8: Check if this is a Corvus engine session first
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+
+        if corvus_session and corvus_session.engine_type == "corvus":
+            # Verify ownership
+            if str(corvus_session.user_id) != user_id:
+                raise AppException("SESSION_FORBIDDEN", 403, "Access denied: you do not own this session")
+            if corvus_session.status != "playing":
+                raise AppException("SESSION_INVALID_STATUS", 400, f"Session status is '{corvus_session.status}', expected 'playing'")
+
+            # Get character_id from CorvusGameSession (D6 field)
+            character_id = str(corvus_session.character_id) if corvus_session.character_id else None
+
+            if not character_id:
+                # Fallback: get first playable character
+                from app.models.script import Character
+                char_stmt = select(Character).where(Character.playable == True).limit(1)
+                char_result = await db.execute(char_stmt)
+                fallback_char = char_result.scalar_one_or_none()
+                if fallback_char:
+                    character_id = str(fallback_char.id)
+                else:
+                    character_id = "default"
+
+            # For Corvus sessions, use the session's character as script context
+            script_id = None
+            if corvus_session.character_id:
+                from app.models.script import Character
+                char_obj = await db.execute(
+                    select(Character).where(Character.id == corvus_session.character_id)
+                )
+                char_data = char_obj.scalar_one_or_none()
+                if char_data and char_data.script_id:
+                    script_id = str(char_data.script_id)
+
+            svc = get_free_chat_service()
+
+            response = await svc.send_message(
+                db=db,
+                user_id=user_id,
+                character_id=character_id,
+                message=request.message,
+                script_id=script_id,
+                session_id=session_id,
+            )
+
+            if "error" in response:
+                raise AppException("FREE_CHAT_ERROR", 400, response["error"])
+
+            # 更新每日任务进度（对话达人）
+            try:
+                from app.api.v1.daily_tasks import update_progress, ProgressUpdateRequest
+                await update_progress(
+                    request=ProgressUpdateRequest(task_type="task_dialogue", increment=1),
+                    user_id=user_id,
+                    db=db
+                )
+            except Exception as e:
+                import logging
+                logging.debug(f"Daily task progress update skipped: {e}")
+
+            # Achievement trigger logic
+            new_achievements = []
+            try:
+                from app.models.gallery import Achievement
+                from app.api.v1.achievements import ACHIEVEMENT_CATALOG
+
+                dialogue_count_result = await db.execute(
+                    select(func.count()).select_from(GameSession).where(
+                        GameSession.user_id == UUID(user_id)
+                    )
+                )
+                dialogue_count = dialogue_count_result.scalar() or 0
+
+                if dialogue_count >= 1:
+                    ach_001_check = await db.execute(
+                        select(Achievement).where(
+                            Achievement.user_id == UUID(user_id),
+                            Achievement.achievement_id == "ACH-001"
+                        )
+                    )
+                    if not ach_001_check.scalar_one_or_none():
+                        new_ach = Achievement(
+                            user_id=UUID(user_id),
+                            achievement_id="ACH-001",
+                            title=ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                            description=ACHIEVEMENT_CATALOG["ACH-001"]["description"],
+                            icon_url=ACHIEVEMENT_CATALOG["ACH-001"]["icon"],
+                            unlocked_at=datetime.utcnow()
+                        )
+                        db.add(new_ach)
+                        await db.flush()
+                        new_achievements.append({
+                            "id": "ACH-001",
+                            "name": ACHIEVEMENT_CATALOG["ACH-001"]["name"],
+                            "description": ACHIEVEMENT_CATALOG["ACH-001"]["description"]
+                        })
+
+                await db.commit()
+            except Exception as e:
+                import logging
+                logging.error(f"Achievement check failed in free-chat: {e}")
+                await db.rollback()
+
+            return {
+                "session_id": session_id,
+                "reply": response.get("reply", ""),
+                "emotion": response.get("emotion", "neutral"),
+                "character_id": response.get("character_id"),
+                "new_achievements": new_achievements,
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
+
+    # Legacy engine path
     # Verify session ownership
     await _verify_session_ownership(UUID(session_id), user_id, db)
 
@@ -1107,13 +1733,140 @@ async def free_chat(
         logging.error(f"Achievement check failed in free-chat: {e}")
         await db.rollback()
 
-    return {
+    from fastapi import Response as _FastResponse
+    _resp_body = {
         "session_id": session_id,
         "reply": response.get("reply", ""),
         "emotion": response.get("emotion", "neutral"),
         "character_id": response.get("character_id"),
         "new_achievements": new_achievements,
     }
+    # CR-042 AC-015: Add deprecation header to old free-chat endpoint
+    _deprecated_resp = _FastResponse(
+        content=json.dumps(_resp_body, default=str),
+        media_type="application/json",
+        headers={"Deprecation": "true"},
+    )
+    return _deprecated_resp
+
+
+@router.post("/game/{session_id}/free-chat/stream")
+async def free_chat_stream(
+    session_id: str,
+    request: FreeChatRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """CR-042 AC-011: Stream free chat response via SSE.
+
+    New endpoint for CR-042 REQ-003.
+    Old POST /game/{session_id}/free-chat remains for backward compatibility (deprecated).
+    """
+    from app.services.free_chat_service import get_free_chat_service
+    from app.models.game import GameSession
+    from app.models.corvus import CorvusGameSession
+    from app.services.llm.gateway import LLMMessage
+    import asyncio
+    import logging as _fc_log
+    _fc_logger = _fc_log.getLogger(__name__)
+
+    # Verify session ownership
+    await _verify_session_ownership(UUID(session_id), user_id, db)
+
+    # Get game session for character/script info
+    session_result = await db.execute(
+        select(GameSession).where(GameSession.id == UUID(session_id))
+    )
+    game_session = session_result.scalar_one_or_none()
+
+    character_id = None
+    script_id = None
+    if game_session:
+        # Get character
+        if game_session.character_id:
+            character_id = str(game_session.character_id)
+        else:
+            from app.models.script import Character
+            char_stmt = select(Character).where(
+                Character.script_id == game_session.script_id,
+                Character.is_main == True,
+            ).limit(1)
+            char_result = await db.execute(char_stmt)
+            main_char = char_result.scalar_one_or_none()
+            if main_char:
+                character_id = str(main_char.id)
+        script_id = str(game_session.script_id) if game_session.script_id else None
+
+    if not character_id:
+        character_id = "default"
+
+    deferred_data = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "character_id": character_id,
+        "message": request.message,
+        "script_id": script_id,
+        "text_chunks": [],
+    }
+
+    async def event_generator():
+        try:
+            svc = get_free_chat_service()
+            # AC-013: Stream using send_message_stream()
+            async for chunk in svc.send_message_stream(
+                db=db,
+                user_id=user_id,
+                character_id=character_id,
+                message=request.message,
+                script_id=script_id,
+                session_id=session_id,
+            ):
+                deferred_data["text_chunks"].append(chunk)
+                yield f'data: {json.dumps({"type":"text","content":chunk})}\n\n'
+
+            # Done event
+            done_payload = {
+                "type": "done",
+                "session_id": str(session_id),
+            }
+            yield f'data: {json.dumps(done_payload, default=str)}\n\n'
+
+        except Exception as e:
+            _fc_logger.error(f"[Free chat SSE] Error: {e}", exc_info=True)
+            yield f'data: {json.dumps({"type":"error","message":str(e)})}\n\n'
+        finally:
+            # AC-014: Deferred DB write for free-chat stream
+            try:
+                from app.core.database import async_session_factory
+                from app.models.free_chat import FreeChatSession
+                loop = asyncio.get_event_loop()
+
+                async def _deferred_free_chat():
+                    try:
+                        async with async_session_factory() as deferred_db:
+                            svc = get_free_chat_service()
+                            # Save messages using the service
+                            full_text = "".join(deferred_data["text_chunks"])
+                            await svc._save_message(deferred_db, session_id, user_id, "user", request.message)
+                            await svc._save_message(deferred_db, session_id, user_id, "assistant", full_text)
+                            await deferred_db.commit()
+                            _fc_logger.info(f"[Deferred] Free chat DB write done for session {session_id}")
+                    except Exception as de:
+                        _fc_logger.error(f"[Deferred] Free chat failed: {de}", exc_info=True)
+
+                loop.create_task(_deferred_free_chat())
+            except Exception as fe:
+                _fc_logger.error(f"[Free chat SSE] Failed to schedule deferred: {fe}", exc_info=True)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/game/{session_id}/free-chat/topics")
@@ -1141,33 +1894,65 @@ async def get_free_chat_history(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get free chat message history."""
+    """Get free chat message history.
+    
+    CR-039 D8: Support Corvus engine sessions.
+    """
     await _verify_session_ownership(UUID(session_id), user_id, db)
     
-    # 获取 GameSession 以找到对应的角色
-    from app.models.game import GameSession
-    session_result = await db.execute(
-        select(GameSession).where(GameSession.id == UUID(session_id))
-    )
-    game_session = session_result.scalar_one_or_none()
-    
-    if not game_session:
-        return {"messages": []}
-    
-    # CR-036 FIX: 使用 session 中的角色（玩家选择的角色），而非固定查 is_main
-    character_id = str(game_session.character_id) if game_session.character_id else None
-    
-    if not character_id:
-        # fallback: 获取该剧本的主角色
-        from app.models.script import Character
-        char_stmt = select(Character).where(
-            Character.script_id == game_session.script_id,
-            Character.is_main == True
-        ).limit(1)
-        char_result = await db.execute(char_stmt)
-        main_char = char_result.scalar_one_or_none()
-        if main_char:
-            character_id = str(main_char.id)
+    # CR-039 D8: Check if this is a Corvus engine session
+    from app.models.corvus import CorvusGameSession
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+
+        if corvus_session and corvus_session.engine_type == "corvus":
+            # Get character_id from CorvusGameSession (D6 field)
+            character_id = str(corvus_session.character_id) if corvus_session.character_id else None
+
+            if not character_id:
+                # Fallback: get first playable character
+                from app.models.script import Character
+                char_stmt = select(Character).where(Character.playable == True).limit(1)
+                char_result = await db.execute(char_stmt)
+                fallback_char = char_result.scalar_one_or_none()
+                if fallback_char:
+                    character_id = str(fallback_char.id)
+        else:
+            corvus_session = None
+    except (ValueError, AttributeError):
+        corvus_session = None
+        character_id = None
+
+    # Legacy GameSession path (if not a Corvus session)
+    if not corvus_session:
+        from app.models.game import GameSession
+        session_result = await db.execute(
+            select(GameSession).where(GameSession.id == UUID(session_id))
+        )
+        game_session = session_result.scalar_one_or_none()
+        
+        if not game_session:
+            return {"messages": []}
+        
+        # CR-036 FIX: 使用 session 中的角色（玩家选择的角色），而非固定查 is_main
+        character_id = str(game_session.character_id) if game_session.character_id else None
+        
+        if not character_id:
+            # fallback: 获取该剧本的主角色
+            from app.models.script import Character
+            char_stmt = select(Character).where(
+                Character.script_id == game_session.script_id,
+                Character.is_main == True
+            ).limit(1)
+            char_result = await db.execute(char_stmt)
+            main_char = char_result.scalar_one_or_none()
+            if main_char:
+                character_id = str(main_char.id)
     
     # 查找该用户与该角色的最近 FreeChatSession
     from app.models.free_chat import FreeChatSession
@@ -1261,6 +2046,48 @@ async def submit_custom_input(
             "remaining_quota": 0,
             "paywall_trigger": trigger_result,
         }
+
+    # CR-042 AC-006: Legacy custom-input → SSE streaming
+    # Get current node and character for streaming
+    from app.models.game import GameSession as _GS
+    _gs_stmt = select(_GS).where(_GS.id == UUID(session_id))
+    _gs_res = await db.execute(_gs_stmt)
+    _gs = _gs_res.scalar_one_or_none()
+
+    _current_node = None
+    _character = None
+    if _gs and _gs.current_node_id:
+        _node_stmt = select(Node).where(Node.id == _gs.current_node_id)
+        _node_res = await db.execute(_node_stmt)
+        _current_node = _node_res.scalar_one_or_none()
+
+    if _gs:
+        # Get character for this session
+        if _gs.character_id:
+            _char_stmt = select(Character).where(Character.id == _gs.character_id)
+            _char_res = await db.execute(_char_stmt)
+            _character = _char_res.scalar_one_or_none()
+        if not _character:
+            # Fallback: main character of the script
+            _mc_stmt = select(Character).where(
+                Character.script_id == _gs.script_id,
+                Character.is_main == True,
+            ).limit(1)
+            _mc_res = await db.execute(_mc_stmt)
+            _character = _mc_res.scalar_one_or_none()
+
+    # AC-006: Return SSE streaming response
+    return _stream_legacy_custom_input(
+        session_uuid=UUID(session_id),
+        user_uuid=UUID(user_id),
+        user_text=request.text.strip(),
+        node=_current_node,
+        character=_character,
+        db=db,
+    )
+
+    # --- Legacy JSON path below is kept but unreachable after SSE return ---
+    # (preserved for rollback safety — git revert restores JSON path)
 
     # Use narrative_engine to process custom input and get response with choices
     engine = NarrativeEngine(db)
@@ -1405,6 +2232,64 @@ async def get_route_map(
     script_service = ScriptService(db)
     result = await script_service.get_route_map(script_uuid, user_uuid)
     return result
+
+
+@router.get("/game/scripts/{script_id}/characters")
+async def get_script_characters(
+    script_id: str,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    CR-038 AC-038-026: Get playable characters for a script.
+
+    Returns characters from the Character table where playable=True.
+    Each character returns: id / name / description / avatar_url / play_description.
+    Response format: {"code": 0, "data": [...]}
+    Empty array if script has no playable characters.
+    """
+    from app.models.script import Character as CharModel
+
+    # Validate script_id is a UUID
+    try:
+        script_uuid = UUID(script_id)
+    except (ValueError, AttributeError):
+        raise AppException("INVALID_SCRIPT_ID", 400, f"Invalid script_id: {script_id}")
+
+    # Verify script exists
+    script_stmt = select(Script).where(Script.id == script_uuid)
+    script_result = await db.execute(script_stmt)
+    script = script_result.scalar_one_or_none()
+    if not script:
+        raise AppException("SCRIPT_NOT_FOUND", 404, f"Script {script_id} not found")
+
+    # Query playable characters
+    char_stmt = (
+        select(CharModel)
+        .where(
+            CharModel.script_id == script_uuid,
+            CharModel.playable == True,
+        )
+        .order_by(CharModel.created_at)
+    )
+    char_result = await db.execute(char_stmt)
+    characters = char_result.scalars().all()
+
+    data = [
+        {
+            "id": str(c.id),
+            "name": c.name,
+            "description": c.description,
+            "avatar_url": c.avatar_url,
+            "play_description": c.play_description,
+        }
+        for c in characters
+    ]
+
+    return {
+        "code": 0,
+        "data": data,
+    }
 
 
 @router.post("/game/{session_id}/convergence/check")
@@ -1650,10 +2535,42 @@ async def get_game_progress(
     CR-009: 获取游戏进度数据
     
     返回当前会话的进度信息，用于进度条展示
+    CR-038: 支持 Corvus engine 会话
     """
     from sqlalchemy import select, func
     from app.models.game import GameSession, GameProgress
     from app.models.script import Script, Route, Node
+    from app.models.corvus import CorvusGameSession
+    
+    # CR-038: 先检查是否为 Corvus 会话
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid,
+            CorvusGameSession.user_id == UUID(user_id)
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session:
+            # Corvus 会话：返回简化进度信息
+            return {
+                "session_id": str(corvus_session.id),
+                "script_id": None,
+                "current_node_id": None,
+                "current_chapter": None,
+                "total_nodes": 0,
+                "total_turns": 0,
+                "explored_nodes": 0,
+                "current_turn": 0,
+                "completion_rate": 0.0,
+                "progress_percentage": 0.0,
+                "choice_count": 0,
+                "dialogue_count": 0,
+                "status": corvus_session.status,
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
     
     # 验证会话所有权
     stmt = select(GameSession).where(
@@ -1738,10 +2655,74 @@ async def get_game_status(
 ):
     """
     BE-O2: 获取游戏状态 — 返回剧本名称、角色名称、好感度。
+    CR-038: 支持 Corvus engine 会话
     """
     from app.models.game import GameSession
     from app.models.script import Script, Character
     from app.models.affection import Affection
+    from app.models.corvus import CorvusGameSession
+    
+    # CR-038: 先检查是否为 Corvus 会话
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid,
+            CorvusGameSession.user_id == UUID(user_id)
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session:
+            # CR-039 D6: Read character_id from session, query Character table for name
+            character_name = ""
+            character_id_str = None
+            if corvus_session.character_id:
+                char_stmt = select(Character).where(Character.id == corvus_session.character_id)
+                char_result = await db.execute(char_stmt)
+                char = char_result.scalar_one_or_none()
+                if char:
+                    character_name = char.name
+                    character_id_str = str(char.id)
+            
+            # AC-014: Read affinity from SessionNpc table
+            from app.models.corvus import SessionNpc
+            npc_stmt = select(SessionNpc).where(
+                SessionNpc.game_session_id == corvus_session.id
+            ).order_by(SessionNpc.affinity.desc()).limit(1)
+            npc_result = await db.execute(npc_stmt)
+            npc = npc_result.scalar_one_or_none()
+            
+            affection_value = 0
+            affinity_level = "neutral"
+            if npc and npc.affinity is not None:
+                affection_value = npc.affinity
+                if affection_value >= 50:
+                    affinity_level = "close"
+                elif affection_value >= 20:
+                    affinity_level = "friendly"
+                elif affection_value >= -10:
+                    affinity_level = "neutral"
+                elif affection_value >= -30:
+                    affinity_level = "distant"
+                else:
+                    affinity_level = "hostile"
+            
+            return {
+                "session_id": str(corvus_session.id),
+                "script_id": None,
+                "script_name": "",
+                "character_id": character_id_str,
+                "character_name": character_name,
+                "affection_value": affection_value,
+                "affinity_level": affinity_level,
+                "status": corvus_session.status,
+                "current_node_id": None,
+                "chapter_number": None,
+                "chapter_type": None,
+                "chapter_title": None,
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
     
     # Verify session ownership
     stmt = select(GameSession).where(
@@ -1843,8 +2824,33 @@ async def get_game_history(
     CR-009: 获取游戏历史记录
     
     返回当前会话的对话和选择历史
+    CR-038: 支持 Corvus engine 会话
     """
     from app.models.game import GameSession
+    from app.models.corvus import CorvusGameSession
+    
+    # CR-038: 先检查是否为 Corvus 会话
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid,
+            CorvusGameSession.user_id == UUID(user_id)
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session:
+            # Corvus 会话：返回空历史（Corvus 对话历史由 SSE 流式处理）
+            return {
+                "session_id": str(corvus_session.id),
+                "history": [],
+                "total_entries": 0,
+                "total": 0,
+                "page": 1,
+                "page_size": 50,
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
     
     # 验证会话所有权
     stmt = select(GameSession).where(
@@ -1898,10 +2904,41 @@ async def store_dialogue(
     """
     BE-O3: Store a dialogue message for a game session.
     Stores user input or AI reply with timestamp.
+    CR-039 D8: Support Corvus sessions (no GameSession record, skip DB insert).
     """
     from app.models.game import GameSession, DialogueHistory
+    from app.models.corvus import CorvusGameSession
     
-    # Verify session ownership
+    # CR-039 D8: Check if this is a Corvus session first
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid,
+            CorvusGameSession.user_id == UUID(user_id)
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session:
+            # Corvus session: dialogue is already stored via write_memory in SSE stream.
+            # Return a mock success response — no GameSession FK needed.
+            import uuid as _uuid
+            from datetime import datetime as _dt
+            mock_id = _uuid.uuid4()
+            return {
+                "id": str(mock_id),
+                "session_id": session_id,
+                "role": request.role,
+                "content": request.content,
+                "character_id": request.character_id,
+                "character_name": request.character_name,
+                "emotion": request.emotion,
+                "created_at": _dt.utcnow().isoformat(),
+            }
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
+    
+    # Verify session ownership (Legacy)
     stmt = select(GameSession).where(
         GameSession.id == UUID(session_id),
         GameSession.user_id == UUID(user_id)
@@ -1962,8 +2999,26 @@ async def get_dialogues(
     """
     from sqlalchemy import select, func
     from app.models.game import GameSession, DialogueHistory
+    from app.models.corvus import CorvusGameSession
     
-    # Verify session ownership
+    # CR-039 D8: Check if this is a Corvus session first
+    try:
+        session_uuid = UUID(session_id)
+        corvus_stmt = select(CorvusGameSession).where(
+            CorvusGameSession.id == session_uuid,
+            CorvusGameSession.user_id == UUID(user_id)
+        )
+        corvus_result = await db.execute(corvus_stmt)
+        corvus_session = corvus_result.scalar_one_or_none()
+        
+        if corvus_session:
+            # Corvus session: no legacy dialogue_history records.
+            # Dialogue is stored via write_memory in SSE stream.
+            return {"dialogues": [], "total": 0, "limit": limit, "offset": offset}
+    except (ValueError, AttributeError):
+        pass  # Not a UUID, fallback to legacy
+    
+    # Verify session ownership (Legacy)
     stmt = select(GameSession).where(
         GameSession.id == UUID(session_id),
         GameSession.user_id == UUID(user_id)
@@ -2164,6 +3219,7 @@ async def get_latest_session(
 # ── CR-037 Corvus-Story-Core Endpoints (DEV-002) ─────────────────────────────
 
 from app.models.corvus import PlayerCandidate, CorvusGameSession
+from app.schemas.game import PlayerCandidateCreate
 
 
 class CreateCorvusSessionRequest(BaseModel):
@@ -2211,6 +3267,66 @@ async def get_player_candidates(
     }
 
 
+@router.post("/game/player/candidates")
+async def create_player_candidate(
+    request: PlayerCandidateCreate,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    CR-038 AC-038-003~006: Create a player character candidate.
+
+    Creates a new player_candidates record for the authenticated user.
+    - name is required (≤100 chars)
+    - personality, backstory, appearance are optional
+    - initial_inventory is managed by backend (not accepted from user)
+    - Maximum 3 candidates per user; 4th returns 400
+    """
+    from sqlalchemy import func as sa_func
+
+    user_uuid = UUID(user_id)
+
+    # Check candidate count limit (max 3)
+    count_stmt = (
+        select(sa_func.count(PlayerCandidate.id))
+        .where(PlayerCandidate.user_id == user_uuid)
+    )
+    count_result = await db.execute(count_stmt)
+    current_count = count_result.scalar() or 0
+
+    if current_count >= 3:
+        raise AppException(
+            ErrorCode.VALIDATION_ERROR,
+            400,
+            "CANDIDATE_LIMIT_EXCEEDED: 用户已有 3 个候选角色，最多 3 个",
+        )
+
+    # Create new candidate
+    candidate = PlayerCandidate(
+        user_id=user_uuid,
+        name=request.name,
+        personality=request.personality,
+        backstory=request.backstory,
+        appearance=request.appearance,
+        initial_inventory=[],  # managed by backend, default empty
+    )
+    db.add(candidate)
+    await db.commit()
+    await db.refresh(candidate)
+
+    return {
+        "code": 0,
+        "data": {
+            "id": str(candidate.id),
+            "name": candidate.name,
+            "personality": candidate.personality,
+            "backstory": candidate.backstory,
+            "appearance": candidate.appearance,
+            "initial_inventory": candidate.initial_inventory or [],
+        },
+    }
+
+
 @router.post("/game/session/create")
 async def create_corvus_session(
     request: CreateCorvusSessionRequest,
@@ -2249,7 +3365,7 @@ async def create_corvus_session(
 class SelectPlayerRequest(BaseModel):
     """Request body for POST /game/session/select-player."""
     game_session_id: str
-    player_candidate_id: str
+    character_id: str
 
 
 @router.post("/game/session/select-player")
@@ -2270,7 +3386,7 @@ async def select_player(
     result = await adapter.create_session(
         user_id=UUID(user_id),
         game_session_id=UUID(request.game_session_id),
-        player_candidate_id=UUID(request.player_candidate_id),
+        character_id=UUID(request.character_id),
     )
 
     return {

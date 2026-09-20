@@ -306,6 +306,20 @@ export const gameApi = {
     return api.post(`/game/${sessionId}/free-chat`, { message, topic_id: topicId });
   },
 
+  // CR-042 AC-016: Free chat SSE streaming endpoint
+  /**
+   * Send a free chat message via SSE streaming endpoint.
+   * Returns the URL and body for useSSEStream composable — does NOT call fetch directly.
+   * The caller (FreeChatView) uses useSSEStream to handle the SSE response.
+   */
+  getFreeChatStreamConfig(sessionId: string, message: string) {
+    return {
+      url: `/api/v1/game/${sessionId}/free-chat/stream`,
+      method: 'POST' as const,
+      body: { message },
+    };
+  },
+
   getFreeChatHistory(sessionId: string, page?: number): Promise<{ messages: FreeChatMessage[] }> {
     const params = page ? `?page=${page}` : '';
     return api.get(`/game/${sessionId}/free-chat/history${params}`);
@@ -592,7 +606,9 @@ export const gameApi = {
     character_name: string;
     character_id: string;
     affection_value: number;
-    affection_level: string;
+    affinity_level: string;  // BE returns affinity_level, not affection_level
+    status?: string;
+    current_node_id?: string | null;
     current_chapter?: string;
     total_chapters?: number;
     chapter_number?: number | null;

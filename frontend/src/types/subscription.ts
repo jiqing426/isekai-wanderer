@@ -124,7 +124,7 @@ export interface CreateOrderRequest {
 
 export interface CreateOrderResponse {
   orderId: string;
-  payUrl: string;
+  payUrl: string | null;
   amount: number;
   currency: string;
 }

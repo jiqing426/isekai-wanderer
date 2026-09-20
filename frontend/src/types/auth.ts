@@ -6,6 +6,7 @@ export interface User {
   emailVerified: boolean;
   avatar?: string;
   username?: string;
+  subscription_tier?: 'free' | 'basic' | 'standard' | 'premium';
 }
 
 export interface AuthTokens {

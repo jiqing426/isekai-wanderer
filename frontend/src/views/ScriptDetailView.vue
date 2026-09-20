@@ -108,6 +108,14 @@
         @unlock="handleUnlockCharacter"
       />
 
+      <!-- CR-038: Corvus player candidate selection modal -->
+      <PlayerCandidateModal
+        v-model="showCandidateModal"
+        :script-id="scriptId"
+        :script-characters="characters"
+        @selected="handleCandidateSelected"
+      />
+
       <!-- 3. Route Tree Section -->
       <section class="route-tree-section">
         <h2 class="section-title">🗺️ 路线探索</h2>
@@ -149,6 +157,7 @@ import RouteTree from '@/components/RouteTree.vue';
 import EndingList from '@/components/EndingList.vue';
 import CGPreviewGrid from '@/components/CGPreviewGrid.vue';
 import LockedCharacterOverlay from '@/components/LockedCharacterOverlay.vue';
+import PlayerCandidateModal from '@/components/PlayerCandidateModal.vue';
 import type { PlayableCharacter } from '@/components/LockedCharacterOverlay.vue';
 
 const router = useRouter();
@@ -169,6 +178,19 @@ const playableCharacters = ref<PlayableCharacter[]>([]);
 const selectedPlayableCharacterId = ref<string | null>(null);
 const showLockedOverlay = ref(false);
 const lockedCharacter = ref<PlayableCharacter | null>(null);
+
+// CR-038: Candidate selection flow
+const showCandidateModal = ref(false);
+
+// CR-038: Handle candidate selection from PlayerCandidateModal
+// CR-039 T-039-FE-002: 传递 initial_scene 到 GameView
+function handleCandidateSelected(sessionId: string, initialScene?: any) {
+  if (initialScene) {
+    sessionStorage.setItem(`corvus_initial_scene_${sessionId}`, JSON.stringify(initialScene));
+  }
+  // Navigate to game page with the Corvus session
+  router.push(`/game?session=${sessionId}`);
+}
 
 // 路线树相关
 const routeChapters = ref<any[]>([]);
@@ -272,19 +294,26 @@ function startGame() {
     router.push(`/login?redirect=/scripts/${scriptId}`);
     return;
   }
+
+  // CR-038: For Corvus engine scripts, show candidate selection modal
+  // instead of directly navigating to /game
+  // Use the scriptDetail response which contains engine_type from GET /scripts/{id}
+  const isCorvus = (scriptDetail.value as any)?.engine_type === 'corvus';
   
-  // CR-028: 如果选择了可扮演角色，传递 character_id
+  if (isCorvus) {
+    // Show PlayerCandidateModal for Corvus scripts
+    showCandidateModal.value = true;
+    return;
+  }
+
+  // Legacy flow: navigate directly to /game
   const characterId = selectedPlayableCharacterId.value;
-  
-  // 找到当前进行的章节（isCurrent 为 true 的章节）
   const currentChapter = routeChapters.value.find(ch => ch.isCurrent);
   if (currentChapter) {
-    // 从当前章节开始游戏
     const routeParam = `&route=${currentChapter.routeId}`;
     const charParam = characterId ? `&character_id=${characterId}` : '';
     router.push(`/game?script=${scriptId}${routeParam}${charParam}`);
   } else {
-    // 如果没有当前章节，直接开始游戏（后端会自动选择第一个可用章节）
     const charParam = characterId ? `&character_id=${characterId}` : '';
     router.push(`/game?script=${scriptId}${charParam}`);
   }
@@ -317,6 +346,7 @@ async function loadScript() {
       completionRate: response.completionRate || 0,
       unlockedNodes: response.unlockedNodes || 0,
       totalNodes: response.totalNodes || 0,
+      engine_type: response.engine_type || 'legacy', // CR-038: store engine_type
     };
     
     // FE-FEAT-023: 更新统计数据

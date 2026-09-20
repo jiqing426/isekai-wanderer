@@ -13,7 +13,7 @@ v4.4 双Agent架构: 重写版本（§3.3）
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, AsyncGenerator, List, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,6 +156,85 @@ class FreeChatService:
             "character_id": character_id,
             "session_id": session_id,
         }
+    
+    async def send_message_stream(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        character_id: str,
+        message: str,
+        script_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        """CR-042 AC-013: Stream free chat response using model_router.stream_with_fallback().
+
+        Yields text tokens for SSE wrapping.
+        DB writes (message save, memory extraction) are handled by the caller's deferred task.
+        """
+        # 1. Get or create session (same as send_message)
+        if not session_id:
+            from sqlalchemy import select
+            stmt = select(FreeChatSession).where(
+                FreeChatSession.user_id == UUID(user_id),
+                FreeChatSession.character_id == UUID(character_id) if character_id else True
+            ).order_by(FreeChatSession.created_at.desc()).limit(1)
+            result = await db.execute(stmt)
+            existing_session = result.scalar_one_or_none()
+            
+            if existing_session:
+                session_id = str(existing_session.id)
+            else:
+                session_id = str(uuid.uuid4())
+                session = FreeChatSession(
+                    id=uuid.UUID(session_id),
+                    user_id=UUID(user_id),
+                    topic_id="free_chat",
+                    character_id=UUID(character_id) if character_id else None,
+                    script_id=UUID(script_id) if script_id else None,
+                )
+                db.add(session)
+                await db.flush()
+        
+        # 2. Get character persona
+        character_persona = await self._get_character_persona_from_db(db, character_id)
+        
+        # 3. Get script info
+        script_info = None
+        if script_id:
+            script_info = await self._get_script_info(db, script_id)
+        
+        # 4. Get affection
+        affection_value = await self._get_affection(db, user_id, character_id)
+        
+        # 5. Get recent messages
+        recent_messages = await self._get_recent_messages(db, session_id, limit=20)
+        
+        # 6. Get relevant memories
+        memories = await self._get_relevant_memories(db, user_id, character_id, query=message, limit=10)
+        
+        # 7. Build prompt
+        system_prompt = build_free_chat_prompt(
+            character_name=character_persona["name"],
+            character_persona=character_persona,
+            affection_value=affection_value,
+            recent_messages=recent_messages,
+            memories=memories,
+            script_info=script_info,
+        )
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message},
+        ]
+        
+        # 8. AC-013: Use stream_with_fallback instead of call_with_fallback
+        async for chunk in model_router.stream_with_fallback(
+            scenario=ScenarioType.FREE_CHAT,
+            messages=messages,
+            max_tokens=300,
+            temperature=0.7,
+        ):
+            yield chunk
     
     async def _get_affection(self, db: AsyncSession, user_id: str, character_id: str) -> int:
         """获取当前好感度"""

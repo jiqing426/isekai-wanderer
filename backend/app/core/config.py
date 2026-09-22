@@ -1,7 +1,10 @@
 """Application configuration via environment variables."""
 
+import logging
 from pydantic_settings import BaseSettings
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -136,7 +139,7 @@ def load_system_configs() -> None:
                         if current != value:
                             setattr(settings, attr, value)
                             display = "***" if attr in ("smtp_password", "jwt_secret") else value
-                            print(f"[Config] {attr} overridden from DB: {display}")
+                            logger.info(f"[Config] {attr} overridden from DB: {display}")
         engine.dispose()
     except Exception as e:
-        print(f"[Config] Failed to load system_configs from DB (using .env): {e}")
+        logger.warning(f"[Config] Failed to load system_configs from DB (using .env): {e}")

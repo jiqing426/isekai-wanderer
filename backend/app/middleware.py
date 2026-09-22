@@ -1,11 +1,14 @@
 """CORS, rate limiting, and logging middleware."""
 
+import logging
 import time
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.redis import get_redis
+
+logger = logging.getLogger(__name__)
 
 
 def setup_cors(app):
@@ -71,5 +74,5 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         process_time = time.time() - start_time
         # Log request (in production, use proper logging)
-        print(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
+        logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
         return response

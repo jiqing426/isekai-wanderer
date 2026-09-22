@@ -156,7 +156,6 @@ const getRedirectPath = () => {
 
 // Track event
 const trackEvent = (eventName: string, data?: Record<string, any>) => {
-  console.log('[Analytics]', eventName, data);
   // TODO: 接入实际的埋点系统
 };
 

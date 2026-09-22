@@ -160,6 +160,10 @@ const routes: RouteRecordRaw[] = [
     meta: { guest: true }, // Public page, no auth required
   },
   {
+    path: '/profile',
+    redirect: '/settings',
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/SettingsView.vue'),

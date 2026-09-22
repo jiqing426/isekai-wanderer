@@ -348,7 +348,6 @@ function handlePostDeleted(postId: string) {
 
 function handleImageClick(post: Post, index: number) {
   // TODO: 实现图片预览功能
-  console.log('Image clicked:', post.images[index]);
 }
 
 async function handleSelectPost(post: Post) {

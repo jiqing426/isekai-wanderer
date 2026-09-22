@@ -128,6 +128,8 @@ const error = ref<string | null>(null);
 const plans = ref<SubscriptionPlan[]>([]);
 const subscribing = ref(false);
 const billingCycle = ref<'monthly' | 'yearly'>('monthly');
+// DEV-005 Bug 1: Guard to prevent duplicate success toasts from re-entrant calls
+const successToastShown = ref(false);
 
 function getTierIcon(planId: string): string {
   const icons: Record<string, string> = {
@@ -209,7 +211,11 @@ async function loadPlans() {
 }
 
 async function handleSubscribe(planId: string) {
+  // DEV-005 Bug 1: Re-entrancy guard — ignore if already in-flight
+  if (subscribing.value) return;
   subscribing.value = true;
+  // DEV-005 Bug 1: Reset toast guard at the start of each subscribe attempt
+  successToastShown.value = false;
   
   try {
     const response = await createOrder({
@@ -218,7 +224,11 @@ async function handleSubscribe(planId: string) {
     });
     
     if (response.status === 'success') {
-      message.success(t('subscriptionPlans.subscribeSuccess'));
+      // DEV-005 Bug 1: Only show success toast once
+      if (!successToastShown.value) {
+        successToastShown.value = true;
+        message.success(t('subscriptionPlans.subscribeSuccess'));
+      }
       await loadPlans();
       // CR-043 AC-016: 刷新订阅状态
       await subscriptionStore.fetchSubscriptionStatus();
@@ -244,7 +254,11 @@ async function handleSubscribe(planId: string) {
       await subscriptionStore.fetchSubscriptionStatus();
       window.location.href = response.payUrl;
     } else {
-      message.success(t('subscriptionPlans.subscribeSuccess'));
+      // DEV-005 Bug 1: Only show success toast once
+      if (!successToastShown.value) {
+        successToastShown.value = true;
+        message.success(t('subscriptionPlans.subscribeSuccess'));
+      }
       await loadPlans();
       await subscriptionStore.fetchSubscriptionStatus();
     }

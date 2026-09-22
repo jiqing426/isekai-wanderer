@@ -24,7 +24,6 @@ withDefaults(defineProps<Props>(), {
 
 function openSettings() {
   // TODO: 打开设置面板
-  console.log('打开设置面板');
 }
 </script>
 

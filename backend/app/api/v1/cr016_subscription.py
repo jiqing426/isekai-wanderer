@@ -4,7 +4,6 @@ Endpoints:
 - GET  /api/subscription/status        → Get current subscription status
 - POST /api/subscription/create        → Create subscription (mock payment)
 - POST /api/subscription/cancel        → Cancel subscription
-- POST /api/subscription/fragment-purchase → Fragment purchase for extra dialogue
 """
 
 from uuid import UUID
@@ -19,7 +18,6 @@ from app.core.database import get_db
 from app.core.exceptions import AppException
 from app.api.v1.auth import get_current_user_id
 from app.models.user import User
-from app.models.payment import Fragment, FragmentTransaction
 from app.models.subscription import Subscription, SubscriptionTier, SubscriptionStatus
 from app.services.subscription_service import SubscriptionService
 
@@ -54,20 +52,6 @@ class CancelSubscriptionResponse(BaseModel):
     message: str
 
 
-class FragmentPurchaseRequest(BaseModel):
-    """Request to purchase extra dialogue with fragments."""
-    amount: int = Field(..., gt=0, description="Number of dialogue units to purchase (3 fragments = 1 unit)")
-
-
-class FragmentPurchaseResponse(BaseModel):
-    """Response after fragment purchase."""
-    status: str
-    fragments_spent: int
-    dialogue_added: int
-    new_fragment_balance: int
-    message: str
-
-
 class SubscriptionStatusResponse(BaseModel):
     """Response for subscription status."""
     tier: str
@@ -81,9 +65,6 @@ class SubscriptionStatusResponse(BaseModel):
 
 
 # ---- Constants ----
-
-# Fragment cost: 3 fragments = 1 dialogue unit
-FRAGMENT_COST_PER_DIALOGUE = 3
 
 # Price map for mock payment
 PRICE_MAP = {
@@ -337,70 +318,4 @@ async def cancel_subscription_cr016(
         status="cancelled",
         expires_at=sub.expires_at.isoformat() if sub.expires_at else None,
         message="Subscription cancelled. Access continues until expiry.",
-    )
-
-
-@router.post("/fragment-purchase", response_model=FragmentPurchaseResponse)
-async def fragment_purchase_dialogue(
-    request: FragmentPurchaseRequest,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Purchase extra dialogue quota with fragments (CR-016).
-    
-    Cost: 3 fragments = 1 dialogue unit.
-    
-    Logic:
-    1. Check user fragment balance >= amount * 3
-    2. Deduct fragments
-    3. Call quota_service.add_fragment_quota(user_id, amount)
-    """
-    uid = UUID(user_id)
-    
-    # Calculate total fragment cost
-    fragments_needed = request.amount * FRAGMENT_COST_PER_DIALOGUE
-    
-    # Lock the fragment row to prevent concurrent double-spend
-    result = await db.execute(
-        select(Fragment).where(Fragment.user_id == uid).with_for_update()
-    )
-    fragment_record = result.scalar_one_or_none()
-    
-    current_balance = fragment_record.balance if fragment_record else 0
-    
-    if current_balance < fragments_needed:
-        raise AppException(
-            "INSUFFICIENT_FRAGMENTS",
-            402,
-            f"Insufficient fragments. Need {fragments_needed}, have {current_balance}"
-        )
-    
-    # Deduct fragments
-    if not fragment_record:
-        fragment_record = Fragment(user_id=uid, balance=0)
-        db.add(fragment_record)
-    
-    fragment_record.balance -= fragments_needed
-    
-    # Record transaction
-    transaction = FragmentTransaction(
-        user_id=uid,
-        amount=-fragments_needed,
-        reason=f"dialogue_quota_purchase:{request.amount}",
-    )
-    db.add(transaction)
-    
-    # Add fragment quota (uses its own locking internally)
-    from app.services.quota_service import QuotaService
-    quota_service = QuotaService(db)
-    await quota_service.add_fragment_quota(uid, request.amount)
-    
-    await db.flush()
-    
-    return FragmentPurchaseResponse(
-        status="success",
-        fragments_spent=fragments_needed,
-        dialogue_added=request.amount,
-        new_fragment_balance=fragment_record.balance,
-        message=f"Purchased {request.amount} dialogue units for {fragments_needed} fragments",
     )

@@ -7,6 +7,7 @@ Otherwise falls back to MockEmailService that logs to a JSONL file.
 """
 
 import json
+import logging
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -15,6 +16,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class IEmailService:
@@ -131,7 +134,7 @@ class SMTPEmailService(IEmailService):
             server.quit()
             return True
         except Exception as e:
-            print(f"[SMTP] Failed to send email to {to}: {e}")
+            logger.warning(f"[SMTP] Failed to send email to {to}: {e}")
             return False
 
     async def send_password_reset_email(
@@ -189,10 +192,10 @@ def _create_email_service() -> IEmailService:
         and settings.smtp_user
         and settings.smtp_password
     ):
-        print(f"[Email] Using SMTP service ({settings.smtp_host}:{settings.smtp_port})")
+        logger.info(f"[Email] Using SMTP service ({settings.smtp_host}:{settings.smtp_port})")
         return SMTPEmailService()
     else:
-        print("[Email] Using mock email service (logging to file)")
+        logger.info("[Email] Using mock email service (logging to file)")
         return MockEmailService()
 
 
@@ -217,4 +220,4 @@ def reload_email_service() -> None:
     except Exception:
         pass
     email_service = _create_email_service()
-    print(f"[Email] Service reloaded — {'SMTP' if isinstance(email_service, SMTPEmailService) else 'Mock'}")
+    logger.info(f"[Email] Service reloaded — {'SMTP' if isinstance(email_service, SMTPEmailService) else 'Mock'}")

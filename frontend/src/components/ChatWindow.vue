@@ -172,7 +172,6 @@ const authStore = useAuthStore()
 const { t } = useI18n()
 const userAvatar = computed(() => {
   const avatar = authStore.user?.avatar
-  console.log('[ChatWindow] userAvatar:', avatar, 'user:', authStore.user)
   return avatar || ''
 })
 
@@ -249,10 +248,8 @@ const scrollToBottom = async () => {
 const loadMessages = async (page: number = 1, prepend: boolean = false) => {
   try {
     isLoadingMore.value = true
-    console.log('[ChatWindow] 开始加载消息:', { page, prepend, characterId: props.characterId })
     const response = await characterChatApi.getMessages(props.characterId, page, pageSize)
-    console.log('[ChatWindow] 加载消息响应:', { page, count: response.messages.length, total: response.total })
-    
+
     if (prepend) {
       // 保存当前滚动位置
       const container = messageListRef.value
@@ -275,7 +272,6 @@ const loadMessages = async (page: number = 1, prepend: boolean = false) => {
     // 判断是否还有更多消息
     hasMoreMessages.value = response.messages.length === pageSize
     currentPage.value = page
-    console.log('[ChatWindow] 加载完成:', { currentPage: currentPage.value, hasMore: hasMoreMessages.value })
   } catch (error) {
     console.error('加载消息失败:', error)
   } finally {
@@ -294,7 +290,6 @@ const handleScroll = () => {
   
   // 当滚动到顶部附近时（距离顶部 100px 以内），加载更多
   if (container.scrollTop < 100 && !isLoadingMore.value && hasMoreMessages.value) {
-    console.log('[ChatWindow] 触发分页加载，当前页:', currentPage.value)
     loadMoreMessages()
   }
 }
@@ -302,7 +297,6 @@ const handleScroll = () => {
 const loadTopics = async () => {
   try {
     const response = await characterChatApi.getTopics(props.characterId)
-    console.log('[ChatWindow] 加载话题:', props.characterId, response)
     // 后端直接返回数组，不是 { topics: [] }
     topics.value = Array.isArray(response) ? response : (response.topics || [])
   } catch (error) {
@@ -314,7 +308,6 @@ const loadTopics = async () => {
 const loadAffection = async () => {
   try {
     const response = await affectionApi.getAffection(props.characterId)
-    console.log('[ChatWindow] 加载好感度:', props.characterId, response)
     affectionValue.value = response.affection_value
   } catch (error) {
     console.error('加载好感度失败:', error)
@@ -418,13 +411,11 @@ const handleClickOutside = (e: MouseEvent) => {
 }
 
 const openGiftModal = async () => {
-  console.log('[ChatWindow] 打开送礼弹窗')
   showPlusMenu.value = false
   showGiftModal.value = true
 }
 
 const handleGiftSent = (result: any) => {
-  console.log('[ChatWindow] 送礼成功:', result)
   // 更新好感度
   if (result.new_affection_value !== undefined) {
     affectionValue.value = result.new_affection_value

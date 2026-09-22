@@ -46,35 +46,23 @@ function scrollToBottom() {
     return;
   }
   const el = scrollRef.value;
-  console.log('[DialogueHistory] scrollToBottom called', {
-    scrollTop: el.scrollTop,
-    scrollHeight: el.scrollHeight,
-    clientHeight: el.clientHeight,
-    style: el.style.cssText,
-  });
   el.scrollTop = el.scrollHeight;
   // double-shot for safety
   if (_timer) clearTimeout(_timer);
   _timer = setTimeout(() => {
     if (el) {
       el.scrollTop = el.scrollHeight;
-      console.log('[DialogueHistory] delayed scroll', {
-        scrollTop: el.scrollTop,
-        scrollHeight: el.scrollHeight,
-      });
     }
   }, 100);
 }
 
 onMounted(() => {
-  console.log('[DialogueHistory] mounted, scrollRef:', !!scrollRef.value);
   scrollToBottom();
 });
 
 watch(
   () => props.history,
   () => {
-    console.log('[DialogueHistory] history changed, len:', props.history.length);
     nextTick(scrollToBottom);
   },
   { deep: true },

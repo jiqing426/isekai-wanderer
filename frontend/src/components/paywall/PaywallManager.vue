@@ -38,6 +38,7 @@ import type { PaywallTrigger, DialogueQuotaStatus, ScriptProgressInfo } from '@/
 import QuotaExhaustedModal from './QuotaExhaustedModal.vue';
 import PaywallBanner from './PaywallBanner.vue';
 import PaywallToast from './PaywallToast.vue';
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter();
 const subscriptionStore = useSubscriptionStore();
@@ -57,17 +58,17 @@ const shouldRender = computed(() => {
 
 const bannerText = computed(() => {
   if (!currentTrigger.value) return '';
-  return currentTrigger.value.payload?.text ?? '升级订阅解锁更多功能';
+  return currentTrigger.value.payload?.text ?? t('paywallManager.defaultUpgradeText');
 });
 
 const bannerActionText = computed(() => {
   if (!currentTrigger.value) return undefined;
-  return currentTrigger.value.payload?.actionText ?? '立即升级';
+  return currentTrigger.value.payload?.actionText ?? t('paywallManager.defaultActionText');
 });
 
 const toastMessage = computed(() => {
   if (!currentTrigger.value) return '';
-  return currentTrigger.value.payload?.message ?? '额度不足';
+  return currentTrigger.value.payload?.message ?? t('paywallManager.defaultMessage');
 });
 
 // 处理队列

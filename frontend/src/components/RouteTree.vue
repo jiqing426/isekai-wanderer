@@ -13,7 +13,7 @@
         <span v-if="chapter.isLocked && chapter.lockReason" class="lock-reason">
           （{{ chapter.lockReason }}）
         </span>
-        <span v-else-if="!chapter.isLocked" class="play-hint">点击继续</span>
+        <span v-else-if="!chapter.isLocked" class="play-hint">{{ $t('routeTree.clickToContinue') }}</span>
       </div>
       
       <div v-if="chapter.subRoutes && chapter.subRoutes.length > 0" class="sub-routes">
@@ -27,7 +27,7 @@
           <span class="route-name">{{ route.name }}</span>
           <span v-if="route.isLocked" class="route-lock">【{{ route.lockReason }}】</span>
           <span v-else-if="route.affection" class="route-affection">
-            （好感{{ route.affection }}% {{ route.status }}）
+            {{ $t('routeTree.affectionStatus', { affection: route.affection, status: route.status }) }}
           </span>
         </div>
       </div>

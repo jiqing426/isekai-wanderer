@@ -14,8 +14,8 @@
       <div v-if="phase === 'playing'" class="phase-game">
         <!-- 游戏标题栏 -->
         <div class="game-header">
-          <n-button @click="router.back()" class="back-btn" title="返回">
-            ← 返回
+          <n-button @click="router.back()" class="back-btn" :title="t('gameViewExtra.back')">
+            {{ $t('gameViewExtra.back') }}
           </n-button>
           <ChapterProgress
             :chapter="currentChapter"
@@ -30,25 +30,25 @@
               class="quota-inline" 
               v-if="subscriptionStore.dialogueQuota"
               :title="subscriptionStore.isSubscriber 
-                ? '订阅用户：无限对话额度' 
-                : `对话额度：剩余 ${subscriptionStore.dialogueQuota.remaining}/${subscriptionStore.dialogueQuota.base_quota}\n每日 08:00 重置`"
+                ? t('gameViewExtra.subscriberUnlimitedQuota') 
+                : t('gameViewExtra.dialogueQuotaRemaining', { remaining: subscriptionStore.dialogueQuota.remaining, total: subscriptionStore.dialogueQuota.base_quota })"
             >
               <span class="quota-icon">💬</span>
               <span class="quota-value" :class="{ 'is-subscriber': subscriptionStore.isSubscriber }">
                 {{ subscriptionStore.isSubscriber ? '∞' : `${subscriptionStore.dialogueQuota.remaining}/${subscriptionStore.dialogueQuota.base_quota}` }}
               </span>
               <span v-if="!subscriptionStore.isSubscriber && subscriptionStore.dialogueQuota.remaining <= 2" class="quota-reset-hint" :title="quotaResetHint">
-                🕐 08:00重置
+                {{ $t('gameViewExtra.quotaResetHint') }}
               </span>
               <n-button v-if="!subscriptionStore.isSubscriber && subscriptionStore.dialogueQuota.remaining <= 2" size="tiny" type="primary" @click="router.push('/subscribe')">
-                补充
+                {{ $t('gameViewExtra.supplement') }}
               </n-button>
             </div>
-            <n-button @click="handleManualSave" class="icon-btn" title="存档">
-              💾 存档
+            <n-button @click="handleManualSave" class="icon-btn" :title="t('gameViewExtra.save')">
+              {{ $t('gameViewExtra.save') }}
             </n-button>
-            <n-button @click="openHistory" class="icon-btn" title="历史">
-              📜 历史
+            <n-button @click="openHistory" class="icon-btn" :title="t('gameViewExtra.history')">
+              {{ $t('gameViewExtra.history') }}
             </n-button>
           </div>
         </div>
@@ -69,15 +69,15 @@
               :character-id="gameStatus?.character_id || game.currentDialogue?.character_id"
               :value="gameStatus?.affection_value ?? game.currentSession?.affection_value ?? currentAffection"
             />
-            <n-button @click="openGiftModal" class="action-btn">🎁 送礼</n-button>
-            <n-button @click="goToFreeChat" class="action-btn">💬 自由对话</n-button>
-            <n-button @click="viewGiftHistory" class="action-btn">📋 送礼记录</n-button>
+            <n-button @click="openGiftModal" class="action-btn">{{ $t('gameViewExtra.sendGift') }}</n-button>
+            <n-button @click="goToFreeChat" class="action-btn">{{ $t('gameViewExtra.freeChat') }}</n-button>
+            <n-button @click="viewGiftHistory" class="action-btn">{{ $t('gameViewExtra.giftHistory') }}</n-button>
           </aside>
 
           <!-- 右侧栏 flex:1 -->
           <main class="right-story-stage" :style="{ backgroundImage: `url(${currentBackground})` }">
             <StoryPanel
-              :text="game.currentDialogue?.text || '剧情正在展开...'"
+              :text="game.currentDialogue?.text || t('gameViewExtra.storyUnfolding')"
               :character-name="characterDisplayName"
               :emotion="game.currentDialogue?.emotion"
               :speed="typewriterSpeed"
@@ -93,7 +93,7 @@
             <!-- 好感度动效 -->
             <transition name="fade">
               <div v-if="showAffectionAnimation" class="affection-animation" :class="affectionDelta > 0 ? 'positive' : 'negative'">
-                {{ affectionDelta > 0 ? '+' : '' }}{{ affectionDelta }} 好感度
+                {{ affectionDelta > 0 ? '+' : '' }}{{ affectionDelta }} {{ $t('gameViewExtra.affectionPoint') }}
               </div>
             </transition>
             <!-- 剧本对话输入框 -->
@@ -114,15 +114,15 @@
                 <h2 class="ending-title">{{ game.currentDialogue?.ending_title || $t('game.ending') }}</h2>
                 <p class="ending-desc">{{ game.currentDialogue?.ending_description || game.currentDialogue?.text || '' }}</p>
                 <div class="ending-actions">
-                  <n-button size="large" secondary @click="router.push('/discover')">🏠 返回首页</n-button>
-                  <n-button size="large" secondary @click="handleRestartCurrentChapter">🔄 重新开始</n-button>
+                  <n-button size="large" secondary @click="router.push('/discover')">{{ $t('gameViewExtra.backToHome') }}</n-button>
+                  <n-button size="large" secondary @click="handleRestartCurrentChapter">{{ $t('gameViewExtra.restart') }}</n-button>
                   <n-button 
                     v-if="(game.currentDialogue as any)?.has_next_chapter" 
                     size="large" 
                     type="primary" 
                     @click="handleNextChapter"
                   >
-                    ▶️ 进入{{ (game.currentDialogue as any)?.next_chapter_title || '下一章节' }}
+                    ▶️ {{ $t('gameViewExtra.enterNextChapter') }}{{ (game.currentDialogue as any)?.next_chapter_title || $t('gameViewExtra.nextChapter') }}
                   </n-button>
                 </div>
               </div>
@@ -154,21 +154,21 @@
       <n-modal
         v-model:show="showGiftHistoryModal"
         preset="card"
-        title="📋 送礼记录"
+        :title="t('gameViewExtra.giftHistoryTitle')"
         :style="{ width: '450px' }"
       >
         <div v-if="giftHistoryLoading" style="text-align: center; padding: 20px;">
           <n-spin size="medium" />
         </div>
         <div v-else-if="giftHistory.length === 0" style="text-align: center; padding: 20px;">
-          <n-empty description="暂无送礼记录" />
+          <n-empty :description="$t('gameViewExtra.noGiftHistory')" />
         </div>
         <div v-else class="gift-history-list">
           <div v-for="record in giftHistory" :key="record.id" class="gift-history-item">
             <span class="gift-history-icon">🎁</span>
             <div class="gift-history-info">
               <span class="gift-history-name">{{ record.gift_name }}</span>
-              <span class="gift-history-to">送给 {{ record.character_name }}</span>
+              <span class="gift-history-to">{{ $t('gameViewExtra.sentTo') }} {{ record.character_name }}</span>
             </div>
             <span class="gift-history-affection">+{{ record.affection_delta }}</span>
           </div>
@@ -361,7 +361,7 @@ async function loadGameStatus() {
       character_id: status.character_id || '',
       // Fix: use ?? to preserve 0 (valid value), and read affinity_level from BE
       affection_value: status.affection_value ?? 0,
-      affection_level: status.affinity_level ?? '相识',
+      affection_level: status.affinity_level ?? t('game.acquaintance'),
       chapter_number: status.chapter_number ?? null,
       chapter_type: status.chapter_type ?? null,
       chapter_title: status.chapter_title ?? null,
@@ -411,10 +411,10 @@ async function loadHistoryFromApi() {
 // @ts-ignore
 function lifecycleStageLabel(stage: string): string {
   const map: Record<string, string> = {
-    honeymoon: '蜜月期',
-    growth: '养成期',
-    regular: '常规期',
-    returnee: '回归期'
+    honeymoon: t('gameViewExtra.lifecycleHoneymoon'),
+    growth: t('gameViewExtra.lifecycleGrowth'),
+    regular: t('gameViewExtra.lifecycleRegular'),
+    returnee: t('gameViewExtra.lifecycleReturnee')
   };
   return map[stage] || stage;
 }
@@ -428,7 +428,7 @@ function triggerPaywall(trigger: PaywallTrigger) {
 
 // CR-016: 额度重置时间提示（UTC 00:00 = 北京时间 08:00）
 const quotaResetHint = computed(() => {
-  return '每日 08:00 重置（UTC 00:00）';
+  return t('gameViewExtra.quotaResetHintFull');
 });
 
 
@@ -436,17 +436,17 @@ const quotaResetHint = computed(() => {
 const currentChapter = computed(() => {
   // CR-030: 优先使用 gameStatus 的章节信息（来自 API），其次使用 progress API 的章节信息
   if (gameStatus.value?.chapter_number && gameStatus.value?.chapter_title) {
-    return `第${gameStatus.value.chapter_number}章：${gameStatus.value.chapter_title}`;
+    return t('gameViewExtra.chapterTitle', { n: gameStatus.value.chapter_number, title: gameStatus.value.chapter_title });
   }
   // CR-020: 其次使用 progress API 的章节信息，最后使用 dialogue 的章节信息
-  return gameProgress.value?.current_chapter || game.currentDialogue?.chapter || '序章';
+  return gameProgress.value?.current_chapter || game.currentDialogue?.chapter || t('gameViewExtra.prologue');
 });
 
 // 章节背景图片映射：根据章节动态切换背景
 const chapterBackgrounds: Record<string, string> = {
-  '第一章': 'http://47.107.174.176:8000/static/images/others/d6eb2bac-5b7e-496d-bed7-df085f34a564.png',
-  '第二章': 'http://47.107.174.176:8000/static/images/scripts/covers/edaa2171-11c9-403e-a55f-543e97e94205.png',
-  '第三章': 'http://47.107.174.176:8000/static/images/scripts/covers/3cfbf3fb-9164-4a54-8191-631f4bb6bb79.png',
+  t('gameViewExtra.chapter1'): 'http://47.107.174.176:8000/static/images/others/d6eb2bac-5b7e-496d-bed7-df085f34a564.png',
+  t('gameViewExtra.chapter2'): 'http://47.107.174.176:8000/static/images/scripts/covers/edaa2171-11c9-403e-a55f-543e97e94205.png',
+  t('gameViewExtra.chapter3'): 'http://47.107.174.176:8000/static/images/scripts/covers/3cfbf3fb-9164-4a54-8191-631f4bb6bb79.png',
 };
 
 const defaultBackground = 'http://47.107.174.176:8000/static/images/others/d6eb2bac-5b7e-496d-bed7-df085f34a564.png';
@@ -542,15 +542,15 @@ async function initGame() {
         ]);
         // CR-039 T-039-FE-002: Corvus 会话如果没有初始对话或对话文字为空，自动发送一条初始消息
         if (game.currentSession.engine_type === 'corvus' && (!game.currentDialogue || !game.currentDialogue.text)) {
-          await game.submitCustomInput('开始游戏');
+          await game.submitCustomInput(t('gameViewExtra.startGameCommand'));
         }
       } else {
         phase.value = 'error';
-        errorMsg.value = '无法恢复会话，请重新开始游戏';
+        errorMsg.value = t('gameViewExtra.cantRestoreSession');
       }
     } catch (err) {
       phase.value = 'error';
-      errorMsg.value = err instanceof Error ? err.message : '恢复会话失败';
+      errorMsg.value = err instanceof Error ? err.message : t('gameViewExtra.restoreSessionFailed');
     }
     return;
   }
@@ -690,14 +690,14 @@ async function handleChoice(choiceId: string) {
 // Go to free chat page
 function goToFreeChat() {
   if (!game.currentSession) {
-    message.warning('请先开始游戏');
+    message.warning(t('gameViewExtra.pleaseStartGame'));
     return;
   }
   // CR-032 T-032-FE-003: 确保传递 NPC 角色 ID，不传递玩家角色 ID
   // D7: Corvus done 事件 character_id=null，fallback 到 gameStatus
   const npcCharacterId = game.currentDialogue?.character_id || gameStatus.value?.character_id;
   if (!npcCharacterId) {
-    message.warning('当前没有对话角色，无法开启自由对话');
+    message.warning(t('gameViewExtra.noCharacterForChat'));
     return;
   }
   router.push({
@@ -799,7 +799,7 @@ const shardBalance = ref(0);
 // Open gift modal
 async function openGiftModal() {
   if (!game.currentSession || !game.currentDialogue?.character_id) {
-    message.warning('当前无法送礼');
+    message.warning(t('gameViewExtra.cannotSendGiftNow'));
     return;
   }
   
@@ -825,7 +825,7 @@ async function openGiftModal() {
     }
   } catch (err) {
     console.error('加载礼物列表失败:', err);
-    message.error('加载礼物列表失败');
+    message.error(t('gameViewExtra.loadGiftListFailed'));
   } finally {
     giftLoading.value = false;
   }
@@ -842,7 +842,7 @@ async function viewGiftHistory() {
   // CR-032 T-032-FE-004: 获取当前 NPC 角色的送礼记录
   const npcCharacterId = game.currentDialogue?.character_id || gameStatus.value?.character_id;
   if (!npcCharacterId) {
-    message.warning('当前没有角色信息，无法查看送礼记录');
+    message.warning(t('gameViewExtra.noCharacterForGiftHistory'));
     return;
   }
   
@@ -857,7 +857,7 @@ async function viewGiftHistory() {
     }
   } catch (err) {
     console.error('获取送礼历史失败:', err);
-    message.error('获取送礼历史失败');
+    message.error(t('gameViewExtra.getGiftHistoryFailed'));
   } finally {
     giftHistoryLoading.value = false;
   }
@@ -875,9 +875,9 @@ async function handleManualSave() {
       affection_value: currentAffection.value,
       choice_history: game.choiceHistory,
     });
-    message.success('存档成功');
+    message.success(t('gameViewExtra.saveSuccess'));
   } catch (err) {
-    message.error('存档失败');
+    message.error(t('gameViewExtra.saveFailed'));
   }
 }
 
@@ -908,7 +908,7 @@ async function handleRestartCurrentChapter() {
     ]);
   } else {
     phase.value = 'error';
-    errorMsg.value = game.error || '无法重新开始章节';
+    errorMsg.value = game.error || t('gameViewExtra.cantRestartChapter');
   }
 }
 
@@ -939,14 +939,14 @@ async function handleNextChapter() {
     ]);
   } else {
     phase.value = 'error';
-    errorMsg.value = game.error || '无法进入下一章节';
+    errorMsg.value = game.error || t('gameViewExtra.cantEnterNextChapter');
   }
 }
 
 // Exit warning
 onBeforeRouteLeave((_to, _from, next) => {
   if (game.currentSession && !game.isSaved) {
-    const confirmed = window.confirm('当前进度尚未存档，是否存档后再离开？');
+    const confirmed = window.confirm(t('gameViewExtra.unsavedProgressConfirm'));
     if (confirmed) {
       handleManualSave();
     }

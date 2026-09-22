@@ -135,4 +135,22 @@ async function copyLink() {
 .share-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
 .share-error { width: 100%; }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .share-page { padding: 16px 12px 32px; min-height: auto; }
+  .share-card { padding: 24px 18px; }
+  .card-brand { margin-bottom: 20px; }
+  .brand-logo { font-size: 18px; }
+  .brand-name { font-size: 13px; }
+  .card-character { margin-bottom: 20px; }
+  .char-name-large { font-size: 20px; }
+  .char-script-large { font-size: 12px; }
+  .card-stats { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .stat-label { font-size: 10px; }
+  .stat-value { font-size: 13px; }
+  .card-footer { padding-top: 12px; }
+  .footer-date { font-size: 11px; }
+  .footer-id { font-size: 10px; }
+  .share-actions { gap: 10px; margin-top: 16px; }
+}
 </style>

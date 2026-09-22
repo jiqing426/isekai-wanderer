@@ -86,27 +86,27 @@ type AchievementReward = NonNullable<Achievement['reward']>;
 function conditionLabel(condition: AchievementCondition | undefined, progress: AchievementProgress | undefined): string {
   if (!condition) return '';
   const typeMap: Record<string, string> = {
-    'dialogue_count': '对话次数',
-    'completed_scripts': '完成剧本',
-    'affection': '好感度',
-    'cg_count': '收集 CG',
-    'gifts_sent': '赠送礼物',
-    'choice_count': '做出选择',
-    'streak': '连续登录',
-    'friends_count': '添加好友',
-    'branches_explored': '探索分支',
-    'characters_unlocked': '解锁角色',
-    'all_good_endings': '达成所有好结局',
-    'all_achievements_unlocked': '解锁所有成就',
+    'dialogue_count': t('achievementView.condDialogueCount'),
+    'completed_scripts': t('achievementView.condCompletedScripts'),
+    'affection': t('achievementView.condAffection'),
+    'cg_count': t('achievementView.condCgCount'),
+    'gifts_sent': t('achievementView.condGiftsSent'),
+    'choice_count': t('achievementView.condChoiceCount'),
+    'streak': t('achievementView.condStreak'),
+    'friends_count': t('achievementView.condFriendsCount'),
+    'branches_explored': t('achievementView.condBranchesExplored'),
+    'characters_unlocked': t('achievementView.condCharactersUnlocked'),
+    'all_good_endings': t('achievementView.condAllGoodEndings'),
+    'all_achievements_unlocked': t('achievementView.condAllAchievementsUnlocked'),
     // Legacy keys
-    'dialogue': '对话次数',
-    'choice': '做出选择',
-    'ending': '解锁结局',
-    'script': '完成剧本',
-    'checkin': '签到',
-    'gift': '赠送礼物',
-    'fragments': '碎片收集',
-    'cg': '收集 CG',
+    'dialogue': t('achievementView.condDialogueCount'),
+    'choice': t('achievementView.condChoiceCount'),
+    'ending': t('achievementView.condEnding'),
+    'script': t('achievementView.condCompletedScripts'),
+    'checkin': t('achievementView.condCheckin'),
+    'gift': t('achievementView.condGiftsSent'),
+    'fragments': t('achievementView.condFragments'),
+    'cg': t('achievementView.condCgCount'),
   };
   const label = typeMap[condition.type] || condition.type;
   const current = progress?.current ?? condition.current ?? 0;
@@ -117,11 +117,11 @@ function conditionLabel(condition: AchievementCondition | undefined, progress: A
 function rewardLabel(reward: AchievementReward | undefined): string {
   if (!reward) return '';
   const typeMap: Record<string, string> = {
-    'fragments': '碎片',
-    'fragment': '碎片',
-    'gold': '金币',
-    'exp': '经验',
-    'dialogue': '对话次数',
+    'fragments': t('achievementView.rewardFragments'),
+    'fragment': t('achievementView.rewardFragments'),
+    'gold': t('achievementView.rewardGold'),
+    'exp': t('achievementView.rewardExp'),
+    'dialogue': t('achievementView.condDialogueCount'),
   };
   const label = typeMap[reward.type] || reward.type;
   return `🎁 ${reward.amount} ${label}`;
@@ -140,9 +140,9 @@ const achievements = ref<Achievement[]>([]);
 const unlockedCount = computed(() => achievements.value.filter(a => a.isUnlocked).length);
 
 function formatDate(iso: string | null): string {
-  if (!iso) return '未知时间';
+  if (!iso) return t('achievementView.unknownDate');
   const date = new Date(iso);
-  if (isNaN(date.getTime())) return '未知时间';
+  if (isNaN(date.getTime())) return t('achievementView.unknownDate');
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 
@@ -245,4 +245,23 @@ onMounted(() => {
   transition: width 0.3s ease;
 }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .achievement-page { padding: 16px 12px 32px; }
+  .page-header { margin-bottom: 16px; }
+  .page-header h1 { font-size: 20px; }
+  .subtitle { font-size: 13px; margin: 4px 0 10px; }
+  .stats { gap: 16px; }
+  .stat-num { font-size: 20px; }
+  .stat-label { font-size: 11px; }
+  .achievement-grid { gap: 10px; }
+  .ach-card { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
+  .ach-icon { width: 40px; height: 40px; font-size: 24px; align-self: center; }
+  .ach-body { width: 100%; }
+  .ach-name { font-size: 14px; }
+  .ach-desc { font-size: 11px; }
+  .ach-condition { font-size: 10px; }
+  .ach-time { font-size: 10px; }
+  .ach-action { align-self: stretch; }
+}
 </style>

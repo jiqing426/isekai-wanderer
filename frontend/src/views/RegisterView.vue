@@ -41,7 +41,7 @@
           <input
             type="text"
             v-model="displayName"
-            :placeholder="t('auth.displayName') + '（选填）'"
+            :placeholder="t('auth.displayName') + '（' + t('register.optional') + '）'"
           />
         </div>
 
@@ -65,7 +65,7 @@
             <input
               type="text"
               v-model="verifyCode"
-              placeholder="验证码"
+              :placeholder="t('register.verifyCodePlaceholder')"
               maxlength="6"
               :class="{ error: codeError }"
             />
@@ -173,9 +173,9 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 const codeButtonText = computed(() => {
   if (codeCountdown.value > 0) {
-    return `${codeCountdown.value}s 后重试`;
+    return t('register.codeRetrySuffix', { seconds: codeCountdown.value });
   }
-  return '获取验证码';
+  return t('register.getCode');
 });
 
 const canSendCode = computed(() => {
@@ -205,16 +205,16 @@ const handleSendCode = async () => {
   
   try {
     await authApi.sendVerifyCode(email.value);
-    message.success('验证码已发送，请查收邮件');
+    message.success(t('register.codeSent'));
     startCountdown();
   } catch (error: any) {
     const msg = error?.message || '';
     if (msg.includes('EMAIL_EXISTS') || msg.includes('409')) {
-      codeError.value = '该邮箱已注册';
+      codeError.value = t('register.error.emailExists');
     } else if (msg.includes('RATE_LIMIT') || msg.includes('429')) {
-      codeError.value = '请求过于频繁，请稍后再试';
+      codeError.value = t('register.error.rateLimit');
     } else {
-      codeError.value = '验证码发送失败，请重试';
+      codeError.value = t('register.error.codeSendFailed');
     }
   } finally {
     sendingCode.value = false;
@@ -225,12 +225,12 @@ const handleSendCode = async () => {
 const validateEmail = () => {
   emailError.value = '';
   if (!email.value) {
-    emailError.value = '请输入邮箱';
+    emailError.value = t('login.validation.emailRequired');
     return false;
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email.value)) {
-    emailError.value = '请输入有效的邮箱地址';
+    emailError.value = t('login.validation.emailInvalid');
     return false;
   }
   return true;
@@ -239,11 +239,11 @@ const validateEmail = () => {
 const validatePassword = () => {
   passwordError.value = '';
   if (!password.value) {
-    passwordError.value = '请输入密码';
+    passwordError.value = t('login.validation.passwordRequired');
     return false;
   }
   if (password.value.length < 6) {
-    passwordError.value = '密码至少需要6位';
+    passwordError.value = t('login.validation.passwordMinLength');
     return false;
   }
   return true;
@@ -252,11 +252,11 @@ const validatePassword = () => {
 const validateConfirmPassword = () => {
   confirmPasswordError.value = '';
   if (!confirmPassword.value) {
-    confirmPasswordError.value = '请确认密码';
+    confirmPasswordError.value = t('register.validation.confirmPasswordRequired');
     return false;
   }
   if (confirmPassword.value !== password.value) {
-    confirmPasswordError.value = '两次输入的密码不一致';
+    confirmPasswordError.value = t('register.validation.passwordMismatch');
     return false;
   }
   return true;
@@ -298,16 +298,16 @@ const handleGoogleLogin = async () => {
       onboardingCompleted: false,
       emailVerified: true,
     });
-    message.success('注册成功');
+    message.success(t('auth.registerSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const msg = error?.message || '';
     if (msg.includes('timeout') || msg.includes('TIMEOUT')) {
-      message.error('授权服务暂时无法访问，请使用邮箱注册');
+      message.error(t('register.error.oauthUnavailable'));
     } else if (msg.includes('500') || msg.includes('SERVER_ERROR')) {
-      message.error('服务器繁忙，请稍后重试');
+      message.error(t('login.error.serverBusy'));
     } else {
-      message.error('Google授权失败，请重试');
+      message.error(t('login.error.googleFailed'));
     }
   } finally {
     loading.value = false;
@@ -329,16 +329,16 @@ const handleDiscordLogin = async () => {
       onboardingCompleted: false,
       emailVerified: true,
     });
-    message.success('注册成功');
+    message.success(t('auth.registerSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const msg = error?.message || '';
     if (msg.includes('timeout') || msg.includes('TIMEOUT')) {
-      message.error('授权服务暂时无法访问，请使用邮箱注册');
+      message.error(t('register.error.oauthUnavailable'));
     } else if (msg.includes('500') || msg.includes('SERVER_ERROR')) {
-      message.error('服务器繁忙，请稍后重试');
+      message.error(t('login.error.serverBusy'));
     } else {
-      message.error('Discord授权失败，请重试');
+      message.error(t('login.error.discordFailed'));
     }
   } finally {
     loading.value = false;
@@ -376,21 +376,21 @@ const handleEmailRegister = async () => {
       onboardingCompleted: profile.onboarding_completed,
       emailVerified: profile.email_verified,
     });
-    message.success('注册成功');
+    message.success(t('auth.registerSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const errCode = error?.message || '';
     // 处理不同的错误类型
     if (errCode.includes('EMAIL_EXISTS') || errCode.includes('409')) {
-      registerError.value = '该邮箱已被注册，请直接登录';
+      registerError.value = t('register.error.emailRegistered');
     } else if (errCode.includes('INVALID_EMAIL') || errCode.includes('400')) {
-      registerError.value = '邮箱格式不正确';
+      registerError.value = t('register.error.emailInvalid');
     } else if (errCode.includes('WEAK_PASSWORD') || errCode.includes('422')) {
-      registerError.value = '密码强度不足，请使用更复杂的密码';
+      registerError.value = t('register.error.weakPassword');
     } else if (errCode.includes('500') || errCode.includes('SERVER_ERROR')) {
-      registerError.value = '服务器繁忙，请稍后重试';
+      registerError.value = t('login.error.serverBusy');
     } else {
-      registerError.value = '注册失败，请重试';
+      registerError.value = t('register.error.registerFailed');
     }
   } finally {
     loading.value = false;

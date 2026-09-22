@@ -17,8 +17,8 @@
           </div>
           
           <div class="trial-info" v-if="showTrial">
-            <span class="trial-badge">🎁 3天免费试用</span>
-            <p class="trial-text">无需立即付费，随时可取消</p>
+            <span class="trial-badge">{{ $t('paywallModal.trialBadge') }}</span>
+            <p class="trial-text">{{ $t('paywallModal.trialText') }}</p>
           </div>
           
           <div class="action-buttons">
@@ -26,7 +26,7 @@
               {{ subscribeText }}
             </button>
             <button v-if="showLater" class="secondary-button" @click="handleLater">
-              稍后再说
+              {{ $t('paywallModal.later') }}
             </button>
           </div>
         </div>
@@ -37,6 +37,9 @@
 
 <script setup lang="ts">
 import { } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 interface Props {
   visible: boolean;
@@ -50,14 +53,14 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: '解锁完整体验',
-  description: '升级 Premium 会员，享受无限对话、专属剧情和更多特权',
+  title: t('paywallModal.title'),
+  description: t('paywallModal.description'),
   features: () => [
-    '无限 AI 对话次数',
-    '解锁所有高级剧本',
-    '专属角色和剧情',
+    t('paywallModal.feature1'),
+    t('paywallModal.feature2'),
+    t('paywallModal.feature3'),
   ],
-  subscribeText: '立即升级 Premium',
+  subscribeText: t('paywallModal.subscribeText'),
   showTrial: true,
   showLater: true,
   closeOnClickOutside: true,

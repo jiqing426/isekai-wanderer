@@ -1,7 +1,7 @@
 <template>
   <div class="ending-progress">
     <div class="progress-header">
-      <span class="progress-title">🏆 结局收集</span>
+      <span class="progress-title">{{ $t('endingProgress.collectionTitle') }}</span>
       <span class="progress-count">{{ progress.unlocked_count }}/{{ progress.total_endings }}</span>
     </div>
 
@@ -15,8 +15,8 @@
 
     <!-- All collected celebration (AC-SAVE-004.3) -->
     <div v-if="allCollected" class="all-collected">
-      🎉 全部结局已收集！
-      <span class="badge">🏅 完美通关</span>
+      {{ $t('endingProgress.allCollected') }}
+      <span class="badge">{{ $t('endingProgress.perfectClear') }}</span>
     </div>
 
     <!-- Unlocked endings list -->
@@ -46,7 +46,7 @@
     </div>
 
     <!-- No endings defined (AC-SAVE-004.5) -->
-    <n-empty v-if="progress.total_endings === 0" description="该剧本暂无结局收集" size="small" />
+    <n-empty v-if="progress.total_endings === 0" :description="$t('endingProgress.noEndings')" size="small" />
   </div>
 </template>
 
@@ -54,6 +54,9 @@
 import { NEmpty } from 'naive-ui';
 import { computed } from 'vue';
 import type { EndingProgressResponse } from '@/api/game';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   progress: EndingProgressResponse;
@@ -77,7 +80,7 @@ function endingIcon(type: string): string {
 
 function endingTypeLabel(type: string): string {
   const map: Record<string, string> = {
-    happy: 'HE', bad: 'BE', normal: 'NE', true_end: 'TE', hidden: '隐藏', secret: '秘密',
+    happy: 'HE', bad: 'BE', normal: 'NE', true_end: 'TE', hidden: t('endingProgress.typeHidden'), secret: t('endingProgress.typeSecret'),
   };
   return map[type] || type;
 }

@@ -79,46 +79,45 @@ async def create_order(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """创建订阅订单（需要认证）"""
-    uid = UUID(user_id)
-    
+    """创建/升级/续费订阅订单（需要认证）
+
+    统一委托给 CR-016 的 create 逻辑，支持升级叠加、同级续费、降级预约。
+    """
+    # Delegate to CR-016 create endpoint
+    from app.api.v1.cr016_subscription import create_subscription_cr016, CreateSubscriptionRequest
+
     # Validate planId
     valid_plans = ["basic", "standard", "premium"]
     if request.planId not in valid_plans:
         raise AppException("PLAN_NOT_FOUND", 404, f"套餐不存在: {request.planId}")
-    
+
     # Validate cycleType
     if request.cycleType not in ["monthly", "yearly"]:
         raise AppException("INVALID_CYCLE_TYPE", 400, f"无效的订阅周期: {request.cycleType}")
-    
+
     # Price map
     price_map = {
         "basic": {"monthly": 1.99, "yearly": 19.99},
         "standard": {"monthly": 4.99, "yearly": 49.99},
         "premium": {"monthly": 9.99, "yearly": 99.99}
     }
-    
     amount = price_map[request.planId][request.cycleType]
-    
-    # Generate order ID
     order_id = f"order_{uuid.uuid4().hex[:12]}"
-    
-    # Directly activate subscription (no mock payment gateway)
-    from datetime import datetime, timezone, timedelta
-    
-    if request.cycleType == "monthly":
-        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-    else:
-        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
-    subscription_service = SubscriptionService(db)
-    await subscription_service.on_subscription_created(uid, request.planId, expires_at)
+
+    # Delegate to CR-016 logic
+    cr016_request = CreateSubscriptionRequest(tier=request.planId, cycle=request.cycleType)
+    result = await create_subscription_cr016(cr016_request, user_id, db)
     await db.commit()
-    
+
     return {
         "orderId": order_id,
         "payUrl": None,
         "amount": amount,
         "currency": "USD",
         "status": "success",
-        "message": "订阅成功"
+        "action": result.action,
+        "tier": result.tier,
+        "expires_at": result.expires_at,
+        "pending_tier": result.pending_tier,
+        "message": result.message,
     }

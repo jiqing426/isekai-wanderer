@@ -49,9 +49,9 @@
                 @change="handleAvatarUpload"
                 style="display: none"
               />
-              📷 更换头像
+              📷 {{ $t('settingsExtra.changeAvatar') }}
             </label>
-            <span class="upload-hint">最大 5MB</span>
+            <span class="upload-hint">{{ $t('settingsExtra.maxSize5mb') }}</span>
           </div>
 
           <div class="form-group">
@@ -102,10 +102,10 @@
           <div class="setting-group">
             <label>{{ $t('settings.typingSpeed') }}</label>
             <select v-model="playSettings.typing_speed" @change="savePlaySettings">
-              <option value="slow">慢速</option>
-              <option value="normal">正常</option>
-              <option value="fast">快速</option>
-              <option value="instant">即时</option>
+              <option value="slow">{{ $t('settingsExtra.speedSlow') }}</option>
+              <option value="normal">{{ $t('settingsExtra.speedNormal') }}</option>
+              <option value="fast">{{ $t('settingsExtra.speedFast') }}</option>
+              <option value="instant">{{ $t('settingsExtra.speedInstant') }}</option>
             </select>
           </div>
 
@@ -124,7 +124,7 @@
           </div>
 
           <div class="setting-group" v-if="playSettings.auto_play">
-            <label>自动播放延迟 ({{ localAutoPlayDelay }}ms)</label>
+            <label>{{ $t('settingsExtra.autoPlayDelay', { n: localAutoPlayDelay }) }}</label>
             <input 
               type="range" 
               v-model.number="localAutoPlayDelay"
@@ -135,7 +135,7 @@
           </div>
 
           <div class="setting-group">
-            <label>BGM 音量 ({{ localBgmVolume }}%)</label>
+            <label>{{ $t('settingsExtra.bgmVolume', { n: localBgmVolume }) }}</label>
             <input 
               type="range" 
               v-model.number="localBgmVolume"
@@ -145,7 +145,7 @@
           </div>
 
           <div class="setting-group">
-            <label>音效音量 ({{ localSfxVolume }}%)</label>
+            <label>{{ $t('settingsExtra.sfxVolume', { n: localSfxVolume }) }}</label>
             <input 
               type="range" 
               v-model.number="localSfxVolume"
@@ -170,8 +170,8 @@
           <div class="notify-list">
             <div class="notify-item">
               <div class="notify-info">
-                <span class="notify-label">版本更新通知</span>
-                <span class="notify-desc">当应用有新版本时通知</span>
+                <span class="notify-label">{{ $t('settingsExtra.updateNotifyLabel') }}</span>
+                <span class="notify-desc">{{ $t('settingsExtra.updateNotifyDesc') }}</span>
               </div>
               <label class="toggle-switch">
                 <input 
@@ -185,8 +185,8 @@
 
             <div class="notify-item">
               <div class="notify-info">
-                <span class="notify-label">活动提醒</span>
-                <span class="notify-desc">限时活动开始提醒</span>
+                <span class="notify-label">{{ $t('settingsExtra.activityReminderLabel') }}</span>
+                <span class="notify-desc">{{ $t('settingsExtra.activityReminderDesc') }}</span>
               </div>
               <label class="toggle-switch">
                 <input 
@@ -200,8 +200,8 @@
 
             <div class="notify-item">
               <div class="notify-info">
-                <span class="notify-label">签到推送</span>
-                <span class="notify-desc">每日签到提醒</span>
+                <span class="notify-label">{{ $t('settingsExtra.checkinPushLabel') }}</span>
+                <span class="notify-desc">{{ $t('settingsExtra.checkinPushDesc') }}</span>
               </div>
               <label class="toggle-switch">
                 <input 
@@ -215,8 +215,8 @@
 
             <div class="notify-item">
               <div class="notify-info">
-                <span class="notify-label">新剧本上架</span>
-                <span class="notify-desc">有新剧本发布时通知</span>
+                <span class="notify-label">{{ $t('settingsExtra.newScriptLabel') }}</span>
+                <span class="notify-desc">{{ $t('settingsExtra.newScriptDesc') }}</span>
               </div>
               <label class="toggle-switch">
                 <input 
@@ -235,16 +235,16 @@
           <h3 class="panel-title">{{ $t('settings.privacySecurity') }}</h3>
 
           <div class="privacy-section">
-            <h4>修改密码</h4>
-            <p class="section-desc">定期修改密码可以提高账户安全性</p>
+            <h4>{{ $t('settingsExtra.changePassword') }}</h4>
+            <p class="section-desc">{{ $t('settingsExtra.changePasswordDesc') }}</p>
             <button class="action-btn" @click="showPasswordModal = true">
-              修改密码
+              {{ $t('settingsExtra.changePassword') }}
             </button>
           </div>
 
           <div class="privacy-section">
-            <h4>登录设备管理</h4>
-            <p class="section-desc">查看和管理已登录的设备</p>
+            <h4>{{ $t('settingsExtra.deviceManagement') }}</h4>
+            <p class="section-desc">{{ $t('settingsExtra.deviceManagementDesc') }}</p>
             
             <div class="device-list" v-if="devices.length > 0">
               <div 
@@ -256,13 +256,13 @@
                 <div class="device-info">
                   <div class="device-name">
                     {{ device.device_name }}
-                    <span v-if="device.is_current" class="current-badge">当前设备</span>
+                    <span v-if="device.is_current" class="current-badge">{{ $t('settingsExtra.currentDevice') }}</span>
                   </div>
                   <div class="device-meta">
                     {{ device.browser }} · {{ device.os }}
                   </div>
                   <div class="device-meta">
-                    最后活跃: {{ formatTime(device.last_active_at) }}
+                    {{ $t('settingsExtra.lastActive') }}: {{ formatTime(device.last_active_at) }}
                   </div>
                 </div>
                 <button 
@@ -271,120 +271,61 @@
                   @click="handleLogoutDevice(device.id)"
                   :disabled="loggingOutDevice === device.id"
                 >
-                  下线
+                  {{ $t('settingsExtra.logoutDevice') }}
                 </button>
               </div>
             </div>
             <div v-else class="empty-state">
-              暂无设备信息
+              {{ $t('settingsExtra.noDevices') }}
             </div>
           </div>
         </div>
 
-        <!-- 会员管理 -->
-        <div v-if="activeTab === 'member'" class="content-panel">
-          <h3 class="panel-title">{{ $t('settings.membership') }}</h3>
-
-          <div class="member-card">
-            <div class="member-header">
-              <div class="member-tier">
-                <span class="tier-icon">{{ getTierIcon(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
-                <span class="tier-name">{{ getTierName(memberInfo?.tier || authStore.user?.subscription_tier) }}</span>
-              </div>
-              <span class="member-status" :class="memberInfo?.status">
-                {{ getStatusText(memberInfo?.status) }}
-              </span>
-            </div>
-
-            <div class="member-details">
-              <div class="detail-row">
-                <span class="detail-label">会员时间</span>
-                <span class="detail-value">
-                  {{ memberInfo?.member_since ? formatDate(memberInfo.member_since) : '-' }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">到期时间</span>
-                <span class="detail-value">
-                  {{ memberInfo?.expires_at ? formatDate(memberInfo.expires_at) : '-' }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">自动续费</span>
-                <span class="detail-value">
-                  {{ memberInfo?.auto_renew ? '已开启' : '未开启' }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">碎片余额</span>
-                <span class="detail-value">💎 {{ memberInfo?.fragment_balance || 0 }}</span>
-              </div>
-            </div>
-
-            <div class="member-benefits" v-if="memberInfo?.benefits && memberInfo.benefits.length > 0">
-              <h4>当前权益</h4>
-              <div class="benefits-list">
-                <div v-for="benefit in memberInfo.benefits" :key="benefit" class="benefit-item">
-                  ✓ {{ getBenefitText(benefit) }}
-                </div>
-              </div>
-            </div>
-
-            <div class="member-actions">
-              <button class="primary-btn" @click="router.push('/subscription')">
-                {{ memberInfo?.tier === 'free' ? '升级会员' : '续费' }}
-              </button>
-              <button class="secondary-btn" @click="router.push('/fragment')">
-                碎片商城
-              </button>
-            </div>
-          </div>
-        </div>
       </main>
     </div>
 
     <!-- 修改密码弹窗 -->
     <div v-if="showPasswordModal" class="modal-overlay" @click="showPasswordModal = false">
       <div class="modal-content" @click.stop>
-        <h3>修改密码</h3>
+        <h3>{{ $t('settingsExtra.changePassword') }}</h3>
         
         <div class="form-group">
-          <label>当前密码</label>
+          <label>{{ $t('settingsExtra.currentPassword') }}</label>
           <input 
             v-model="passwordForm.old_password"
             type="password"
-            placeholder="请输入当前密码"
+            :placeholder="t('settingsExtra.currentPasswordPlaceholder')"
           />
         </div>
 
         <div class="form-group">
-          <label>新密码</label>
+          <label>{{ $t('settingsExtra.newPasswordLabel') }}</label>
           <input 
             v-model="passwordForm.new_password"
             type="password"
-            placeholder="请输入新密码（至少8位）"
+            :placeholder="t('settingsExtra.newPasswordPlaceholder')"
           />
         </div>
 
         <div class="form-group">
-          <label>确认新密码</label>
+          <label>{{ $t('settingsExtra.confirmNewPasswordLabel') }}</label>
           <input 
             v-model="passwordConfirm"
             type="password"
-            placeholder="请再次输入新密码"
+            :placeholder="t('settingsExtra.confirmNewPasswordPlaceholder')"
           />
         </div>
 
         <div class="modal-actions">
           <button class="cancel-btn" @click="showPasswordModal = false">
-            取消
+            {{ $t('common.cancel') }}
           </button>
           <button 
             class="confirm-btn" 
             @click="handleChangePassword"
             :disabled="changingPassword"
           >
-            {{ changingPassword ? '提交中...' : '确认修改' }}
+            {{ changingPassword ? $t('settingsExtra.submitting') : $t('settingsExtra.confirmChange') }}
           </button>
         </div>
       </div>
@@ -425,7 +366,7 @@ const { t } = useI18n();
 const message = useMessage();
 
 // 当前激活的标签
-const activeTab = ref<'profile' | 'play' | 'notify' | 'privacy' | 'member'>('profile');
+const activeTab = ref<'profile' | 'play' | 'notify' | 'privacy'>('profile');
 
 // 标签配置
 const tabs = computed(() => [
@@ -433,7 +374,6 @@ const tabs = computed(() => [
   { key: 'play' as const, icon: '🎮', label: t('settings.playPreferences') },
   { key: 'notify' as const, icon: '🔔', label: t('settings.notifications') },
   { key: 'privacy' as const, icon: '🔒', label: t('settings.privacySecurity') },
-  { key: 'member' as const, icon: '💎', label: t('settings.membership') },
 ]);
 
 // 个人资料
@@ -504,7 +444,7 @@ async function loadProfile() {
     userEmail.value = profile.email || '';
   } catch (err) {
     console.error('加载个人资料失败:', err);
-    message.error('加载个人资料失败');
+    message.error(t('settingsExtra.loadProfileFailed'));
   }
 }
 
@@ -517,10 +457,10 @@ async function saveProfile() {
       avatar_url: userAvatar.value,
       signature: userSignature.value,
     });
-    message.success('保存成功');
+    message.success(t('settingsExtra.saveSuccess'));
   } catch (err) {
     console.error('保存个人资料失败:', err);
-    message.error('保存失败');
+    message.error(t('settingsExtra.saveFailed'));
   } finally {
     savingProfile.value = false;
   }
@@ -534,14 +474,14 @@ async function handleAvatarUpload(event: Event) {
 
   // 验证文件大小
   if (file.size > 5 * 1024 * 1024) {
-    message.error('头像大小不能超过5MB');
+    message.error(t('settingsExtra.avatarTooLarge'));
     return;
   }
 
   // 验证文件类型
   const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   if (!validTypes.includes(file.type)) {
-    message.error('只支持 jpg/png/gif/webp 格式');
+    message.error(t('settingsExtra.unsupportedFormat'));
     return;
   }
 
@@ -549,10 +489,10 @@ async function handleAvatarUpload(event: Event) {
     // 上传头像
     const result = await uploadAvatar(file);
     userAvatar.value = result.avatar_url;
-    message.success('头像上传成功');
+    message.success(t('settingsExtra.avatarUploadSuccess'));
   } catch (err: any) {
     console.error('头像上传失败:', err);
-    message.error(err?.message || '上传失败，请重试');
+    message.error(err?.message || t('settingsExtra.avatarUploadFailed'));
   }
 }
 
@@ -575,10 +515,10 @@ async function savePlaySettings() {
     playSettings.value.bgm_volume = localBgmVolume.value;
     playSettings.value.sfx_volume = localSfxVolume.value;
     await updatePlaySetting(playSettings.value);
-    message.success('保存成功');
+    message.success(t('settingsExtra.saveSuccess'));
   } catch (err) {
     console.error('保存播放设置失败:', err);
-    message.error('保存失败');
+    message.error(t('settingsExtra.saveFailed'));
   } finally {
     savingPlaySettings.value = false;
   }
@@ -598,10 +538,10 @@ async function loadNotifySettings() {
 async function saveNotifySettings() {
   try {
     await updateNotifySetting(notifySettings.value);
-    message.success('保存成功');
+    message.success(t('settingsExtra.saveSuccess'));
   } catch (err) {
     console.error('保存通知设置失败:', err);
-    message.error('保存失败');
+    message.error(t('settingsExtra.saveFailed'));
   }
 }
 
@@ -620,11 +560,11 @@ async function handleLogoutDevice(deviceId: string) {
   loggingOutDevice.value = deviceId;
   try {
     await logoutDevice(deviceId);
-    message.success('设备已下线');
+    message.success(t('settingsExtra.deviceLoggedOut'));
     await loadDevices();
   } catch (err) {
     console.error('下线设备失败:', err);
-    message.error('下线失败');
+    message.error(t('settingsExtra.deviceLogoutFailed'));
   } finally {
     loggingOutDevice.value = null;
   }
@@ -643,17 +583,17 @@ async function loadMemberInfo() {
 // 修改密码
 async function handleChangePassword() {
   if (!passwordForm.value.old_password || !passwordForm.value.new_password) {
-    message.error('请填写完整');
+    message.error(t('settingsExtra.fillComplete'));
     return;
   }
 
   if (passwordForm.value.new_password.length < 8) {
-    message.error('新密码至少8位');
+    message.error(t('settingsExtra.passwordMinLength'));
     return;
   }
 
   if (passwordForm.value.new_password !== passwordConfirm.value) {
-    message.error('两次输入的密码不一致');
+    message.error(t('settingsExtra.passwordMismatch'));
     return;
   }
 
@@ -663,13 +603,13 @@ async function handleChangePassword() {
       old_password: passwordForm.value.old_password,
       new_password: passwordForm.value.new_password,
     });
-    message.success('密码修改成功');
+    message.success(t('settingsExtra.passwordChangeSuccess'));
     showPasswordModal.value = false;
     passwordForm.value = { old_password: '', new_password: '' };
     passwordConfirm.value = '';
   } catch (err: any) {
     console.error('修改密码失败:', err);
-    message.error(err?.message || '修改失败');
+    message.error(err?.message || t('settingsExtra.passwordChangeFailed'));
   } finally {
     changingPassword.value = false;
   }
@@ -683,7 +623,7 @@ function formatTime(dateStr: string): string {
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return '未知时间';
+  if (isNaN(date.getTime())) return t('settingsExtra.unknownTime');
   return date.toLocaleDateString('zh-CN');
 }
 
@@ -700,30 +640,30 @@ function getTierIcon(tier?: string): string {
 
 function getTierName(tier?: string): string {
   const names: Record<string, string> = {
-    free: '免费版',
-    basic: '基础版',
-    standard: '标准版',
-    premium: '高级版',
+    free: t('settingsExtra.tierFreeName'),
+    basic: t('settingsExtra.tierBasicName'),
+    standard: t('settingsExtra.tierStandardName'),
+    premium: t('settingsExtra.tierPremiumName'),
   };
-  return names[tier || 'free'] || '免费版';
+  return names[tier || 'free'] || t('settingsExtra.tierFreeName');
 }
 
 function getStatusText(status?: string): string {
   const texts: Record<string, string> = {
-    active: '生效中',
-    inactive: '未激活',
-    cancelled: '已取消',
-    trialing: '试用中',
+    active: t('settingsExtra.statusActive'),
+    inactive: t('settingsExtra.statusInactive'),
+    cancelled: t('settingsExtra.statusCancelled'),
+    trialing: t('settingsExtra.statusTrialing'),
   };
-  return texts[status || 'inactive'] || '未激活';
+  return texts[status || 'inactive'] || t('settingsExtra.statusInactive');
 }
 
 function getBenefitText(benefit: string): string {
   const texts: Record<string, string> = {
-    free_chat_enabled: '自由对话',
-    full_memory_access: '完整记忆',
-    exclusive_cg: '专属CG',
-    priority_support: '优先客服',
+    free_chat_enabled: t('settingsExtra.benefitFreeChat'),
+    full_memory_access: t('settingsExtra.benefitFullMemory'),
+    exclusive_cg: t('settingsExtra.benefitExclusiveCg'),
+    priority_support: t('settingsExtra.benefitPrioritySupport'),
   };
   return texts[benefit] || benefit;
 }

@@ -39,23 +39,14 @@ async def list_scripts(
     size: Optional[int] = Query(None, ge=1, le=100, description="每页数量"),
     limit: Optional[int] = Query(None, ge=1, le=100, description="每页数量（size 的别名，向后兼容）"),
     db: AsyncSession = Depends(get_db),
-    user_id: Optional[str] = Depends(None),  # Optional auth — public endpoint
 ):
     """List scripts with search, filter, sort and pagination (public — auth optional).
     
     CR-043 AC-009: When user is authenticated, each script includes is_accessible field.
     When not authenticated, is_accessible is omitted (frontend can compute from free tier).
     """
-    # CR-043: Try to get user_id from JWT if provided
+    # CR-043: Try to get user_id from JWT if provided (optional)
     actual_user_id = None
-    try:
-        from app.api.v1.auth import get_current_user_id as _get_uid
-        from fastapi import Request
-        # user_id may be passed via dependency injection if token present
-        # For simplicity, we accept it as optional parameter
-        actual_user_id = user_id
-    except Exception:
-        pass
     # Resolve size: prefer size, fallback to limit, default 12
     effective_size = size if size is not None else (limit if limit is not None else 12)
     # Clamp size to [10, 40] per BE-D4 spec

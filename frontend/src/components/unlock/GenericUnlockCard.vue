@@ -7,7 +7,7 @@
       </div>
 
       <!-- 解锁标签 -->
-      <div class="unlock-label">{{ typeLabel }} 已解锁</div>
+      <div class="unlock-label">{{ $t('genericUnlockCard.unlocked', { type: typeLabel }) }}</div>
 
       <!-- 标题 -->
       <h3 class="unlock-title">{{ title }}</h3>
@@ -24,8 +24,8 @@
 
       <!-- 按钮组 -->
       <div class="button-group">
-        <button class="btn-confirm" @click="$emit('confirm')">确认</button>
-        <button v-if="showLater" class="btn-later" @click="$emit('later')">稍后</button>
+        <button class="btn-confirm" @click="$emit('confirm')">{{ $t('genericUnlockCard.confirm') }}</button>
+        <button v-if="showLater" class="btn-later" @click="$emit('later')">{{ $t('genericUnlockCard.later') }}</button>
       </div>
     </div>
   </div>
@@ -33,7 +33,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { UnlockType, UnlockReward } from '@/types/unlock'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   type: UnlockType
@@ -62,16 +65,17 @@ const typeIcon = computed(() => {
 })
 
 const typeLabel = computed(() => {
-  const labels: Record<string, string> = {
+  const keyMap: Record<string, string> = {
     cg: 'CG',
-    achievement: '成就',
-    hidden_story: '隐藏剧情',
-    voice: '语音',
-    exclusive_script: '专属剧本',
-    reward_float: '奖励',
-    multi_reward: '奖励'
+    achievement: 'genericUnlockCard.typeAchievement',
+    hidden_story: 'genericUnlockCard.typeHiddenStory',
+    voice: 'genericUnlockCard.typeVoice',
+    exclusive_script: 'genericUnlockCard.typeExclusiveScript',
+    reward_float: 'genericUnlockCard.typeRewardFloat',
+    multi_reward: 'genericUnlockCard.typeMultiReward'
   }
-  return labels[props.type] || '内容'
+  const mapped = keyMap[props.type]
+  return mapped && mapped.includes('.') ? t(mapped) : (mapped || t('genericUnlockCard.typeContent'))
 })
 
 const showLater = computed(() => {
@@ -88,12 +92,13 @@ function rewardIcon(type: string): string {
 }
 
 function rewardLabel(type: string): string {
-  const labels: Record<string, string> = {
-    fragment: '碎片',
-    exp: '经验',
-    gold: '金币'
+  const keyMap: Record<string, string> = {
+    fragment: 'rewardFloat.fragment',
+    exp: 'rewardFloat.exp',
+    gold: 'rewardFloat.gold'
   }
-  return labels[type] || type
+  const i18nKey = keyMap[type]
+  return i18nKey ? t(i18nKey) : type
 }
 </script>
 

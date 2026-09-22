@@ -1,7 +1,7 @@
 <template>
   <div class="quota-display">
     <div class="quota-header">
-      <h3 class="quota-title">对话额度</h3>
+      <h3 class="quota-title">{{ $t('quotaDisplay.title') }}</h3>
       <button class="refresh-btn" @click="refreshQuota" :disabled="refreshing">
         <span class="refresh-icon" :class="{ spinning: refreshing }">🔄</span>
       </button>
@@ -13,7 +13,7 @@
         <span class="quota-separator">/</span>
         <span class="quota-total">{{ quota.total }}</span>
       </div>
-      <div class="quota-label">剩余额度</div>
+      <div class="quota-label">{{ $t('quotaDisplay.remaining') }}</div>
     </div>
 
     <div class="quota-bar">
@@ -30,7 +30,7 @@
         @click="showBuyDialog = true"
         :disabled="quota.total === -1"
       >
-        购买额外额度
+        {{ $t('quotaDisplay.buyExtra') }}
       </button>
     </div>
 
@@ -38,7 +38,7 @@
     <div v-if="showBuyDialog" class="dialog-overlay" @click.self="showBuyDialog = false">
       <div class="dialog-content">
         <button class="dialog-close" @click="showBuyDialog = false">✕</button>
-        <h3 class="dialog-title">购买额外对话额度</h3>
+        <h3 class="dialog-title">{{ $t('quotaDisplay.buyDialogTitle') }}</h3>
         
         <div class="buy-options">
           <div
@@ -48,19 +48,19 @@
             :class="{ selected: selectedOption === option.id }"
             @click="selectedOption = option.id"
           >
-            <div class="option-quota">+{{ option.quota }} 次对话</div>
-            <div class="option-price">{{ option.cost }} 碎片</div>
+            <div class="option-quota">{{ $t('quotaDisplay.quotaOption', { n: option.quota }) }}</div>
+            <div class="option-price">{{ $t('quotaDisplay.costOption', { n: option.cost }) }}</div>
           </div>
         </div>
 
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="showBuyDialog = false">取消</button>
+          <button class="btn-cancel" @click="showBuyDialog = false">{{ $t('quotaDisplay.cancel') }}</button>
           <button
             class="btn-confirm"
             @click="handleBuyQuota"
             :disabled="!selectedOption || buying"
           >
-            {{ buying ? '购买中...' : '确认购买' }}
+            {{ buying ? $t('quotaDisplay.buying') : $t('quotaDisplay.confirm') }}
           </button>
         </div>
       </div>
@@ -72,6 +72,9 @@
 import { ref, computed } from 'vue';
 import { useMessage } from 'naive-ui';
 import { exchangeQuota } from '@/api/subscription';
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   quota: {
@@ -123,7 +126,7 @@ async function handleBuyQuota() {
       quantity: 1
     });
 
-    message.success(`购买成功！获得 ${response.quota_added} 次对话额度`);
+    message.success(t('quotaDisplay.buySuccess', { n: response.quota_added }));
     showBuyDialog.value = false;
     selectedOption.value = null;
 
@@ -133,7 +136,7 @@ async function handleBuyQuota() {
       remaining: response.new_quota
     });
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : '购买失败';
+    const errorMsg = err instanceof Error ? err.message : t('quotaDisplay.buyFailed');
     message.error(errorMsg);
   } finally {
     buying.value = false;

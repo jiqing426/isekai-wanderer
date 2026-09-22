@@ -51,6 +51,8 @@ from app.api.v1.cr016_paywall import router as cr016_paywall_router
 from app.api.v1.cr017_unlock import router as cr017_unlock_router
 from app.api.v1.lorebook import router as lorebook_router
 from app.api.v1.scene_configs import router as scene_configs_router
+from app.api.v1.admin_system import router as admin_system_router
+from app.api.v1.admin_users import router as admin_users_router
 
 api_router.include_router(user_router)
 api_router.include_router(daily_router)
@@ -91,3 +93,5 @@ api_router.include_router(cr016_paywall_router)
 api_router.include_router(cr017_unlock_router)
 api_router.include_router(lorebook_router)
 api_router.include_router(scene_configs_router)
+api_router.include_router(admin_system_router)
+api_router.include_router(admin_users_router)

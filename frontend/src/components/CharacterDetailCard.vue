@@ -1,7 +1,7 @@
 <template>
   <div class="character-detail-card" :class="{ selected: isSelected, locked: isPlayable && !isUnlocked }" @click="$emit('select')">
     <!-- CR-028: 可扮演标识角标 -->
-    <span v-if="isPlayable && isUnlocked" class="playable-badge">🎮可玩</span>
+    <span v-if="isPlayable && isUnlocked" class="playable-badge">{{ $t('characterDetailCard.playable') }}</span>
     
     <!-- 角色头像和基础信息 -->
     <div class="character-header">
@@ -11,9 +11,9 @@
       </div>
       <div class="character-basic">
         <h3>{{ character.name }}</h3>
-        <p class="character-desc">{{ character.description || '暂无描述' }}</p>
+        <p class="character-desc">{{ character.description || $t('characterDetailCard.noDescription') }}</p>
         <div class="basic-info">
-          <span v-if="character.age">{{ character.age }}岁</span>
+          <span v-if="character.age">{{ $t('characterDetailCard.yearsOld', { age: character.age }) }}</span>
           <span v-if="character.height">{{ character.height }}cm</span>
           <span v-if="character.birthday">{{ character.birthday }}</span>
         </div>
@@ -27,13 +27,13 @@
         💎 {{ unlockPrice }}
       </span>
       <span v-else-if="unlockType === 'subscription'" class="card-locked-subscription">
-        ⭐ 订阅专属
+        {{ $t('characterDetailCard.subscriptionExclusive') }}
       </span>
     </div>
 
     <!-- 喜好标签 -->
     <div class="character-likes" v-if="character.likes && character.likes.length > 0">
-      <span class="likes-label">喜好：</span>
+      <span class="likes-label">{{ $t('characterDetailCard.likesLabel') }}</span>
       <div class="likes-tags">
         <span v-for="like in character.likes" :key="like" class="like-tag">
           {{ like }}
@@ -43,7 +43,7 @@
 
     <!-- 性格特征进度条 -->
     <div class="personality-traits" v-if="parsedPersonality && Object.keys(parsedPersonality).length > 0">
-      <h4>性格特征</h4>
+      <h4>{{ $t('characterDetailCard.personalityTitle') }}</h4>
       <div class="trait-item" v-for="(value, key) in parsedPersonality" :key="key">
         <span class="trait-label">{{ getPersonalityLabel(String(key)) }}</span>
         <div class="trait-bar">
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 interface Character {
   id: string;
@@ -70,6 +71,8 @@ interface Character {
   avatar_url?: string;
   is_main?: boolean;
 }
+
+const { t } = useI18n();
 
 const props = defineProps<{
   character: Character;
@@ -114,38 +117,39 @@ const parsedPersonality = computed(() => {
 });
 
 function getPersonalityLabel(key: string): string {
-  const labels: Record<string, string> = {
-    gentle: '温柔',
-    tsundere: '傲娇',
-    cool: '冷静',
-    energetic: '活泼',
-    mysterious: '神秘',
-    loyal: '忠诚',
-    brave: '勇敢',
-    brav: '勇敢',
-    wisdom: '智慧',
-    charisma: '魅力',
-    luck: '幸运',
-    intelligence: '智力',
-    strength: '力量',
-    agility: '敏捷',
-    charm: '魅力',
-    wit: '机智',
-    courage: '勇气',
-    kindness: '善良',
-    humor: '幽默',
-    passion: '热情',
-    calm: '沉稳',
-    creative: '创造力',
-    determined: '决心',
-    empathetic: '共情',
-    optimistic: '乐观',
-    rational: '理性',
-    sensitive: '敏感',
-    stubborn: '固执',
-    wise: '睿智'
+  const keyMap: Record<string, string> = {
+    gentle: 'characterDetailCard.pGentle',
+    tsundere: 'characterDetailCard.pTsundere',
+    cool: 'characterDetailCard.pCool',
+    energetic: 'characterDetailCard.pEnergetic',
+    mysterious: 'characterDetailCard.pMysterious',
+    loyal: 'characterDetailCard.pLoyal',
+    brave: 'characterDetailCard.pBrave',
+    brav: 'characterDetailCard.pBrave',
+    wisdom: 'characterDetailCard.pWisdom',
+    charisma: 'characterDetailCard.pCharisma',
+    luck: 'characterDetailCard.pLuck',
+    intelligence: 'characterDetailCard.pIntelligence',
+    strength: 'characterDetailCard.pStrength',
+    agility: 'characterDetailCard.pAgility',
+    charm: 'characterDetailCard.pCharm',
+    wit: 'characterDetailCard.pWit',
+    courage: 'characterDetailCard.pCourage',
+    kindness: 'characterDetailCard.pKindness',
+    humor: 'characterDetailCard.pHumor',
+    passion: 'characterDetailCard.pPassion',
+    calm: 'characterDetailCard.pCalm',
+    creative: 'characterDetailCard.pCreative',
+    determined: 'characterDetailCard.pDetermined',
+    empathetic: 'characterDetailCard.pEmpathetic',
+    optimistic: 'characterDetailCard.pOptimistic',
+    rational: 'characterDetailCard.pRational',
+    sensitive: 'characterDetailCard.pSensitive',
+    stubborn: 'characterDetailCard.pStubborn',
+    wise: 'characterDetailCard.pWise'
   };
-  return labels[key] || key;
+  const i18nKey = keyMap[key];
+  return i18nKey ? t(i18nKey) : key;
 }
 </script>
 

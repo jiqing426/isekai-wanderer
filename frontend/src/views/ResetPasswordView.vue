@@ -96,4 +96,12 @@ async function handleSubmit() {
 .auth-header p { color: var(--text-muted); font-size: 14px; margin: 0; }
 
 /* === 移动端适配 === */
+@media (max-width: 768px) {
+  .auth-page { padding: 8px; }
+  .auth-card { padding: 28px 20px; border-radius: 20px; }
+  .auth-header { margin-bottom: 24px; }
+  .brand-logo { font-size: 30px; }
+  .auth-header h1 { font-size: 24px; }
+  .auth-header p { font-size: 13px; }
+}
 </style>

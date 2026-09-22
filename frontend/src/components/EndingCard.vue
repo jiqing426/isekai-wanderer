@@ -17,11 +17,11 @@
       <div v-if="stats" class="ending-stats">
         <div class="stat">
           <span class="stat-num">{{ stats.choices }}</span>
-          <span class="stat-lbl">选择</span>
+          <span class="stat-lbl">{{ $t('endingCard.statChoice') }}</span>
         </div>
         <div class="stat">
           <span class="stat-num">{{ stats.finalAffection }}</span>
-          <span class="stat-lbl">好感</span>
+          <span class="stat-lbl">{{ $t('endingCard.statAffection') }}</span>
         </div>
       </div>
     </div>
@@ -30,6 +30,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 export type EndingType = 'good' | 'bad' | 'normal' | 'true_end' | 'hidden';
 
@@ -43,11 +46,11 @@ const props = defineProps<{
 }>();
 
 const BADGE_MAP: Record<EndingType, string> = {
-  good: '✦ 好结局',
-  bad: '✧ 坏结局',
-  normal: '◈ 普通结局',
-  true_end: '★ 真结局',
-  hidden: '✦ 隐藏结局',
+  good: t('endingCard.goodEnding'),
+  bad: t('endingCard.badEnding'),
+  normal: t('endingCard.normalEnding'),
+  true_end: t('endingCard.trueEnding'),
+  hidden: t('endingCard.hiddenEnding'),
 };
 
 const badgeText = computed(() => BADGE_MAP[props.endingType] || props.endingType);

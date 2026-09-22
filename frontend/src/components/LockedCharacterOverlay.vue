@@ -9,7 +9,7 @@
           </div>
 
           <!-- Character Info -->
-          <h3 class="modal-title">解锁角色</h3>
+          <h3 class="modal-title">{{ $t('lockedCharacterOverlay.unlockTitle') }}</h3>
           <div class="character-preview">
             <div class="preview-avatar">
               <img v-if="character?.avatar_url && !avatarFailed" :src="character.avatar_url" :alt="character?.name" @error="avatarFailed = true" />
@@ -22,23 +22,23 @@
           <!-- Unlock Info -->
           <div class="unlock-info">
             <template v-if="character?.unlock_type === 'paid'">
-              <p class="unlock-message">该角色为付费角色，解锁后即可扮演</p>
+              <p class="unlock-message">{{ $t('lockedCharacterOverlay.paidUnlockMsg') }}</p>
               <div class="price-tag">
                 <span class="price-icon">💎</span>
                 <span class="price-value">{{ character?.unlock_price }}</span>
               </div>
             </template>
             <template v-else-if="character?.unlock_type === 'subscription'">
-              <p class="unlock-message">该角色仅限高级订阅用户扮演</p>
+              <p class="unlock-message">{{ $t('lockedCharacterOverlay.subscriptionOnlyMsg') }}</p>
               <div class="subscription-badge">
-                <span>⭐ 高级订阅</span>
+                <span>{{ $t('lockedCharacterOverlay.premiumSubscription') }}</span>
               </div>
             </template>
           </div>
 
           <!-- Actions -->
           <div class="modal-actions">
-            <button class="btn-cancel" @click="$emit('close')">取消</button>
+            <button class="btn-cancel" @click="$emit('close')">{{ $t('lockedCharacterOverlay.cancel') }}</button>
             <button class="btn-unlock" @click="handleUnlock" :disabled="unlocking">
               <span v-if="unlocking" class="btn-spinner"></span>
               <span v-else>{{ unlockButtonText }}</span>
@@ -55,6 +55,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { useI18n } from 'vue-i18n'
 
 export interface PlayableCharacter {
   id: string;
@@ -67,9 +68,11 @@ export interface PlayableCharacter {
 }
 
 const props = defineProps<{
-  visible: boolean;
-  character: PlayableCharacter | null;
-}>();
+  visible: boolean
+  character: any
+}>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -87,14 +90,14 @@ watch(() => props.character?.avatar_url, () => {
 });
 
 const unlockButtonText = computed(() => {
-  if (!props.character) return '解锁';
+  if (!props.character) return t('lockedCharacterOverlay.unlock');
   if (props.character.unlock_type === 'paid') {
-    return `💎 ${props.character.unlock_price} 解锁`;
+    return t('lockedCharacterOverlay.unlockWithPrice', { n: props.character.unlock_price });
   }
   if (props.character.unlock_type === 'subscription') {
-    return '⭐ 订阅解锁';
+    return t('lockedCharacterOverlay.subscribeUnlock');
   }
-  return '解锁';
+  return t('lockedCharacterOverlay.unlock');
 });
 
 async function handleUnlock() {
@@ -104,7 +107,7 @@ async function handleUnlock() {
   try {
     emit('unlock', props.character.id);
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : '解锁失败，请稍后重试';
+    errorMessage.value = err instanceof Error ? err.message : t('lockedCharacterOverlay.unlockFailed');
   } finally {
     unlocking.value = false;
   }

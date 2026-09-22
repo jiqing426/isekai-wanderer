@@ -3,7 +3,7 @@
     class="delete-button"
     @click="handleClick"
     :disabled="loading"
-    title="删除帖子"
+    :title="$t('deletePostButton.deletePost')"
   >
     <span class="delete-icon">🗑️</span>
   </button>
@@ -13,6 +13,9 @@
 import { ref } from 'vue';
 import { useMessage } from 'naive-ui';
 import { deletePost } from '@/api/community';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   postId: string;
@@ -26,18 +29,18 @@ const message = useMessage();
 const loading = ref(false);
 
 async function handleClick() {
-  if (!confirm('确定要删除这个帖子吗？此操作不可撤销。')) {
+  if (!confirm(t('deletePostButton.confirmDelete'))) {
     return;
   }
 
   loading.value = true;
   try {
     await deletePost(props.postId);
-    message.success('帖子已删除');
+    message.success(t('deletePostButton.deleted'));
     emit('deleted');
   } catch (error) {
     console.error('删除帖子失败:', error);
-    message.error('删除失败，请重试');
+    message.error(t('deletePostButton.deleteFailed'));
   } finally {
     loading.value = false;
   }

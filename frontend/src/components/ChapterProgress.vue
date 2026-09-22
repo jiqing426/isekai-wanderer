@@ -27,6 +27,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   chapter?: string;
@@ -35,7 +38,7 @@ const props = withDefaults(defineProps<{
   convergencePoint?: string;
   progress?: number;
 }>(), {
-  chapter: '序章',
+  chapter: t('chapterProgress.prologue'),
   chapterNumber: null,
   chapterTitle: null,
   progress: 0,
@@ -44,10 +47,10 @@ const props = withDefaults(defineProps<{
 // CR-030: 优先使用 chapterNumber + chapterTitle 显示 "第X章：章节名"
 const chapterDisplay = computed(() => {
   if (props.chapterNumber != null && props.chapterTitle) {
-    return `第${props.chapterNumber}章：${props.chapterTitle}`;
+    return t('chapterProgress.chapterFormat', { n: props.chapterNumber, title: props.chapterTitle });
   }
   // 向后兼容：旧 session 返回 chapter_number=null，使用 chapter prop 或默认值
-  return props.chapter || '序章';
+  return props.chapter || t('chapterProgress.prologue');
 });
 
 const clampedProgress = computed(() => {

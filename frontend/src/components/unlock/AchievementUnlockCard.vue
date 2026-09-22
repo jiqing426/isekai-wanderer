@@ -19,7 +19,7 @@
 
       <!-- 成就信息 -->
       <div class="info-section">
-        <div class="unlock-label">成就已解锁</div>
+        <div class="unlock-label">{{ $t('achievementUnlockCard.unlocked') }}</div>
         <h3 class="achievement-title">{{ title }}</h3>
         <p v-if="description" class="achievement-description">{{ description }}</p>
       </div>
@@ -34,13 +34,16 @@
       </div>
 
       <!-- 确认按钮 -->
-      <button class="btn-confirm" @click="$emit('confirm')">确认</button>
+      <button class="btn-confirm" @click="$emit('confirm')">{{ $t('achievementUnlockCard.confirm') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { UnlockReward } from '@/types/unlock'
+
+const { t } = useI18n()
 
 defineProps<{
   title: string
@@ -67,12 +70,13 @@ function rewardIcon(type: string): string {
 }
 
 function rewardLabel(type: string): string {
-  const labels: Record<string, string> = {
-    fragment: '碎片',
-    exp: '经验',
-    gold: '金币'
+  const keyMap: Record<string, string> = {
+    fragment: 'rewardFloat.fragment',
+    exp: 'rewardFloat.exp',
+    gold: 'rewardFloat.gold'
   }
-  return labels[type] || type
+  const i18nKey = keyMap[type]
+  return i18nKey ? t(i18nKey) : type
 }
 </script>
 

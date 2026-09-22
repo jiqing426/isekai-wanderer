@@ -1,6 +1,6 @@
 <template>
   <div class="multi-reward-summary">
-    <h3 class="summary-title">获得奖励</h3>
+    <h3 class="summary-title">{{ $t('multiRewardSummary.title') }}</h3>
 
     <div class="rewards-grid">
       <div
@@ -15,12 +15,15 @@
       </div>
     </div>
 
-    <button class="confirm-btn" @click="$emit('confirm')">确认</button>
+    <button class="confirm-btn" @click="$emit('confirm')">{{ $t('multiRewardSummary.confirm') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { UnlockReward } from '@/types/unlock'
+
+const { t } = useI18n()
 
 defineProps<{
   rewards: UnlockReward[]
@@ -44,12 +47,13 @@ function rewardIcon(type: string): string {
 }
 
 function rewardLabel(type: string): string {
-  const labels: Record<string, string> = {
-    fragment: '碎片',
-    exp: '经验',
-    gold: '金币'
+  const keyMap: Record<string, string> = {
+    fragment: 'rewardFloat.fragment',
+    exp: 'rewardFloat.exp',
+    gold: 'rewardFloat.gold'
   }
-  return labels[type] || type
+  const i18nKey = keyMap[type]
+  return i18nKey ? t(i18nKey) : type
 }
 </script>
 

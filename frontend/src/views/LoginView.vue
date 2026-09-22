@@ -81,7 +81,7 @@
 
       <!-- Forgot Password + Sign Up -->
       <div class="auth-links">
-        <a href="#" class="forgot-link" @click.prevent="goToForgotPassword">忘记密码？</a>
+        <a href="#" class="forgot-link" @click.prevent="goToForgotPassword">{{ t('auth.forgotPassword') }}</a>
         <span class="auth-switch">
           {{ t('auth.noAccount') }} <a href="#" @click.prevent="goToSignup">{{ t('auth.registerNow') }}</a>
         </span>
@@ -118,12 +118,12 @@ const loading = ref(false);
 const validateEmail = () => {
   emailError.value = '';
   if (!email.value) {
-    emailError.value = '请输入邮箱';
+    emailError.value = t('login.validation.emailRequired');
     return false;
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email.value)) {
-    emailError.value = '请输入有效的邮箱地址';
+    emailError.value = t('login.validation.emailInvalid');
     return false;
   }
   return true;
@@ -132,11 +132,11 @@ const validateEmail = () => {
 const validatePassword = () => {
   passwordError.value = '';
   if (!password.value) {
-    passwordError.value = '请输入密码';
+    passwordError.value = t('login.validation.passwordRequired');
     return false;
   }
   if (password.value.length < 6) {
-    passwordError.value = '密码至少需要6位';
+    passwordError.value = t('login.validation.passwordMinLength');
     return false;
   }
   return true;
@@ -176,16 +176,16 @@ const handleGoogleLogin = async () => {
       onboardingCompleted: false,
       emailVerified: true,
     });
-    message.success('登录成功');
+    message.success(t('auth.loginSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const msg = error?.message || '';
     if (msg.includes('timeout') || msg.includes('TIMEOUT')) {
-      message.error('授权服务暂时无法访问，请使用邮箱登录');
+      message.error(t('login.error.oauthUnavailable'));
     } else if (msg.includes('500') || msg.includes('SERVER_ERROR')) {
-      message.error('服务器繁忙，请稍后重试');
+      message.error(t('login.error.serverBusy'));
     } else {
-      message.error('Google授权失败，请重试');
+      message.error(t('login.error.googleFailed'));
     }
   } finally {
     loading.value = false;
@@ -207,16 +207,16 @@ const handleDiscordLogin = async () => {
       onboardingCompleted: false,
       emailVerified: true,
     });
-    message.success('登录成功');
+    message.success(t('auth.loginSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const msg = error?.message || '';
     if (msg.includes('timeout') || msg.includes('TIMEOUT')) {
-      message.error('授权服务暂时无法访问，请使用邮箱登录');
+      message.error(t('login.error.oauthUnavailable'));
     } else if (msg.includes('500') || msg.includes('SERVER_ERROR')) {
-      message.error('服务器繁忙，请稍后重试');
+      message.error(t('login.error.serverBusy'));
     } else {
-      message.error('Discord授权失败，请重试');
+      message.error(t('login.error.discordFailed'));
     }
   } finally {
     loading.value = false;
@@ -252,21 +252,21 @@ const handleEmailLogin = async () => {
       onboardingCompleted: profile.onboarding_completed,
       emailVerified: profile.email_verified,
     });
-    message.success('登录成功');
+    message.success(t('auth.loginSuccess'));
     router.push(getRedirectPath());
   } catch (error: any) {
     const errCode = error?.message || '';
     // 处理不同的错误类型
     if (errCode.includes('USER_NOT_FOUND') || errCode.includes('404')) {
-      loginError.value = '邮箱尚未注册，请前往注册';
+      loginError.value = t('login.error.userNotFound');
     } else if (errCode.includes('INVALID_CREDENTIALS') || errCode.includes('401')) {
-      loginError.value = '邮箱或密码不正确';
+      loginError.value = t('login.error.invalidCredentials');
     } else if (errCode.includes('ACCOUNT_BANNED') || errCode.includes('FORBIDDEN')) {
-      loginError.value = '账号暂时受限，请联系客服';
+      loginError.value = t('login.error.accountBanned');
     } else if (errCode.includes('500') || errCode.includes('SERVER_ERROR')) {
-      loginError.value = '服务器繁忙，请稍后重试';
+      loginError.value = t('login.error.serverBusy');
     } else {
-      loginError.value = '登录失败，请重试';
+      loginError.value = t('login.error.loginFailed');
     }
   } finally {
     loading.value = false;

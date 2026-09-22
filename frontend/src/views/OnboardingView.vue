@@ -190,8 +190,8 @@ const userInput = ref('');
 const isTyping = ref(false);
 const chatContainer = ref<HTMLElement | null>(null);
 const chatMessages = ref([
-  { role: 'ai', text: '你好！我是雪乃，很高兴认识你。让我来为你介绍一下这个奇妙的世界吧！' },
-  { role: 'ai', text: '在这里，每一个选择都会影响故事的走向。你可以和我聊天，探索不同的可能性。' },
+  { role: 'ai', text: t('onboarding.chatGreeting1') },
+  { role: 'ai', text: t('onboarding.chatGreeting2') },
 ]);
 
 // Story types (single select)
@@ -291,7 +291,7 @@ async function sendMessage() {
     // Fallback message on error
     chatMessages.value.push({
       role: 'ai',
-      text: '抱歉，我暂时无法回复。请稍后再试。'
+      text: t('onboarding.chatError')
     });
   } finally {
     isTyping.value = false;

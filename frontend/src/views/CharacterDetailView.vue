@@ -43,7 +43,7 @@
             <span class="stat-value highlight" v-if="character.affection.next_level.remaining != null && !isNaN(character.affection.next_level.remaining)">
               {{ character.affection.next_level.remaining }} {{ $t('character.points') }}
             </span>
-            <span class="stat-value" v-else>已满级</span>
+            <span class="stat-value" v-else>{{ $t('characterDetail.maxLevel') }}</span>
           </div>
         </div>
       </section>
@@ -81,7 +81,7 @@
 
       <!-- Personality Analysis Section -->
       <section class="section glass-card">
-        <h2>📊 性格特点</h2>
+        <h2>📊 {{ $t('characterDetail.personality') }}</h2>
         <div class="personality-analysis">
           <div class="personality-list" v-if="personalityTraits.length > 0">
             <div v-for="trait in personalityTraits" :key="trait.key" class="personality-item">
@@ -100,14 +100,14 @@
             </div>
           </div>
           <div v-else class="no-personality">
-            <p>暂无性格分析数据</p>
+            <p>{{ $t('characterDetail.noPersonalityData') }}</p>
           </div>
         </div>
       </section>
 
       <!-- Voice Preview Section -->
       <section class="section glass-card">
-        <h2>🎤 语音试听</h2>
+        <h2>🎤 {{ $t('characterDetail.voicePreview') }}</h2>
         <div class="voice-list">
           <div v-for="voice in voiceSamples" :key="voice.id" class="voice-item">
             <div class="voice-info">
@@ -133,13 +133,13 @@
           </div>
         </div>
         <div v-if="!canPlayVoice" class="voice-upgrade-hint">
-          💎 升级到 Standard 或 Premium 即可解锁全部语音
+          💎 {{ $t('characterDetail.unlockVoice') }}
         </div>
       </section>
 
       <!-- Character Portrait Section (暂时隐藏) -->
       <!-- <section class="section glass-card">
-        <h2>🎭 角色立绘</h2>
+        <h2>🎭 {{ $t('characterDetail.characterArt') }}</h2>
         <div class="portrait-display">
           <div class="portrait-main">
             <div class="portrait-container" :class="`emotion-${currentEmotion}`">
@@ -149,12 +149,12 @@
               </div>
             </div>
             <div class="emotion-info">
-              <span class="emotion-label">当前表情：</span>
+              <span class="emotion-label">{{ $t('characterDetail.currentEmotion') }}</span>
               <span class="emotion-value">{{ emotionLabel(currentEmotion) }}</span>
             </div>
           </div>
           <div class="emotion-switcher">
-            <h3>切换表情</h3>
+            <h3>{{ $t('characterDetail.switchEmotion') }}</h3>
             <div class="emotion-buttons">
               <button
                 v-for="emotion in availableEmotions"
@@ -196,7 +196,7 @@
     <!-- 统一送礼组件 -->
     <GiftModal
       v-model="showGiftModal"
-      :target-name="character?.name || '角色'"
+      :target-name="character?.name || $t('characterDetail.character')"
       :target-id="characterId"
       @gift-sent="onGiftSent"
     />
@@ -330,7 +330,7 @@ async function playVoice(voiceId: string) {
   playingVoiceId.value = voiceId;
   
   try {
-    const emotion = voice.label || '打招呼';
+    const emotion = voice.label || t('characterDetail.greeting');
     
     // 使用 api 工具类发请求（自动带 token）
     const response = await fetch(
@@ -365,7 +365,7 @@ async function playVoice(voiceId: string) {
   } catch (err) {
     console.error('Voice synthesis failed:', err);
     playingVoiceId.value = null;
-    message.error('语音合成失败，请稍后重试');
+    message.error(t('characterDetail.voiceSynthesisError'));
   }
 }
 
@@ -375,7 +375,7 @@ function getCookieValue(name: string): string {
 }
 
 function showUpgradePrompt() {
-  message.info('升级到 Standard 或 Premium 即可解锁全部语音试听功能');
+  message.info(t('characterDetail.unlockVoiceHint'));
 }
 
 // ── 礼物相关 ──

@@ -24,6 +24,8 @@ export interface SubscriptionStatus {
   status: 'active' | 'cancelled' | 'expired' | null
   started_at: string | null
   expires_at: string | null
+  billing_cycle: string | null
+  pending_tier: string | null
   permissions: TierPermissions
 }
 

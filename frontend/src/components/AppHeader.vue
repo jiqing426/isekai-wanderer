@@ -130,7 +130,7 @@ const userInitial = computed(() => {
 // FE-O26: 导航 tabs 配置
 const navTabs = computed(() => [
   { path: '/discover', icon: '📚', label: t('nav.scripts'), requiresAuth: false },
-  { path: '/character-chat', icon: '💬', label: '角色聊天', requiresAuth: true },
+  { path: '/character-chat', icon: '💬', label: t('appHeader.characterChat'), requiresAuth: true },
   { path: '/gallery', icon: '🖼️', label: t('nav.gallery'), requiresAuth: true },
   { path: '/fragment', icon: '💠', label: t('nav.fragment'), requiresAuth: true },
   { path: '/subscribe', icon: '⭐', label: t('nav.subscription'), requiresAuth: true },
@@ -152,14 +152,14 @@ function handleNavClick(tab: { path: string; requiresAuth: boolean }, isMobile =
 }
 
 const currentLangLabel = computed(() => {
-  const map: Record<string, string> = { 'zh-CN': '中', 'en-US': 'EN', 'ja-JP': '日' };
+  const map: Record<string, string> = { 'zh-CN': t('appHeader.langZh'), 'en-US': t('appHeader.langEn'), 'ja-JP': t('appHeader.langJp') };
   return map[locale.value] || locale.value.slice(0, 2).toUpperCase();
 });
 
 const langOptions = [
-  { label: '🇨🇳 中文', key: 'zh-CN' },
+  { label: t('appHeader.langZhFull'), key: 'zh-CN' },
   { label: '🇺🇸 English', key: 'en-US' },
-  { label: '🇯🇵 日本語', key: 'ja-JP' },
+  { label: t('appHeader.langJpFull'), key: 'ja-JP' },
 ];
 
 const userOptions = [

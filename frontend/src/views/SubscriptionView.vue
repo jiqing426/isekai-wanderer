@@ -9,42 +9,6 @@
         </div>
       </div>
 
-      <!-- CR-016: 当前订阅状态 -->
-      <div v-if="subscriptionStore.subscriptionStatus" class="current-subscription glass-card fade-in-up">
-        <div class="subscription-status-header">
-          <div class="status-left">
-            <span class="status-label">当前订阅</span>
-            <span class="tier-badge" :class="subscriptionStore.currentTier">
-              {{ tierNameMap[subscriptionStore.currentTier] }}
-            </span>
-          </div>
-          <div class="status-right">
-            <span v-if="subscriptionStore.subscriptionStatus.expires_at" class="expires-info">
-              到期时间：{{ formatDate(subscriptionStore.subscriptionStatus.expires_at) }}
-            </span>
-            <span v-else class="expires-info">永久有效</span>
-          </div>
-        </div>
-        <div class="subscription-actions">
-          <n-button v-if="subscriptionStore.isSubscriber" size="small" secondary @click="showCancelConfirm = true">
-            取消订阅
-          </n-button>
-        </div>
-      </div>
-
-      <!-- CR-016: 碎片购买入口 -->
-      <div class="fragment-purchase-section glass-card fade-in-up">
-        <div class="fragment-header">
-          <span class="fragment-icon">✨</span>
-          <span class="fragment-title">碎片购买额外对话</span>
-          <span class="fragment-balance">💎 {{ shardBalance }}</span>
-        </div>
-        <p class="fragment-desc">使用碎片临时补充对话额度，3 碎片 = 1 次额外对话</p>
-        <n-button type="primary" size="small" @click="openFragmentPurchase">
-          立即购买
-        </n-button>
-      </div>
-
       <!-- New Subscription Plans Component -->
       <SubscriptionPlans />
 
@@ -58,14 +22,14 @@
 
       <!-- Feature Comparison Table (保留原有) -->
       <div class="comparison-section reveal">
-        <h2 class="section-title">详细功能对比</h2>
+        <h2 class="section-title">{{ $t('subscriptionView.detailComparison') }}</h2>
         <div class="comparison-table glass-card">
           <div class="comp-header">
-            <div class="comp-cell comp-label">功能</div>
-            <div class="comp-cell">免费版</div>
-            <div class="comp-cell">基础版</div>
-            <div class="comp-cell">标准版</div>
-            <div class="comp-cell">高级版</div>
+            <div class="comp-cell comp-label">{{ $t('subscriptionView.feature') }}</div>
+            <div class="comp-cell">{{ $t('subscription.free') }}</div>
+            <div class="comp-cell">{{ $t('subscription.basic') }}</div>
+            <div class="comp-cell">{{ $t('subscription.standard') }}</div>
+            <div class="comp-cell">{{ $t('subscription.premium') }}</div>
           </div>
           <div v-for="row in comparisonRows" :key="row.label" class="comp-row">
             <div class="comp-cell comp-label">{{ row.label }}</div>
@@ -103,192 +67,49 @@
         </n-collapse>
       </div>
 
-      <!-- Exit retention modal -->
-      <n-modal v-model:show="showExitModal" preset="card" style="max-width: 480px" :mask-closable="false">
-        <div class="exit-retention">
-          <div class="exit-icon">🎁</div>
-          <h2 class="exit-title">确定不领取免费试用？</h2>
-          <p class="exit-desc">
-            现在订阅 Standard 计划，即可享受 <strong>7天免费试用</strong>！
-            <br />试用期间可随时取消，不会收取任何费用。
-          </p>
-          <div class="exit-benefits">
-            <div class="benefit-item">
-              <span class="benefit-icon">✓</span>
-              <span>无限游戏次数</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">✓</span>
-              <span>全部剧本访问</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">✓</span>
-              <span>无限体力</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">✓</span>
-              <span>专属剧本</span>
-            </div>
-          </div>
-          <n-space vertical :size="12" style="margin-top: 20px;">
-            <n-button type="primary" block size="large" @click="claimTrial">
-              🎉 领取7天免费试用
-            </n-button>
-            <n-button block @click="continueLeave">继续离开</n-button>
-          </n-space>
-        </div>
-      </n-modal>
-
-      <!-- CR-016: 取消订阅确认弹窗 -->
-      <n-modal v-model:show="showCancelConfirm" preset="card" style="max-width: 420px" :mask-closable="false">
-        <div class="cancel-confirm">
-          <div class="confirm-icon">⚠️</div>
-          <h3 class="confirm-title">确定取消订阅？</h3>
-          <p class="confirm-desc">取消后将在当前周期结束后停止服务，届时将失去所有订阅特权。</p>
-          <n-space vertical :size="12" style="margin-top: 20px;">
-            <n-button type="error" block @click="handleCancelSubscription">确认取消</n-button>
-            <n-button block secondary @click="showCancelConfirm = false">再想想</n-button>
-          </n-space>
-        </div>
-      </n-modal>
-
-      <!-- CR-016: 碎片购买弹窗 -->
-      <n-modal v-model:show="showFragmentPurchase" preset="card" style="max-width: 420px" :mask-closable="false">
-        <div class="fragment-purchase-modal">
-          <div class="modal-icon">✨</div>
-          <h3 class="modal-title">碎片购买额外对话</h3>
-          <p class="modal-desc">3 碎片 = 1 次额外对话</p>
-          <div class="modal-balance">当前碎片余额：<span class="balance-value">💎 {{ shardBalance }}</span></div>
-          <div class="amount-selector">
-            <n-input-number v-model:value="fragmentAmount" :min="1" :max="99" placeholder="购买次数" />
-            <div class="cost-display">
-              消耗碎片：<span class="cost-value">{{ fragmentAmount * 3 }}</span>
-            </div>
-          </div>
-          <n-space vertical :size="12" style="margin-top: 20px;">
-            <n-button type="primary" block :loading="purchasing" @click="handleFragmentPurchase">
-              确认购买
-            </n-button>
-            <n-button block secondary @click="showFragmentPurchase = false">取消</n-button>
-          </n-space>
-        </div>
-      </n-modal>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted } from 'vue';
 import { useScrollReveal } from '@/composables/useScrollReveal';
 import { useSubscriptionStore } from '@/stores/subscription';
-import { cancelSubscription, purchaseFragmentQuota } from '@/api/subscription';
-import { gameApi } from '@/api/game';
-import { useMessage } from 'naive-ui';
+import { useI18n } from 'vue-i18n';
 import SubscriptionPlans from '@/components/SubscriptionPlans.vue';
 import TierComparison from '@/components/paywall/TierComparison.vue';
 
 useScrollReveal();
 
-const router = useRouter();
-const message = useMessage();
+const { t } = useI18n();
 const subscriptionStore = useSubscriptionStore();
-const showExitModal = ref(false);
-const showCancelConfirm = ref(false);
-const showFragmentPurchase = ref(false);
-const fragmentAmount = ref(1);
-const purchasing = ref(false);
-const shardBalance = ref(0);
 
-async function loadShardBalance() {
-  try {
-    const data = await gameApi.getShardBalance();
-    shardBalance.value = data.balance;
-  } catch {
-    // ignore
-  }
-}
-
-function openFragmentPurchase() {
-  showFragmentPurchase.value = true;
-  loadShardBalance();
-}
-
-const tierNameMap: Record<string, string> = {
-  free: '免费版',
-  basic: '基础版',
-  standard: '标准版',
-  premium: '高级版'
-};
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  // 后端返回 UTC 时间，前端转换为本地时区显示
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  });
-}
-
-async function handleCancelSubscription() {
-  try {
-    await cancelSubscription();
-    message.success('订阅已取消');
-    showCancelConfirm.value = false;
-    await subscriptionStore.fetchSubscriptionStatus();
-  } catch (err) {
-    message.error('取消订阅失败');
-  }
-}
-
-async function handleFragmentPurchase() {
-  purchasing.value = true;
-  try {
-    await purchaseFragmentQuota({ amount: fragmentAmount.value });
-    message.success(`成功购买 ${fragmentAmount.value} 次额外对话`);
-    showFragmentPurchase.value = false;
-    await subscriptionStore.fetchDialogueQuota();
-  } catch (err) {
-    message.error('购买失败');
-  } finally {
-    purchasing.value = false;
-  }
-}
+const tierNameMap = computed<Record<string, string>>(() => ({
+  free: t('subscription.free'),
+  basic: t('subscription.basic'),
+  standard: t('subscription.standard'),
+  premium: t('subscription.premium')
+}));
 
 onMounted(async () => {
   await subscriptionStore.fetchSubscriptionStatus();
-  await subscriptionStore.fetchDialogueQuota();
-  await loadShardBalance();
 });
 
 // 功能对比数据
-const comparisonRows = [
-  { label: '每日游戏次数', free: true, basic: true, standard: true, premium: true },
-  { label: '全部剧本', free: false, basic: true, standard: true, premium: true },
-  { label: '无限体力', free: false, basic: false, standard: true, premium: true },
-  { label: '社区发帖', free: false, basic: true, standard: true, premium: true },
-  { label: '碎片加成', free: false, basic: true, standard: true, premium: true },
-  { label: '专属剧本', free: false, basic: false, standard: true, premium: true },
-  { label: '优先体验', free: false, basic: false, standard: false, premium: true },
-  { label: '专属头像框', free: false, basic: false, standard: false, premium: true },
-  { label: '月度碎片礼包', free: false, basic: false, standard: false, premium: true },
-  { label: '专属客服支持', free: false, basic: false, standard: false, premium: true },
-  { label: '自定义角色', free: false, basic: false, standard: true, premium: true },
-];
+const comparisonRows = computed(() => [
+  { label: t('subscriptionView.featDailyPlays'), free: true, basic: true, standard: true, premium: true },
+  { label: t('subscriptionView.featAllScripts'), free: false, basic: true, standard: true, premium: true },
+  { label: t('subscriptionView.featUnlimitedStamina'), free: false, basic: false, standard: true, premium: true },
+  { label: t('subscriptionView.featCommunityPost'), free: false, basic: true, standard: true, premium: true },
+  { label: t('subscriptionView.featShardBonus'), free: false, basic: true, standard: true, premium: true },
+  { label: t('subscriptionView.featExclusiveScripts'), free: false, basic: false, standard: true, premium: true },
+  { label: t('subscriptionView.featPriorityAccess'), free: false, basic: false, standard: false, premium: true },
+  { label: t('subscriptionView.featExclusiveAvatar'), free: false, basic: false, standard: false, premium: true },
+  { label: t('subscriptionView.featMonthlyShardPack'), free: false, basic: false, standard: false, premium: true },
+  { label: t('subscriptionView.featExclusiveSupport'), free: false, basic: false, standard: false, premium: true },
+  { label: t('subscriptionView.featCustomCharacter'), free: false, basic: false, standard: true, premium: true },
+]);
 
-function claimTrial() {
-  showExitModal.value = false;
-  router.push('/subscription');
-}
-
-function continueLeave() {
-  showExitModal.value = false;
-  router.push('/discover');
-}
 </script>
 
 <style scoped>
@@ -675,35 +496,6 @@ function continueLeave() {
   justify-content: flex-end;
 }
 
-/* CR-016: 碎片购买入口 */
-.fragment-purchase-section {
-  padding: 20px 24px;
-  margin-bottom: 24px;
-}
-
-.fragment-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.fragment-icon {
-  font-size: 24px;
-}
-
-.fragment-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.fragment-desc {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 12px 0;
-}
-
 /* CR-016: 套餐对比包装 */
 .tier-comparison-wrapper {
   padding: 24px;
@@ -733,42 +525,43 @@ function continueLeave() {
   line-height: 1.6;
 }
 
-/* CR-016: 碎片购买弹窗 */
-.fragment-purchase-modal {
-  text-align: center;
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .subscription-page { padding: 16px 12px 32px; }
+  .page-header { margin-bottom: 16px; }
+  .page-header h1 { font-size: 22px; }
+  .page-subtitle { font-size: 13px; }
+  .billing-toggle { margin-bottom: 20px; }
+  .billing-tabs { gap: 4px; }
+  .billing-tab { padding: 8px 16px; }
+  .tab-label { font-size: 13px; }
+  .tab-hint { font-size: 10px; }
+  .plans-grid { grid-template-columns: 1fr; gap: 12px; margin-bottom: 32px; }
+  .plan-card { padding: 20px 16px; }
+  .plan-card:hover { transform: none; }
+  .plan-name { font-size: 16px; }
+  .price-amount { font-size: 30px; }
+  .price-unit { font-size: 12px; }
+  .plan-feature { font-size: 12px; padding: 5px 0; }
+  .comparison-section { margin-bottom: 32px; }
+  .section-title { font-size: 18px; margin: 0 0 14px; }
+  .comparison-table { border-radius: 12px; }
+  .comp-header, .comp-row { grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; padding: 10px 8px; font-size: 11px; }
+  .comp-cell { font-size: 11px; }
+  .comp-label { font-size: 11px; }
+  .tier-comparison-wrapper { padding: 16px; margin-bottom: 32px; }
+  .faq-section { max-width: 100%; margin: 0 auto 32px; }
+  .faq-section .section-title { font-size: 20px; margin: 0 0 16px; }
+  :deep(.faq-collapse .n-collapse-item__header) { padding: 14px 16px !important; font-size: 13px; }
+  :deep(.faq-collapse .n-collapse-item__content-inner) { padding: 0 16px 12px !important; }
+  .faq-answer { font-size: 12px; }
+  .current-subscription { padding: 16px; margin-bottom: 16px; }
+  .subscription-status-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .status-left { gap: 8px; }
+  .status-label { font-size: 13px; }
+  .tier-badge { font-size: 12px; }
+  .expires-info { font-size: 12px; }
+  .subscription-actions { justify-content: stretch; }
+  .subscription-actions :deep(.n-button) { width: 100%; }
 }
-
-.modal-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.modal-title {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0 0 8px 0;
-}
-
-.modal-desc {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin: 0 0 20px 0;
-}
-
-.amount-selector {
-  margin: 20px 0;
-}
-
-.cost-display {
-  margin-top: 12px;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.cost-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #FBBF24;
-}
-
 </style>

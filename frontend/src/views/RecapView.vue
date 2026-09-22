@@ -178,4 +178,29 @@ onMounted(() => { loadRecap(); });
 .sum-num { font-size: 22px; font-weight: 800; color: var(--brand-primary); font-variant-numeric: tabular-nums; }
 .sum-label { font-size: 12px; color: var(--text-muted); }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .recap-page { padding: 16px 12px 32px; }
+  .recap-header { margin-bottom: 16px; }
+  .recap-header h1 { font-size: 20px; }
+  .subtitle { font-size: 13px; }
+  .recap-timeline { padding-left: 18px; }
+  .recap-timeline::before { left: 6px; }
+  .recap-event { padding: 12px 14px; margin-bottom: 10px; }
+  .event-dot { left: -16px; top: 16px; width: 8px; height: 8px; }
+  .event-meta { gap: 6px; margin-bottom: 5px; }
+  .event-type-badge { font-size: 9px; padding: 1px 5px; }
+  .event-scene { font-size: 10px; }
+  .event-time { font-size: 9px; }
+  .event-text { font-size: 13px; line-height: 1.5; }
+  .event-choice { gap: 6px; padding: 5px 8px; margin-top: 6px; }
+  .choice-arrow { font-size: 13px; }
+  .choice-label { font-size: 12px; }
+  .choice-delta { font-size: 10px; }
+  .recap-summary { margin-top: 16px; padding: 16px; }
+  .recap-summary h3 { font-size: 15px; margin: 0 0 12px; }
+  .summary-stats { flex-wrap: wrap; gap: 16px; }
+  .sum-num { font-size: 18px; }
+  .sum-label { font-size: 11px; }
+}
 </style>

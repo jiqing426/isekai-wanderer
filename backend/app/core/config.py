@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     token_budget_l3_npc: int = 300  # NPC profile (character)
     token_budget_l4_memory: int = 800  # Memory recall
     token_budget_l5_narrative: int = 300  # Narrative director
+
+    # CR-044: Fragment billing config
+    dialogue_fragment_cost: int = 2           # 普通对话每次扣碎片数
+    daily_free_dialogues: int = 3             # 每日免费对话次数
+    narrative_free_chars: int = 500           # AI叙事生成前N字免费
+    narrative_billing_step: int = 200         # AI叙事每N字一个计费单位
+    narrative_cost_per_step: int = 1          # AI叙事每个计费单位扣碎片数
     token_budget_l6_player: int = 200  # Player input
     token_encoding: str = "cl100k_base"  # tiktoken encoding model
 
@@ -81,3 +88,55 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def load_system_configs() -> None:
+    """Load system configs from DB and override settings.
+    Called at startup and after admin updates a config value.
+    DB values take priority over .env values.
+    """
+    try:
+        from sqlalchemy import create_engine, text
+        import os, socket
+
+        db_url = os.getenv("DATABASE_URL", settings.database_url)
+        # Convert asyncpg to psycopg2 for sync access
+        if "asyncpg" in db_url:
+            db_url = db_url.replace("asyncpg", "psycopg2")
+        # In docker network, 'db' is the postgres service name
+        # If localhost doesn't work, try 'db'
+        db_url_resolved = db_url.replace("localhost:5432", "db:5432").replace("localhost:9000", "db:5432")
+
+        from sqlalchemy.pool import NullPool
+        engine = create_engine(db_url_resolved, poolclass=NullPool, connect_args={"connect_timeout": 5})
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT key, value FROM system_configs")).fetchall()
+            for key, value in rows:
+                if value is not None:
+                    setting_map = {
+                        "app_url": "app_url",
+                        "smtp_host": "smtp_host",
+                        "smtp_port": "smtp_port",
+                        "smtp_user": "smtp_user",
+                        "smtp_password": "smtp_password",
+                        "smtp_from": "smtp_from",
+                        "jwt_secret": "jwt_secret",
+                        "dialogue_fragment_cost": "dialogue_fragment_cost",
+                        "daily_free_dialogues": "daily_free_dialogues",
+                        "narrative_free_chars": "narrative_free_chars",
+                        "narrative_billing_step": "narrative_billing_step",
+                        "narrative_cost_per_step": "narrative_cost_per_step",
+                    }
+                    attr = setting_map.get(key)
+                    if attr:
+                        if attr in ("smtp_port", "dialogue_fragment_cost", "daily_free_dialogues",
+                                    "narrative_free_chars", "narrative_billing_step", "narrative_cost_per_step"):
+                            value = int(value)
+                        current = getattr(settings, attr, None)
+                        if current != value:
+                            setattr(settings, attr, value)
+                            display = "***" if attr in ("smtp_password", "jwt_secret") else value
+                            print(f"[Config] {attr} overridden from DB: {display}")
+        engine.dispose()
+    except Exception as e:
+        print(f"[Config] Failed to load system_configs from DB (using .env): {e}")

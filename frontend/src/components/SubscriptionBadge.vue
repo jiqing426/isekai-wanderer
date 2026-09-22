@@ -19,6 +19,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   tier: 'free' | 'basic' | 'standard' | 'premium';
@@ -42,12 +45,12 @@ const tierIcon = computed(() => {
 
 const tierText = computed(() => {
   const texts: Record<string, string> = {
-    free: '免费版',
-    basic: '基础版',
-    standard: '标准版',
-    premium: '高级版'
+    free: t('subscriptionBadge.free'),
+    basic: t('subscriptionBadge.basic'),
+    standard: t('subscriptionBadge.standard'),
+    premium: t('subscriptionBadge.premium')
   };
-  return texts[props.tier] || '免费版';
+  return texts[props.tier] || t('subscriptionBadge.free');
 });
 
 const quotaPercentage = computed(() => {

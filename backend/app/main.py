@@ -15,6 +15,10 @@ from fastapi.exceptions import RequestValidationError
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
     # Startup
+    # Load system configs from DB (overrides .env values)
+    from app.core.config import load_system_configs
+    load_system_configs()
+
     # HIGH-003: Warn if using weak JWT secret
     import sys
     if settings.jwt_secret == "change-me-local-only":

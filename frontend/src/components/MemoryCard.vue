@@ -15,7 +15,7 @@
     <div class="memory-content">
       <p class="memory-text">{{ memory.content }}</p>
       <div class="memory-context" v-if="memory.scene_context">
-        <span class="context-label">场景:</span>
+        <span class="context-label">{{ $t('memoryCard.sceneLabel') }}</span>
         <span class="context-value">{{ memory.scene_context }}</span>
       </div>
     </div>
@@ -26,7 +26,7 @@
     </div>
     <div class="memory-actions">
       <n-button size="tiny" quaternary @click="$emit('delete', memory.id)">
-        删除
+        {{ $t('memoryCard.delete') }}
       </n-button>
     </div>
   </div>

@@ -3,7 +3,7 @@
     <div class="comparison-grid">
       <!-- 表头 -->
       <div class="grid-header">
-        <div class="header-cell feature-col">功能</div>
+        <div class="header-cell feature-col">{{ $t('tierComparison.featureHeader') }}</div>
         <div
           v-for="tier in tiers"
           :key="tier.key"
@@ -11,13 +11,13 @@
           :class="{ recommended: tier.key === 'standard' }"
         >
           <span class="tier-name">{{ tier.name }}</span>
-          <span v-if="tier.key === 'standard'" class="recommend-tag">推荐</span>
+          <span v-if="tier.key === 'standard'" class="recommend-tag">{{ $t('tierComparison.recommend') }}</span>
         </div>
       </div>
 
       <!-- 价格行 -->
       <div class="grid-row price-row">
-        <div class="row-cell feature-col">月费</div>
+        <div class="row-cell feature-col">{{ $t('tierComparison.monthlyFee') }}</div>
         <div
           v-for="tier in tiers"
           :key="tier.key"
@@ -49,6 +49,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { SubscriptionTier } from '@/types/subscription';
 
 interface Props {
@@ -58,6 +60,8 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   compact: false
 });
+
+const { t } = useI18n();
 
 interface TierConfig {
   key: SubscriptionTier;
@@ -70,44 +74,44 @@ interface FeatureConfig {
   label: string;
 }
 
-const tiers: TierConfig[] = [
-  { key: 'free', name: '免费', price: '¥0' },
-  { key: 'basic', name: '基础', price: '¥19' },
-  { key: 'standard', name: '标准', price: '¥39' },
-  { key: 'premium', name: '高级', price: '¥69' }
-];
+const tiers = computed<TierConfig[]>(() => [
+  { key: 'free', name: t('tierComparison.tierFree'), price: '¥0' },
+  { key: 'basic', name: t('tierComparison.tierBasic'), price: '¥19' },
+  { key: 'standard', name: t('tierComparison.tierStandard'), price: '¥39' },
+  { key: 'premium', name: t('tierComparison.tierPremium'), price: '¥69' }
+]);
 
-const features: FeatureConfig[] = [
-  { key: 'dialogue', label: '每日对话' },
-  { key: 'archive', label: '存档位' },
-  { key: 'script', label: '剧本权限' },
-  { key: 'voice', label: '语音' },
-  { key: 'rewind', label: '回溯C15' },
+const features = computed<FeatureConfig[]>(() => [
+  { key: 'dialogue', label: t('tierComparison.featureDialogue') },
+  { key: 'archive', label: t('tierComparison.featureArchive') },
+  { key: 'script', label: t('tierComparison.featureScript') },
+  { key: 'voice', label: t('tierComparison.featureVoice') },
+  { key: 'rewind', label: t('tierComparison.featureRewind') },
   { key: 'ugc', label: 'UGC' },
-  { key: 'discount', label: '碎片折扣' },
-  { key: 'hidden', label: '隐藏选项' }
-];
+  { key: 'discount', label: t('tierComparison.featureDiscount') },
+  { key: 'hidden', label: t('tierComparison.featureHidden') }
+]);
 
 type CellValue = string | boolean;
 
 const featureValues: Record<string, Record<SubscriptionTier, CellValue>> = {
   dialogue: {
-    free: '5次',
-    basic: '20次',
-    standard: '无限',
-    premium: '无限'
+    free: t('tierComparison.dialogueFree'),
+    basic: t('tierComparison.dialogueBasic'),
+    standard: t('tierComparison.dialogueStandard'),
+    premium: t('tierComparison.dialoguePremium')
   },
   archive: {
-    free: '3个',
-    basic: '10个',
-    standard: '无限',
-    premium: '无限'
+    free: t('tierComparison.archiveFree'),
+    basic: t('tierComparison.archiveBasic'),
+    standard: t('tierComparison.archiveStandard'),
+    premium: t('tierComparison.archivePremium')
   },
   script: {
-    free: '试用',
-    basic: '普通',
-    standard: '普通',
-    premium: '含独占'
+    free: t('tierComparison.scriptFree'),
+    basic: t('tierComparison.scriptBasic'),
+    standard: t('tierComparison.scriptStandard'),
+    premium: t('tierComparison.scriptPremium')
   },
   voice: {
     free: false,
@@ -128,10 +132,10 @@ const featureValues: Record<string, Record<SubscriptionTier, CellValue>> = {
     premium: true
   },
   discount: {
-    free: '无',
-    basic: '9折',
-    standard: '8折',
-    premium: '7折'
+    free: t('tierComparison.discountFree'),
+    basic: t('tierComparison.discountBasic'),
+    standard: t('tierComparison.discountStandard'),
+    premium: t('tierComparison.discountPremium')
   },
   hidden: {
     free: false,

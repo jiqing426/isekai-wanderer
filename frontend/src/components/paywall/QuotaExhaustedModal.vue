@@ -3,7 +3,7 @@
     <Transition name="fade-scale">
       <div v-if="visible" class="quota-modal-overlay" @click.self="handleClose">
         <div class="quota-modal" role="dialog" aria-modal="true" aria-labelledby="quota-modal-title">
-          <button class="close-btn" @click="handleClose" aria-label="关闭">
+          <button class="close-btn" @click="handleClose" :aria-label="$t('quotaExhaustedModal.cancel')">
             <span>✕</span>
           </button>
 
@@ -11,28 +11,28 @@
             <!-- 进度信息 -->
             <div class="progress-info">
               <div class="icon">⚠️</div>
-              <h2 id="quota-modal-title" class="title">对话额度已用完</h2>
+              <h2 id="quota-modal-title" class="title">{{ $t('quotaExhaustedModal.title') }}</h2>
               <p v-if="scriptProgress" class="script-progress">
                 <span class="script-title">{{ scriptProgress.script_title }}</span>
-                <span class="chapter-info">第 {{ scriptProgress.chapter }} / {{ scriptProgress.total_chapters }} 章</span>
+                <span class="chapter-info">{{ $t('quotaExhaustedModal.chapterInfo', { current: scriptProgress.chapter, total: scriptProgress.total_chapters }) }}</span>
               </p>
               <p v-if="scriptProgress" class="play-duration">
-                已游玩 {{ formatDuration(scriptProgress.play_duration_minutes) }}
+                {{ $t('quotaExhaustedModal.playedDuration', { duration: formatDuration(scriptProgress.play_duration_minutes) }) }}
               </p>
             </div>
 
             <!-- 额度信息 -->
             <div class="quota-info">
               <div class="quota-item">
-                <span class="label">基础额度</span>
+                <span class="label">{{ $t('quotaExhaustedModal.baseQuota') }}</span>
                 <span class="value">{{ quotaInfo.base_quota }}</span>
               </div>
               <div class="quota-item">
-                <span class="label">已使用</span>
+                <span class="label">{{ $t('quotaExhaustedModal.used') }}</span>
                 <span class="value">{{ quotaInfo.consumed }}</span>
               </div>
               <div class="quota-item">
-                <span class="label">剩余</span>
+                <span class="label">{{ $t('quotaExhaustedModal.remaining') }}</span>
                 <span class="value remaining">{{ quotaInfo.remaining }}</span>
               </div>
             </div>
@@ -43,12 +43,12 @@
               <div class="solution-card subscribe-card">
                 <div class="card-header">
                   <span class="card-icon">💎</span>
-                  <span class="card-title">升级订阅</span>
-                  <span class="recommend-badge">推荐</span>
+                  <span class="card-title">{{ $t('quotaExhaustedModal.upgradeTitle') }}</span>
+                  <span class="recommend-badge">{{ $t('quotaExhaustedModal.recommend') }}</span>
                 </div>
-                <p class="card-desc">解锁无限对话和更多专属特权</p>
+                <p class="card-desc">{{ $t('quotaExhaustedModal.upgradeDesc') }}</p>
                 <button class="btn-primary" @click="handleSubscribe">
-                  查看订阅套餐
+                  {{ $t('quotaExhaustedModal.viewPlans') }}
                 </button>
               </div>
 
@@ -56,18 +56,18 @@
               <div class="solution-card fragment-card">
                 <div class="card-header">
                   <span class="card-icon">✨</span>
-                  <span class="card-title">碎片购买</span>
+                  <span class="card-title">{{ $t('quotaExhaustedModal.fragmentPurchaseTitle') }}</span>
                 </div>
-                <p class="card-desc">使用碎片临时补充对话额度</p>
+                <p class="card-desc">{{ $t('quotaExhaustedModal.fragmentPurchaseDesc') }}</p>
                 <button class="btn-secondary" @click="showFragmentConfirm = true">
-                  购买额外额度
+                  {{ $t('quotaExhaustedModal.buyExtra') }}
                 </button>
               </div>
             </div>
 
             <!-- 套餐对比 -->
             <div class="tier-comparison-section">
-              <h3 class="comparison-title">套餐对比</h3>
+              <h3 class="comparison-title">{{ $t('quotaExhaustedModal.comparisonTitle') }}</h3>
               <TierComparison compact />
             </div>
           </div>
@@ -80,18 +80,18 @@
       <div v-if="showFragmentConfirm" class="fragment-confirm-overlay" @click.self="showFragmentConfirm = false">
         <div class="fragment-confirm-modal">
           <div class="fragment-icon">✨</div>
-          <h3 class="fragment-title">使用碎片购买对话</h3>
-          <p class="fragment-desc">3 碎片 = 1 次额外对话</p>
+          <h3 class="fragment-title">{{ $t('quotaExhaustedModal.fragmentDialogTitle') }}</h3>
+          <p class="fragment-desc">{{ $t('quotaExhaustedModal.fragmentDialogDesc') }}</p>
           <div class="fragment-amount">
-            <label>购买次数：</label>
+            <label>{{ $t('quotaExhaustedModal.purchaseCountLabel') }}</label>
             <input type="number" v-model.number="fragmentAmount" min="1" max="99" />
           </div>
           <div class="fragment-cost">
-            消耗碎片：<span class="cost-value">{{ fragmentAmount * 3 }}</span>
+            {{ $t('quotaExhaustedModal.consumeFragments') }}<span class="cost-value">{{ fragmentAmount * 3 }}</span>
           </div>
           <div class="fragment-actions">
-            <button class="btn-cancel" @click="showFragmentConfirm = false">取消</button>
-            <button class="btn-confirm" @click="confirmFragmentPurchase">确认购买</button>
+            <button class="btn-cancel" @click="showFragmentConfirm = false">{{ $t('quotaExhaustedModal.cancel') }}</button>
+            <button class="btn-confirm" @click="confirmFragmentPurchase">{{ $t('quotaExhaustedModal.confirmPurchase') }}</button>
           </div>
         </div>
       </div>
@@ -101,6 +101,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { DialogueQuotaStatus, ScriptProgressInfo } from '@/types/subscription';
 import TierComparison from './TierComparison.vue';
 
@@ -111,6 +112,8 @@ interface Props {
 }
 
 defineProps<Props>();
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: 'close'): void;
@@ -135,10 +138,10 @@ function confirmFragmentPurchase() {
 }
 
 function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 60) return t('quotaExhaustedModal.minutesShort', { n: minutes });
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return mins > 0 ? `${hours} 小时 ${mins} 分钟` : `${hours} 小时`;
+  return mins > 0 ? t('quotaExhaustedModal.hoursMinutes', { h: hours, m: mins }) : t('quotaExhaustedModal.hoursShort', { n: hours });
 }
 </script>
 

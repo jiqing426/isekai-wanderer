@@ -152,7 +152,7 @@ const characterTabs = computed(() => {
       map.set(save.character_id, save.character_name);
     }
   }
-  const tabs: { id: string; name: string; filterValue: string | null }[] = [{ id: '__all__', name: '全部', filterValue: null }];
+  const tabs: { id: string; name: string; filterValue: string | null }[] = [{ id: '__all__', name: t('common.all'), filterValue: null }];
   for (const [id, name] of map) {
     tabs.push({ id, name, filterValue: id });
   }
@@ -244,7 +244,7 @@ async function loadSaves() {
     const resp = await gameApi.getSaves(selectedCharacterId.value || undefined);
     saves.value = resp.saves;
   } catch (err) {
-    console.warn('加载存档失败:', err);
+    console.warn(t('saveManager.loadFailed'), err);
   } finally {
     loading.value = false;
   }
@@ -316,5 +316,31 @@ onMounted(() => {
   border-radius: 6px;
   padding: 2px 8px;
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .save-manager-page { padding: 16px 12px 32px; }
+  .page-header { margin-bottom: 16px; }
+  .page-header h1 { font-size: 20px; }
+  .subtitle { font-size: 13px; }
+  .saves-list { gap: 12px; }
+  .save-card { flex-direction: column; gap: 12px; padding: 14px; align-items: stretch; }
+  .save-cover { width: 56px; height: 56px; align-self: flex-start; }
+  .save-emoji { font-size: 28px; }
+  .save-info { width: 100%; }
+  .save-title-row { flex-wrap: wrap; gap: 6px; }
+  .save-title { font-size: 15px; }
+  .save-route { font-size: 12px; }
+  .save-node { font-size: 11px; }
+  .save-meta { flex-wrap: wrap; gap: 6px; }
+  .save-meta :deep(.n-progress) { width: 100px !important; }
+  .save-percent { font-size: 11px; }
+  .save-time { font-size: 10px; }
+  .save-name-row { flex-wrap: wrap; gap: 6px; }
+  .save-actions { flex-wrap: wrap; gap: 4px; align-self: flex-start; }
+  .character-filter-tabs { gap: 6px; margin-bottom: 14px; }
+  .filter-tab { padding: 5px 10px; font-size: 12px; }
+  .save-character-badge { font-size: 11px; padding: 1px 6px; }
 }
 </style>

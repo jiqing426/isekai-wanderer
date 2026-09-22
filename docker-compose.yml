@@ -84,12 +84,16 @@ services:
       - app
 
   admin:
-    build:
-      context: ./admin
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm vite --port 8082 --host 0.0.0.0"
     env_file:
       - .env
     ports:
-      - "${ADMIN_PORT:-3100}:3100"
+      - "${ADMIN_PORT:-8082}:8082"
+    volumes:
+      - ./admin:/app
+      - admin_node_modules:/app/node_modules
     depends_on:
       - backend
     profiles:
@@ -98,3 +102,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  admin_node_modules:

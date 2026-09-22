@@ -1,4 +1,5 @@
 <template>
+import { useI18n } from 'vue-i18n'
   <Transition name="banner-slide">
     <div v-if="visible" class="paywall-banner" role="banner">
       <div class="banner-content">
@@ -7,7 +8,7 @@
         <button v-if="actionText" class="banner-action" @click="handleAction">
           {{ actionText }}
         </button>
-        <button class="banner-close" @click="handleClose" aria-label="关闭">
+        <button class="banner-close" @click="handleClose" :aria-label="$t('paywallBanner.close')">
           ✕
         </button>
       </div>
@@ -21,6 +22,8 @@ interface Props {
   actionText?: string;
   visible: boolean;
 }
+
+const { t } = useI18n()
 
 defineProps<Props>();
 

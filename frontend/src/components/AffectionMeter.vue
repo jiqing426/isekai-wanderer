@@ -22,8 +22,8 @@
     <div class="meter-footer" v-if="!compact">
       <span class="meter-level" :style="{ color: levelColor }">{{ levelLabel }}</span>
       <span v-if="nextLevel" class="meter-next">
-        距离 <strong :style="{ color: nextLevelColor }">{{ nextLevelLabel }}</strong>
-        还需 <strong>{{ nextLevelRemaining }}</strong> 点
+        {{ $t('affectionMeter.distanceTo') }} <strong :style="{ color: nextLevelColor }">{{ nextLevelLabel }}</strong>
+        {{ $t('affectionMeter.remaining') }} <strong>{{ nextLevelRemaining }}</strong> {{ $t('affectionMeter.points') }}
       </span>
     </div>
   </div>
@@ -32,6 +32,9 @@
 <script setup lang="ts">
 import { NTooltip } from 'naive-ui';
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 /**
  * CR3-011: AffectionMeter component
@@ -43,16 +46,16 @@ const props = withDefaults(defineProps<{
   label?: string;
   compact?: boolean;
 }>(), {
-  label: '好感度',
+  label: t('affectionMeter.affectionLabel'),
   compact: false,
 });
 
 const LEVELS = [
-  { min: 0, max: 19, label: '相识', color: '#9CA3AF' },
-  { min: 20, max: 39, label: '暧昧', color: '#F472B6' },
-  { min: 40, max: 59, label: '信赖', color: '#38BDF8' },
-  { min: 60, max: 79, label: '羁绊', color: '#A78BFA' },
-  { min: 80, max: 100, label: '挚友', color: '#F43F5E' },
+  { min: 0, max: 19, label: t('affectionMeter.tierAcquainted'), color: '#9CA3AF' },
+  { min: 20, max: 39, label: t('affectionMeter.tierAmbiguous'), color: '#F472B6' },
+  { min: 40, max: 59, label: t('affectionMeter.tierTrusted'), color: '#38BDF8' },
+  { min: 60, max: 79, label: t('affectionMeter.tierBonded'), color: '#A78BFA' },
+  { min: 80, max: 100, label: t('affectionMeter.tierBestFriend'), color: '#F43F5E' },
 ];
 
 const clampedValue = computed(() => Math.max(0, Math.min(100, props.value)));

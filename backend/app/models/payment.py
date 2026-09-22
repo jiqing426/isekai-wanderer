@@ -46,23 +46,5 @@ class Purchase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
-class Subscription(Base):
-    """Subscription record model."""
-
-    __tablename__ = "subscriptions"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    plan_id: Mapped[str] = mapped_column(String(50), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
-    billing_cycle: Mapped[str] = mapped_column(String(10), default="monthly")
-    currency: Mapped[str] = mapped_column(String(3), default="USD")
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    is_mock: Mapped[bool] = mapped_column(Boolean, default=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    quota_total: Mapped[int] = mapped_column(Integer, default=50)
-    quota_used: Mapped[int] = mapped_column(Integer, default=0)
-    quota_period: Mapped[str | None] = mapped_column(String(20), default="honeymoon")
-    auto_renew: Mapped[bool] = mapped_column(Boolean, default=False)
+# Subscription is now unified in app.models.subscription (CR-044)
+from app.models.subscription import Subscription  # noqa: F401, E402

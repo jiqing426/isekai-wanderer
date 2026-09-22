@@ -3,7 +3,7 @@
     <div class="affection-header">
       <span class="affection-label">
         <span class="heart-icon">♥</span>
-        好感度
+        {{ $t('affectionDisplay.affectionLabel') }}
       </span>
       <span class="affection-value">{{ clampedValue }} / 100</span>
     </div>
@@ -35,6 +35,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 interface LevelDef {
   key: string;
@@ -43,12 +46,12 @@ interface LevelDef {
 }
 
 const levels: LevelDef[] = [
-  { key: '相识', threshold: 0, color: '#9CA3AF' },
-  { key: '暧昧', threshold: 20, color: '#F472B6' },
-  { key: '信赖', threshold: 40, color: '#38BDF8' },
-  { key: '羁绊', threshold: 60, color: '#A78BFA' },
-  { key: '挚友', threshold: 80, color: '#F43F5E' },
-  { key: '挚爱', threshold: 100, color: '#EC4899' },
+  { key: t('affectionDisplay.tierAcquainted'), threshold: 0, color: '#9CA3AF' },
+  { key: t('affectionDisplay.tierAmbiguous'), threshold: 20, color: '#F472B6' },
+  { key: t('affectionDisplay.tierTrusted'), threshold: 40, color: '#38BDF8' },
+  { key: t('affectionDisplay.tierBonded'), threshold: 60, color: '#A78BFA' },
+  { key: t('affectionDisplay.tierBestFriend'), threshold: 80, color: '#F43F5E' },
+  { key: t('affectionDisplay.tierTrueLove'), threshold: 100, color: '#EC4899' },
 ];
 
 const props = withDefaults(defineProps<{

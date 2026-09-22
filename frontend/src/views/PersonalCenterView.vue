@@ -2,74 +2,112 @@
   <div class="personal-center-page">
     <!-- 用户信息卡片 -->
     <div class="user-info-card glass-card">
-      <div class="user-avatar">
-        <img v-if="userProfile?.avatar_url && !userAvatarFailed" :src="userProfile.avatar_url" :alt="userProfile.display_name || '用户'" @error="userAvatarFailed = true" />
+      <div class="user-avatar" @click="toggleAvatarMenu">
+        <img v-if="userProfile?.avatar_url && !userAvatarFailed" :src="userProfile.avatar_url" :alt="userProfile.display_name || t('personalCenter.defaultUser')" @error="userAvatarFailed = true" />
         <div v-else class="avatar-placeholder">
           {{ (userProfile?.display_name || 'U').charAt(0).toUpperCase() }}
         </div>
+        <div class="avatar-dropdown" v-if="showAvatarMenu" @click.stop>
+          <div class="dropdown-item" @click="goToSettings">⚙️ {{ $t('personalCenter.settings') }}</div>
+          <div class="dropdown-item logout" @click="handleLogout">🚪 {{ $t('personalCenter.logout') }}</div>
+        </div>
       </div>
       <div class="user-info">
-        <h2 class="user-name">{{ userProfile?.display_name || '用户' }}</h2>
+        <h2 class="user-name">{{ userProfile?.display_name || $t('personalCenter.defaultUser') }}</h2>
         <p class="user-email">{{ userProfile?.email || '' }}</p>
         <div class="user-badges">
           <span class="badge" :class="subscriptionStatus?.tier || 'free'">
-            {{ subscriptionStatus?.tier === 'premium' ? '高级会员' : subscriptionStatus?.tier === 'standard' ? '标准会员' : '免费用户' }}
+            {{ subscriptionStatus?.tier === 'premium' ? $t('personalCenter.premiumMember') : subscriptionStatus?.tier === 'standard' ? $t('personalCenter.standardMember') : $t('personalCenter.freeUser') }}
           </span>
-          <span class="badge email-verified" v-if="userProfile?.email_verified">✓ 已验证</span>
+          <span class="badge email-verified" v-if="userProfile?.email_verified">✓ {{ $t('personalCenter.verified') }}</span>
         </div>
+      </div>
+    </div>
+
+    <!-- 会员卡区域 -->
+    <div class="membership-card glass-card">
+      <div class="membership-header">
+        <span class="membership-tier" :class="subscriptionStatus?.tier || 'free'">
+          {{ subscriptionStatus?.tier === 'premium' ? $t('personalCenter.premiumMemberIcon') : subscriptionStatus?.tier === 'standard' ? $t('personalCenter.standardMemberIcon') : $t('personalCenter.freeUserIcon') }}
+        </span>
+        <span class="membership-status" :class="subscriptionStatus?.status">
+          {{ subscriptionStatus?.status === 'active' ? $t('personalCenter.statusActive') : subscriptionStatus?.status === 'cancelled' ? $t('personalCenter.statusCancelled') : $t('personalCenter.statusExpired') }}
+        </span>
+      </div>
+      <div class="membership-details">
+        <div class="detail-row">
+          <span class="detail-label">{{ $t('personalCenter.expiresAt') }}</span>
+          <span class="detail-value">{{ subscriptionStatus?.expires_at ? formatDate(subscriptionStatus.expires_at) : $t('personalCenter.permanent') }}</span>
+        </div>
+        <div v-if="subscriptionStatus?.pending_tier" class="detail-row pending-downgrade">
+          <span class="detail-label">{{ $t('personalCenter.pendingDowngrade') }}</span>
+          <span class="detail-value">→ {{ tierLabel(subscriptionStatus.pending_tier) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">{{ $t('personalCenter.fragmentBalance') }}</span>
+          <span class="detail-value">💎 {{ asset?.balance || 0 }}</span>
+        </div>
+      </div>
+      <div class="membership-actions">
+        <n-button type="primary" size="small" @click="router.push('/subscribe')">
+          {{ subscriptionStatus?.tier === 'free' ? $t('personalCenter.upgradeMember') : $t('personalCenter.renew') }}
+        </n-button>
+        <n-button size="small" @click="router.push('/fragment')">
+          {{ $t('personalCenter.fragmentMall') }}
+        </n-button>
       </div>
     </div>
 
     <!-- 统计卡片 -->
     <div class="stats-card glass-card">
-      <h3 class="card-title">📊 游戏统计</h3>
+      <h3 class="card-title">{{ $t('personalCenter.gameStats') }}</h3>
       <div class="stats-grid">
         <div class="stat-item">
           <div class="stat-value">{{ stats?.scripts_completed || 0 }}</div>
-          <div class="stat-label">完成剧本</div>
+          <div class="stat-label">{{ $t('personalCenter.scriptsCompleted') }}</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats?.total_play_time_minutes || 0 }}</div>
-          <div class="stat-label">游戏时长(分钟)</div>
+          <div class="stat-label">{{ $t('personalCenter.playTimeMinutes') }}</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats?.endings_unlocked || 0 }}</div>
-          <div class="stat-label">解锁结局</div>
+          <div class="stat-label">{{ $t('personalCenter.endingsUnlocked') }}</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats?.cgs_collected || 0 }}</div>
-          <div class="stat-label">收集 CG</div>
+          <div class="stat-label">{{ $t('personalCenter.cgsCollected') }}</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats?.total_dialogues || 0 }}</div>
-          <div class="stat-label">总对话数</div>
+          <div class="stat-label">{{ $t('personalCenter.totalDialogues') }}</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats?.total_choices || 0 }}</div>
-          <div class="stat-label">选择次数</div>
+          <div class="stat-label">{{ $t('personalCenter.totalChoices') }}</div>
         </div>
         <!-- CR-028: 扮演角色数 -->
         <div class="stat-item" v-if="stats?.characters_played !== undefined">
           <div class="stat-value">{{ stats.characters_played }}</div>
-          <div class="stat-label">扮演角色</div>
+          <div class="stat-label">{{ $t('personalCenter.charactersPlayed') }}</div>
         </div>
       </div>
     </div>
 
     <!-- 对话额度卡片 -->
     <div class="quota-card glass-card">
-      <h3 class="card-title">💬 今日对话额度</h3>
+      <h3 class="card-title">{{ $t('personalCenter.dailyQuota') }}</h3>
       <div class="quota-content">
         <div class="quota-display">
           <div class="quota-used">
             <span class="quota-value">{{ dialogueQuota?.used || 0 }}</span>
-            <span class="quota-label">已使用</span>
+            <span class="quota-label">{{ $t('personalCenter.used') }}</span>
           </div>
           <div class="quota-separator">/</div>
           <div class="quota-total">
-            <span class="quota-value" v-if="dialogueQuota?.total === -1">无限额度</span>
+            <span class="quota-value" v-if="dialogueQuota?.total === -1">{{ $t('personalCenter.unlimitedQuota') }}</span>
             <span class="quota-value" v-else>{{ dialogueQuota?.total || 0 }}</span>
-            <span class="quota-label" v-if="dialogueQuota?.total !== -1">总额度</span>
+            <span class="quota-label" v-if="dialogueQuota?.total !== -1">{{ $t('personalCenter.totalQuota') }}</span>
           </div>
         </div>
         <div class="quota-progress">
@@ -80,52 +118,52 @@
           ></div>
         </div>
         <div class="quota-hint" v-if="dialogueQuota">
-          <span v-if="dialogueQuota.is_subscriber">✨ 订阅用户 · 无限额度</span>
-          <span v-else>剩余 {{ dialogueQuota.total - dialogueQuota.used }} 次对话</span>
+          <span v-if="dialogueQuota.is_subscriber">{{ $t('personalCenter.subscriberUnlimited') }}</span>
+          <span v-else>{{ $t('personalCenter.remainingDialogues', { n: dialogueQuota.total - dialogueQuota.used }) }}</span>
         </div>
       </div>
     </div>
 
     <!-- 碎片资产卡片 -->
     <div class="asset-card glass-card">
-      <h3 class="card-title">💎 碎片资产</h3>
+      <h3 class="card-title">{{ $t('personalCenter.fragmentAssets') }}</h3>
       <div class="asset-content">
         <div class="asset-balance">
           <div class="balance-value">{{ asset?.balance || 0 }}</div>
-          <div class="balance-label">当前余额</div>
+          <div class="balance-label">{{ $t('personalCenter.currentBalance') }}</div>
         </div>
         <div class="asset-stats">
           <div class="asset-stat">
-            <span class="stat-label">累计获得</span>
+            <span class="stat-label">{{ $t('personalCenter.totalEarned') }}</span>
             <span class="stat-value">{{ asset?.total_earned || 0 }}</span>
           </div>
           <div class="asset-stat">
-            <span class="stat-label">累计消费</span>
+            <span class="stat-label">{{ $t('personalCenter.totalSpent') }}</span>
             <span class="stat-value">{{ asset?.total_spent || 0 }}</span>
           </div>
         </div>
         <n-button type="primary" size="small" @click="router.push('/subscribe')">
-          充值碎片
+          {{ $t('personalCenter.rechargeFragments') }}
         </n-button>
       </div>
     </div>
 
     <!-- 签到卡片 -->
     <div class="checkin-card glass-card">
-      <h3 class="card-title">📅 每日签到</h3>
+      <h3 class="card-title">{{ $t('personalCenter.dailyCheckin') }}</h3>
       <div class="checkin-content">
         <div class="checkin-info">
           <div class="streak-days">
             <span class="streak-value">{{ signInfo?.streak_days || 0 }}</span>
-            <span class="streak-label">连续签到</span>
+            <span class="streak-label">{{ $t('personalCenter.streakDays') }}</span>
           </div>
           <div class="total-checkins">
             <span class="total-value">{{ signInfo?.total_checkins || 0 }}</span>
-            <span class="total-label">累计签到</span>
+            <span class="total-label">{{ $t('personalCenter.totalCheckins') }}</span>
           </div>
           <div class="total-fragments">
             <span class="total-value">{{ signInfo?.total_fragments || 0 }}</span>
-            <span class="total-label">累计获得</span>
+            <span class="total-label">{{ $t('personalCenter.totalFragmentsEarned') }}</span>
           </div>
         </div>
         <div class="checkin-week">
@@ -135,7 +173,7 @@
             class="week-day"
             :class="{ checked }"
           >
-            {{ ['一', '二', '三', '四', '五', '六', '日'][index] }}
+            {{ $t('personalCenter.weekDays').split(',')[index] }}
           </div>
         </div>
         <n-button 
@@ -144,7 +182,7 @@
           :disabled="signInfo?.checked_in_today"
           @click="handleCheckin"
         >
-          {{ signInfo?.checked_in_today ? '今日已签到' : '立即签到' }}
+          {{ signInfo?.checked_in_today ? $t('personalCenter.checkedInToday') : $t('personalCenter.checkinNow') }}
         </n-button>
       </div>
     </div>
@@ -152,8 +190,8 @@
     <!-- CR-025 S017: 每日任务卡片 -->
     <div class="daily-tasks-card glass-card">
       <div class="card-header">
-        <h3 class="card-title">📋 每日任务</h3>
-        <div class="reset-info">每日 0:00 刷新</div>
+        <h3 class="card-title">{{ $t('personalCenter.dailyTasks') }}</h3>
+        <div class="reset-info">{{ $t('personalCenter.resetDaily') }}</div>
         <div class="all-complete-btn">
           <n-button
             v-if="allTasksCompleted && !allCompleteClaimed"
@@ -161,10 +199,10 @@
             size="small"
             @click="claimAllTasks"
           >
-            🎁 全完成奖励
+            {{ $t('personalCenter.allCompleteReward') }}
           </n-button>
-          <n-tag v-else-if="allCompleteClaimed" type="success" size="small">已领取</n-tag>
-          <n-button v-else size="small" disabled>🎁 全完成奖励</n-button>
+          <n-tag v-else-if="allCompleteClaimed" type="success" size="small">{{ $t('personalCenter.claimed') }}</n-tag>
+          <n-button v-else size="small" disabled>{{ $t('personalCenter.allCompleteReward') }}</n-button>
         </div>
       </div>
       <div class="tasks-list">
@@ -190,30 +228,30 @@
               type="primary"
               @click="claimTask(task)"
             >
-              领取
+              {{ $t('personalCenter.claim') }}
             </n-button>
-            <n-tag v-else-if="task.claimed" type="success" size="small">已领取</n-tag>
+            <n-tag v-else-if="task.claimed" type="success" size="small">{{ $t('personalCenter.claimed') }}</n-tag>
             <n-button 
               v-else 
               size="tiny" 
               :disabled="true"
             >
-              领取
+              {{ $t('personalCenter.claim') }}
             </n-button>
           </div>
         </div>
-        <n-empty v-if="dailyTasks.length === 0" description="暂无任务" />
+        <n-empty v-if="dailyTasks.length === 0" :description="$t('personalCenter.noTasks')" />
       </div>
     </div>
 
     <!-- 继续游玩卡片 -->
     <div class="continue-card glass-card" v-if="latestSave">
-      <h3 class="card-title">🎮 继续游玩</h3>
+      <h3 class="card-title">{{ $t('personalCenter.continuePlaying') }}</h3>
       <div class="continue-content">
         <!-- CR-028: 角色头像展示 -->
         <div v-if="latestSave.character_avatar || latestSave.character_name" class="continue-character">
           <div class="continue-avatar">
-            <img v-if="latestSave.character_avatar && !continueAvatarFailed" :src="latestSave.character_avatar" :alt="latestSave.character_name || '角色'" @error="continueAvatarFailed = true" />
+            <img v-if="latestSave.character_avatar && !continueAvatarFailed" :src="latestSave.character_avatar" :alt="latestSave.character_name || t('personalCenter.defaultCharacter')" @error="continueAvatarFailed = true" />
             <span v-else>{{ (latestSave.character_name || '?').charAt(0) }}</span>
           </div>
         </div>
@@ -225,14 +263,14 @@
           </div>
         </div>
         <n-button type="primary" size="small" @click="continueGame">
-          继续游戏
+          {{ $t('personalCenter.continueGame') }}
         </n-button>
       </div>
     </div>
 
     <!-- 角色羁绊卡片 -->
     <div class="bond-card glass-card">
-      <h3 class="card-title">💕 角色羁绊</h3>
+      <h3 class="card-title">{{ $t('personalCenter.characterBonds') }}</h3>
       <div 
         class="bond-list" 
         ref="bondListRef"
@@ -256,21 +294,21 @@
         </div>
         <div v-if="bondLoading" class="bond-loading">
           <n-spin size="small" />
-          <span>加载中...</span>
+          <span>{{ $t('personalCenter.loading') }}</span>
         </div>
         <div v-if="bondNoMore && bondCharacters.length > 0" class="bond-no-more">
-          没有更多了
+          {{ $t('personalCenter.noMore') }}
         </div>
-        <n-empty v-if="!bondLoading && bondCharacters.length === 0" description="暂无羁绊" />
+        <n-empty v-if="!bondLoading && bondCharacters.length === 0" :description="$t('personalCenter.noBonds')" />
       </div>
     </div>
 
     <!-- 结局追踪卡片 -->
     <div class="endings-card glass-card">
-      <h3 class="card-title">🏆 结局追踪</h3>
+      <h3 class="card-title">{{ $t('personalCenter.endingTracking') }}</h3>
       <div class="endings-summary">
         <span class="endings-count">{{ endingsList?.total_endings_unlocked || 0 }}</span>
-        <span class="endings-label">已解锁结局</span>
+        <span class="endings-label">{{ $t('personalCenter.endingsUnlockedCount') }}</span>
       </div>
       <div class="endings-list" v-if="endingsList?.endings && endingsList.endings.length > 0">
         <div 
@@ -284,12 +322,12 @@
           </div>
         </div>
       </div>
-      <n-empty v-else description="暂无结局" />
+      <n-empty v-else :description="$t('personalCenter.noEndings')" />
     </div>
 
     <!-- 新解锁结局卡片 -->
     <div class="continue-card glass-card" v-if="recentEndings?.recent_endings && recentEndings.recent_endings.length > 0">
-      <h3 class="card-title">✨ 新解锁结局</h3>
+      <h3 class="card-title">{{ $t('personalCenter.newEndings') }}</h3>
       <div class="recent-endings-scroll">
         <div 
           v-for="ending in recentEndings.recent_endings" 
@@ -303,7 +341,7 @@
             </div>
           </div>
           <div class="ending-type" :class="ending.ending_type">
-            {{ ending.ending_type === 'good' ? '好结局' : ending.ending_type === 'bad' ? '坏结局' : ending.ending_type }}
+            {{ ending.ending_type === 'good' ? $t('personalCenter.goodEnding') : ending.ending_type === 'bad' ? $t('personalCenter.badEnding') : ending.ending_type }}
           </div>
         </div>
       </div>
@@ -312,20 +350,20 @@
     <!-- AI 记忆卡片 -->
     <div class="memory-card glass-card">
       <h3 class="card-title">
-        🧠 AI 记忆
-        <span class="tooltip-icon" title="展示 AI 记住的对话内容">?</span>
+        {{ $t('personalCenter.aiMemory') }}
+        <span class="tooltip-icon" :title="t('personalCenter.aiMemoryTooltip')">?</span>
       </h3>
       <div class="memory-content">
         <div class="memory-summary">
           <span class="memory-count">{{ memorySummary?.total_memories || 0 }}</span>
-          <span class="memory-label">条记忆</span>
+          <span class="memory-label">{{ $t('personalCenter.memoryCount') }}</span>
         </div>
         
         <!-- FE-FEAT-025: 分类展示记忆 -->
         <div class="memory-categories">
           <!-- 用户偏好 -->
           <div class="memory-category" v-if="memorySummary?.preferences && memorySummary.preferences.length > 0">
-            <h4 class="category-title">🎯 用户偏好 ({{ memorySummary.preferences.length }})</h4>
+            <h4 class="category-title">{{ $t('personalCenter.userPreferences') }} ({{ memorySummary.preferences.length }})</h4>
             <div class="memory-list">
               <div 
                 v-for="pref in memorySummary.preferences" 
@@ -340,7 +378,7 @@
           
           <!-- 角色羁绊 -->
           <div class="memory-category" v-if="memorySummary?.bonds && memorySummary.bonds.length > 0">
-            <h4 class="category-title">💕 角色羁绊 ({{ memorySummary.bonds.length }})</h4>
+            <h4 class="category-title">{{ $t('personalCenter.characterBondsMemory') }} ({{ memorySummary.bonds.length }})</h4>
             <div class="memory-list">
               <div 
                 v-for="bond in memorySummary.bonds" 
@@ -356,7 +394,7 @@
           
           <!-- 重要事件 -->
           <div class="memory-category" v-if="memorySummary?.events && memorySummary.events.length > 0">
-            <h4 class="category-title">✨ 重要事件 ({{ memorySummary.events.length }})</h4>
+            <h4 class="category-title">{{ $t('personalCenter.importantEvents') }} ({{ memorySummary.events.length }})</h4>
             <div class="memory-list">
               <div 
                 v-for="event in memorySummary.events" 
@@ -383,27 +421,80 @@
           </div>
         </div>
         
-        <n-empty v-if="!hasAnyMemories" description="暂无记忆" />
+        <n-empty v-if="!hasAnyMemories" :description="$t('personalCenter.noMemories')" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage, NButton, NEmpty } from 'naive-ui';
 import { api } from '@/api/http';
 import { gameApi } from '@/api/game';
-import { getMe, getMySubscription, getMyStats, getMyAsset, getSignInfo, getLatestSave, getMemorySummary, getCharacterBond, getMyEndings, getRecentEndings } from '@/api/user';
+import { useAuthStore } from '@/stores/auth';
+import { useI18n } from 'vue-i18n';
+import { getMe, getMyStats, getMyAsset, getSignInfo, getLatestSave, getMemorySummary, getCharacterBond, getMyEndings, getRecentEndings } from '@/api/user';
+import { useSubscriptionStore } from '@/stores/subscription';
 import type { UserProfile, SubscriptionStatus } from '@/types/user';
 import type { UserStats, UserAsset, SignInfo, LatestSave, MemorySummary, EndingsList, RecentEndings } from '@/types/personal-center';
 
 const router = useRouter();
 const message = useMessage();
+const { t } = useI18n();
+const authStore = useAuthStore();
+const subscriptionStore = useSubscriptionStore();
+
+// Avatar dropdown menu
+const showAvatarMenu = ref(false);
+
+const toggleAvatarMenu = () => {
+  showAvatarMenu.value = !showAvatarMenu.value;
+};
+
+const goToSettings = () => {
+  showAvatarMenu.value = false;
+  router.push('/settings');
+};
+
+const handleLogout = () => {
+  showAvatarMenu.value = false;
+  authStore.logout();
+  router.push('/login');
+};
+
+// Close avatar menu when clicking outside
+const closeAvatarMenu = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (!target.closest('.user-avatar')) {
+    showAvatarMenu.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', closeAvatarMenu);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeAvatarMenu);
+});
+
+// Format date helper — uses existing formatDate function defined below
+
+function tierLabel(tier: string): string {
+  const labels: Record<string, string> = {
+    free: t('personalCenter.tierFree'),
+    basic: t('personalCenter.tierBasic'),
+    standard: t('personalCenter.tierStandard'),
+    premium: t('personalCenter.tierPremium'),
+  };
+  return labels[tier] || tier;
+}
 
 const userProfile = ref<UserProfile | null>(null);
-const subscriptionStatus = ref<SubscriptionStatus | null>(null);
+// Subscription status from store (calls /cr016/subscription/status)
+const subscriptionStatus = computed(() => subscriptionStore.subscriptionStatus);
 const stats = ref<UserStats | null>(null);
 const asset = ref<UserAsset | null>(null);
 const signInfo = ref<SignInfo | null>(null);
@@ -441,24 +532,24 @@ async function loadDailyTasks() {
 async function claimTask(task: any) {
   try {
     await gameApi.claimDailyTask(task.id);
-    message.success(`领取成功！+${task.reward_amount} 碎片`);
+    message.success(t('personalCenter.claimSuccess', { n: task.reward_amount }));
     await loadDailyTasks();
     await loadAsset();
   } catch (err: any) {
-    message.error(err?.message || '领取失败');
+    message.error(err?.message || t('personalCenter.claimFailed'));
   }
 }
 
 async function claimAllTasks() {
   try {
     await gameApi.claimAllDailyTasks();
-    message.success('🎉 全完成奖励领取成功！+5 碎片');
+    message.success(t('personalCenter.allCompleteSuccess'));
     showCelebration.value = true;
     setTimeout(() => { showCelebration.value = false; }, 2000);
     await loadDailyTasks();
     await loadAsset();
   } catch (err: any) {
-    message.error(err?.message || '领取失败');
+    message.error(err?.message || t('personalCenter.claimFailed'));
   }
 }
 
@@ -488,15 +579,18 @@ function cleanEndingTitle(title: string | null | undefined): string {
 
 async function loadUserData() {
   try {
-    const [profile, subscription] = await Promise.all([
-      getMe(),
-      getMySubscription(),
-    ]);
-    userProfile.value = profile;
-    subscriptionStatus.value = subscription;
+    // Load profile and subscription status separately — one failing should not block the other
+    const profilePromise = getMe().catch(err => {
+      console.error('加载用户信息失败:', err);
+      return null;
+    });
+    const subPromise = subscriptionStore.fetchSubscriptionStatus().catch(err => {
+      console.error('加载订阅状态失败:', err);
+    });
+    const [profile] = await Promise.all([profilePromise, subPromise]);
+    if (profile) userProfile.value = profile;
   } catch (error) {
-    console.error('加载用户信息失败:', error);
-    message.error('加载用户信息失败');
+    console.error('加载用户数据失败:', error);
   }
 }
 
@@ -542,11 +636,11 @@ async function loadMemorySummary() {
 
 function getAffectionLevelLabel(level: string): string {
   const levelMap: Record<string, string> = {
-    acquaintance: '相识',
-    ambiguous: '暧昧',
-    trust: '信赖',
-    bond: '羁绊',
-    love: '挚友'
+    acquaintance: t('personalCenter.affectionAcquaintance'),
+    ambiguous: t('personalCenter.affectionAmbiguous'),
+    trust: t('personalCenter.affectionTrust'),
+    bond: t('personalCenter.affectionBond'),
+    love: t('personalCenter.affectionLove')
   };
   return levelMap[level] || level;
 }
@@ -617,11 +711,11 @@ async function loadDialogueQuota() {
 async function handleCheckin() {
   try {
     const response: any = await api.post('/daily/checkin');
-    message.success(`签到成功！获得 ${response.fragments_earned} 碎片`);
+    message.success(t('personalCenter.checkinSuccess', { n: response.fragments_earned }));
     await loadSignInfo();
     await loadAsset(); // 刷新碎片余额
   } catch (error: any) {
-    message.error(error?.message || '签到失败');
+    message.error(error?.message || t('personalCenter.checkinFailed'));
   }
 }
 
@@ -778,6 +872,107 @@ onMounted(() => {
 }
 
 /* 统计卡片 */
+.user-avatar {
+  position: relative;
+  cursor: pointer;
+}
+
+.avatar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: rgba(30, 20, 50, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 8px;
+  min-width: 120px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.dropdown-item.logout {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.membership-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.membership-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.membership-tier {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.membership-tier.premium { color: #fbbf24; }
+.membership-tier.standard { color: #667eea; }
+.membership-tier.basic { color: #a78bfa; }
+.membership-tier.free { color: rgba(255, 255, 255, 0.6); }
+.membership-status.expired { color: rgba(255, 255, 255, 0.4); }
+
+.pending-downgrade {
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.pending-downgrade .detail-label { color: rgba(251, 191, 36, 0.8); }
+.pending-downgrade .detail-value { color: #fbbf24; font-weight: 600; }
+
+.membership-status.active { color: #4ade80; }
+.membership-status.cancelled { color: #f87171; }
+.membership-status.expired { color: #9ca3af; }
+
+.membership-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.detail-value {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.membership-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));

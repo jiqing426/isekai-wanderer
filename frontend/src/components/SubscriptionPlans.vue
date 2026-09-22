@@ -8,28 +8,28 @@
           :class="{ active: billingCycle === 'monthly' }"
           @click="billingCycle = 'monthly'"
         >
-          <span class="tab-label">按月订阅</span>
-          <span class="tab-hint">灵活续订</span>
+          <span class="tab-label">{{ $t('subscriptionPlans.monthlyTab') }}</span>
+          <span class="tab-hint">{{ $t('subscriptionPlans.monthlyHint') }}</span>
         </button>
         <button
           class="billing-tab"
           :class="{ active: billingCycle === 'yearly' }"
           @click="billingCycle = 'yearly'"
         >
-          <span class="tab-label">按年订阅</span>
-          <span class="tab-hint tab-save">省17%</span>
+          <span class="tab-label">{{ $t('subscriptionPlans.yearlyTab') }}</span>
+          <span class="tab-hint tab-save">{{ $t('subscriptionPlans.yearlyHint') }}</span>
         </button>
       </div>
     </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>加载套餐中...</p>
+      <p>{{ $t('subscriptionPlans.loadingPlans') }}</p>
     </div>
 
     <div v-else-if="error" class="error-state">
       <p>{{ error }}</p>
-      <button @click="loadPlans">重试</button>
+      <button @click="loadPlans">{{ $t('subscriptionPlans.retry') }}</button>
     </div>
 
     <div v-else class="plans-grid">
@@ -39,7 +39,7 @@
         class="plan-card"
         :class="{ current: plan.is_current, recommended: plan.recommend }"
       >
-        <div v-if="plan.recommend" class="recommended-badge">推荐</div>
+        <div v-if="plan.recommend" class="recommended-badge">{{ $t('subscriptionPlans.recommend') }}</div>
         
         <div class="plan-header">
           <div class="plan-icon">{{ getTierIcon(plan.planId) }}</div>
@@ -47,17 +47,17 @@
         </div>
 
         <div class="plan-price">
-          <span v-if="getPrice(plan) === 0" class="price-free">免费</span>
+          <span v-if="getPrice(plan) === 0" class="price-free">{{ $t('subscriptionPlans.free') }}</span>
           <template v-else>
             <span class="price-currency">¥</span>
             <span class="price-amount">{{ getPrice(plan) }}</span>
-            <span class="price-period">/{{ billingCycle === 'monthly' ? '月' : '年' }}</span>
+            <span class="price-period">/{{ billingCycle === 'monthly' ? $t('subscriptionPlans.perMonth') : $t('subscriptionPlans.perYear') }}</span>
           </template>
           <div v-if="billingCycle === 'yearly' && plan.priceMonthly > 0" class="price-monthly-equiv">
-            ≈ ¥{{ (plan.priceYearly / 12).toFixed(1) }}/月
+            {{ $t('subscriptionPlans.monthlyEstimate', { n: (plan.priceYearly / 12).toFixed(1) }) }}
           </div>
           <div v-if="billingCycle === 'yearly' && plan.priceMonthly > 0" class="price-save">
-            比月付省 ¥{{ Math.round(plan.priceMonthly * 12 - plan.priceYearly) }}
+            {{ $t('subscriptionPlans.saveVsMonthly', { n: Math.round(plan.priceMonthly * 12 - plan.priceYearly) }) }}
           </div>
         </div>
 
@@ -74,14 +74,14 @@
             class="btn-current"
             disabled
           >
-            当前套餐
+            {{ $t('subscriptionPlans.currentPlan') }}
           </button>
           <button
             v-else-if="plan.planId === 'free'"
             class="btn-current"
             disabled
           >
-            免费版
+            {{ $t('subscriptionPlans.freeVersion') }}
           </button>
           <button
             v-else
@@ -90,7 +90,7 @@
             @click="handleSubscribe(plan.planId)"
             :disabled="subscribing"
           >
-            {{ subscribing ? '处理中...' : '订阅' }}
+            {{ subscribing ? $t('subscriptionPlans.processing') : $t('subscriptionPlans.subscribe') }}
           </button>
         </div>
       </div>
@@ -100,6 +100,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useMessage } from 'naive-ui';
 import { getSubscriptionPlans, createOrder } from '@/api/subscription';
 import { useSubscriptionStore } from '@/stores/subscription';
@@ -118,6 +119,7 @@ interface SubscriptionPlan {
 }
 
 const message = useMessage();
+const { t } = useI18n();
 const subscriptionStore = useSubscriptionStore();
 const authStore = useAuthStore();
 
@@ -145,15 +147,18 @@ function isCurrentPlan(planId: string): boolean {
   // 2. subscriptionStore 实时状态 — 必须同时匹配 tier 和 billing cycle
   const subStatus = subscriptionStore.subscriptionStatus;
   if (subStatus && subStatus.tier === planId) {
-    // 判断当前订阅周期：通过 expires_at - started_at 的天数差
+    // Use billing_cycle directly from API
+    if (subStatus.billing_cycle) {
+      if (subStatus.billing_cycle === billingCycle.value) return true;
+      return false;
+    }
+    // Fallback: infer from started_at + expires_at if billing_cycle missing
     if (subStatus.started_at && subStatus.expires_at) {
       const start = new Date(subStatus.started_at);
       const expires = new Date(subStatus.expires_at);
       const daysDiff = Math.round((expires.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      // monthly: ~30 days, yearly: ~365 days
       const currentCycle = daysDiff > 180 ? 'yearly' : 'monthly';
       if (currentCycle === billingCycle.value) return true;
-      // 周期不匹配，不是当前选中周期的订阅
       return false;
     }
     // 没有日期信息时只判断 tier
@@ -179,7 +184,7 @@ const subscribedCycleLabel = computed(() => {
     const start = new Date(subStatus.started_at);
     const expires = new Date(subStatus.expires_at);
     const daysDiff = Math.round((expires.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-    return daysDiff > 180 ? '（年付）' : '（月付）';
+    return daysDiff > 180 ? t('subscriptionPlans.yearlyLabel') : t('subscriptionPlans.monthlyLabel');
   }
   return '';
 })
@@ -196,8 +201,8 @@ async function loadPlans() {
     const response = await getSubscriptionPlans();
     plans.value = response.plans as unknown as SubscriptionPlan[];
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '加载套餐失败';
-    message.error('加载套餐失败');
+    error.value = err instanceof Error ? err.message : t('subscriptionPlans.loadFailed');
+    message.error(t('subscriptionPlans.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -213,7 +218,7 @@ async function handleSubscribe(planId: string) {
     });
     
     if (response.status === 'success') {
-      message.success('订阅成功！');
+      message.success(t('subscriptionPlans.subscribeSuccess'));
       await loadPlans();
       // CR-043 AC-016: 刷新订阅状态
       await subscriptionStore.fetchSubscriptionStatus();
@@ -239,12 +244,12 @@ async function handleSubscribe(planId: string) {
       await subscriptionStore.fetchSubscriptionStatus();
       window.location.href = response.payUrl;
     } else {
-      message.success('订阅成功！');
+      message.success(t('subscriptionPlans.subscribeSuccess'));
       await loadPlans();
       await subscriptionStore.fetchSubscriptionStatus();
     }
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : '订阅失败';
+    const errorMsg = err instanceof Error ? err.message : t('subscriptionPlans.subscribeFailed');
     message.error(errorMsg);
   } finally {
     subscribing.value = false;

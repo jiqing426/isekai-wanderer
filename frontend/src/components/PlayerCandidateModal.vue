@@ -16,7 +16,7 @@
 
       <!-- 剧本预设角色列表 -->
       <div v-else-if="scriptCharacters && scriptCharacters.length > 0" class="script-characters-section">
-        <div class="section-label">选择角色</div>
+        <div class="section-label">{{ $t('playerCandidateModal.selectCharacter') }}</div>
         <div class="candidates-grid">
           <div
             v-for="character in scriptCharacters"
@@ -50,14 +50,14 @@
 
       <!-- 无角色 -->
       <div v-else class="empty-state">
-        <n-empty description="本剧本暂无可选角色" />
+        <n-empty :description="$t('playerCandidateModal.noCharacters')" />
       </div>
 
       <!-- 底部操作栏 -->
       <div class="modal-footer">
         <div class="footer-left">
           <n-tag v-if="scriptCharacters && scriptCharacters.length === 0" type="info">
-            本剧本暂无可选角色
+            {{ $t('playerCandidateModal.noCharacters') }}
           </n-tag>
         </div>
         <div class="footer-right">
@@ -117,7 +117,7 @@ async function loadScriptCharacters() {
     scriptCharactersData.value = (response.data ?? []);
   } catch (error) {
     console.error('Failed to load script characters:', error);
-    message.error('加载角色列表失败');
+    message.error(t('playerCandidateModal.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -167,7 +167,7 @@ async function confirmSelection() {
   } catch (error: any) {
     const msg = (error as any)?.response?.data?.message ||
                 (error as any)?.message ||
-                '选角确认失败';
+                t('playerCandidateModal.selectFailed');
     message.error(msg);
   } finally {
     confirming.value = false;

@@ -6,30 +6,30 @@
         
         <div class="paywall-content">
           <div class="icon">🎁</div>
-          <h2 class="title">开始3天免费试用</h2>
-          <p class="description">解锁完整游戏体验，享受无限对话和专属内容</p>
+          <h2 class="title">{{ $t('gamePaywallModal.trialTitle') }}</h2>
+          <p class="description">{{ $t('gamePaywallModal.trialDesc') }}</p>
           
           <div class="features">
             <div class="feature-item">
               <span class="check">✓</span>
-              <span>无限AI对话次数</span>
+              <span>{{ $t('gamePaywallModal.featureUnlimitedChat') }}</span>
             </div>
             <div class="feature-item">
               <span class="check">✓</span>
-              <span>解锁所有高级剧本</span>
+              <span>{{ $t('gamePaywallModal.featureUnlockScripts') }}</span>
             </div>
             <div class="feature-item">
               <span class="check">✓</span>
-              <span>专属角色和剧情</span>
+              <span>{{ $t('gamePaywallModal.featureExclusiveContent') }}</span>
             </div>
           </div>
           
           <div class="cta-section">
             <button class="cta-button" @click="handleSubscribe">
-              立即订阅
+              {{ $t('gamePaywallModal.subscribeNow') }}
             </button>
             <button class="later-button" @click="handleLater">
-              稍后再说
+              {{ $t('gamePaywallModal.later') }}
             </button>
           </div>
         </div>

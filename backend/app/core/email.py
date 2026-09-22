@@ -203,3 +203,18 @@ email_service: IEmailService = _create_email_service()
 def get_email_service() -> IEmailService:
     """Return the active email service singleton."""
     return email_service
+
+
+def reload_email_service() -> None:
+    """Reload email service after SMTP config changed in DB.
+    Re-reads settings and rebuilds the singleton.
+    """
+    global email_service
+    # Reload settings from DB if load_system_configs is available
+    try:
+        from app.core.config import load_system_configs
+        load_system_configs()
+    except Exception:
+        pass
+    email_service = _create_email_service()
+    print(f"[Email] Service reloaded — {'SMTP' if isinstance(email_service, SMTPEmailService) else 'Mock'}")

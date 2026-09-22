@@ -54,7 +54,7 @@
           <!-- Load More -->
           <div v-if="hasMore && !loadingPosts" class="load-more">
             <n-button @click="loadMore" :loading="loadingMore">
-              加载更多
+              {{ $t('common.loading') }}
             </n-button>
           </div>
         </n-spin>
@@ -110,7 +110,7 @@
                     @click="handleDeleteComment(c.id)"
                     :loading="deletingCommentId === c.id"
                   >
-                    删除
+                    {{ $t('common.delete') }}
                   </n-button>
                 </div>
                 <p class="comment-text">{{ c.content }}</p>
@@ -188,12 +188,12 @@ interface Comment {
   created_at: string;
 }
 
-const tabs = [
-  { key: 'recommend' as PostTab, icon: '⭐', label: '推荐' },
-  { key: 'latest' as PostTab, icon: '🕐', label: '最新' },
-  { key: 'hot' as PostTab, icon: '🔥', label: '热门' },
-  { key: 'mine' as PostTab, icon: '📝', label: '我的' }
-];
+const tabs = computed(() => [
+  { key: 'recommend' as PostTab, icon: '⭐', label: t('communityView.tabRecommend') },
+  { key: 'latest' as PostTab, icon: '🕐', label: t('communityView.tabLatest') },
+  { key: 'hot' as PostTab, icon: '🔥', label: t('communityView.tabHot') },
+  { key: 'mine' as PostTab, icon: '📝', label: t('communityView.tabMine') }
+]);
 
 const activeTab = ref<PostTab>('recommend');
 const posts = ref<Post[]>([]);
@@ -223,10 +223,10 @@ function formatTime(dateString: string): string {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
   
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes}分钟前`;
-  if (hours < 24) return `${hours}小时前`;
-  if (days < 7) return `${days}天前`;
+  if (minutes < 1) return t('communityExtra.justNow');
+  if (minutes < 60) return t('communityExtra.minutesAgo', { n: minutes });
+  if (hours < 24) return t('communityExtra.hoursAgo', { n: hours });
+  if (days < 7) return t('communityExtra.daysAgo', { n: days });
   
   return date.toLocaleDateString('zh-CN');
 }
@@ -251,8 +251,8 @@ async function loadPosts() {
     hasMore.value = response.has_more;
     currentPage.value = 1;
   } catch (error) {
-    console.error('加载帖子失败:', error);
-    message.error('加载帖子失败');
+    console.error(t('communityView.loadPostsFailed'), error);
+    message.error(t('communityView.loadPostsFailed'));
   } finally {
     loadingPosts.value = false;
   }
@@ -279,8 +279,8 @@ async function loadMore() {
     hasMore.value = response.has_more;
     currentPage.value++;
   } catch (error) {
-    console.error('加载更多帖子失败:', error);
-    message.error('加载更多失败');
+    console.error(t('communityView.loadMoreFailed'), error);
+    message.error(t('communityView.loadMoreFailed'));
   } finally {
     loadingMore.value = false;
   }
@@ -307,8 +307,8 @@ async function handleSearch(keyword: string) {
     hasMore.value = response.posts.length >= 20;
     currentPage.value = 1;
   } catch (error) {
-    console.error('搜索失败:', error);
-    message.error('搜索失败');
+    console.error(t('communityView.searchFailed'), error);
+    message.error(t('communityView.searchFailed'));
   } finally {
     loadingPosts.value = false;
   }
@@ -343,7 +343,7 @@ function handlePostUnliked(postId: string, newCount: number) {
 
 function handlePostDeleted(postId: string) {
   posts.value = posts.value.filter(p => p.id !== postId);
-  message.success('帖子已删除');
+  message.success(t('communityView.postDeleted'));
 }
 
 function handleImageClick(post: Post, index: number) {
@@ -365,7 +365,7 @@ async function handleSelectPost(post: Post) {
       }
     };
   } catch (error) {
-    console.error('加载帖子详情失败:', error);
+    console.error(t('communityView.loadDetailFailed'), error);
     // 即使失败也显示帖子，但不增加浏览量
     selectedPost.value = post;
   }
@@ -378,8 +378,8 @@ async function loadComments() {
     const res = await getComments(selectedPost.value.id);
     comments.value = res.comments;
   } catch (error) {
-    console.error('加载评论失败:', error);
-    message.error('加载评论失败');
+    console.error(t('communityView.loadCommentsFailed'), error);
+    message.error(t('communityView.loadCommentsFailed'));
   } finally {
     loadingComments.value = false;
   }
@@ -412,11 +412,11 @@ async function handleDeleteComment(commentId: string) {
   deletingCommentId.value = commentId;
   try {
     await deleteComment(commentId);
-    message.success('评论已删除');
+    message.success(t('communityView.commentDeleted'));
     await loadComments(); // 刷新评论列表
     selectedPost.value.stats.comments -= 1; // 更新计数
   } catch (error) {
-    message.error('删除评论失败');
+    message.error(t('communityView.deleteCommentFailed'));
   } finally {
     deletingCommentId.value = null;
   }
@@ -533,4 +533,37 @@ watch(selectedPost, (newPost) => {
 .comment-time { font-size: 11px; color: var(--text-subtle); }
 .comment-text { font-size: 14px; color: var(--text-main); line-height: 1.5; margin: 0; }
 .comment-input { padding: 12px 16px; display: flex; flex-direction: column; }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .community-page { padding: 16px 12px 64px; }
+  .page-header { margin-bottom: 16px; }
+  .page-header h1 { font-size: 20px; }
+  .page-subtitle { font-size: 13px; }
+  .action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+  .action-bar :deep(.n-button) { width: 100%; }
+  .tab-bar { flex-wrap: nowrap; overflow-x: auto; gap: 4px; padding: 3px; }
+  .tab-button { padding: 8px 12px; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+  .post-list { gap: 12px; }
+  .post-detail { max-width: 100%; }
+  .back-link { margin-bottom: 12px; font-size: 12px !important; }
+  .detail-card { padding: 16px; margin-bottom: 16px; }
+  .detail-header { gap: 10px; margin-bottom: 12px; }
+  .detail-avatar { width: 36px; height: 36px; font-size: 15px; }
+  .detail-author { font-size: 14px; }
+  .detail-time { font-size: 11px; }
+  .detail-title { font-size: 18px; margin: 0 0 8px; }
+  .detail-content { font-size: 14px; line-height: 1.7; }
+  .detail-images { gap: 6px; margin-top: 12px; }
+  .detail-img { max-width: 140px; max-height: 140px; border-radius: 8px; }
+  .detail-stats { gap: 12px; margin-top: 12px; padding-top: 10px; font-size: 12px; }
+  .comments-section h3 { font-size: 14px; margin: 0 0 10px; }
+  .comment-list { gap: 8px; margin-bottom: 12px; }
+  .comment-item { padding: 10px 12px; }
+  .comment-header { flex-wrap: wrap; gap: 4px; }
+  .comment-author { font-size: 12px; }
+  .comment-time { font-size: 10px; }
+  .comment-text { font-size: 13px; }
+  .comment-input { padding: 10px 12px; }
+}
 </style>

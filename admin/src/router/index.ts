@@ -1,91 +1,42 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import type { RouteRecordRaw } from 'vue-router';
+import type { App } from 'vue';
 
-const routes: RouteRecordRaw[] = [
-  {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/LoginView.vue'),
-    meta: { guest: true },
-  },
-  {
-    path: '/',
-    component: () => import('@/views/AdminLayout.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
-    children: [
-      {
-        path: '',
-        name: 'Dashboard',
-        component: () => import('@/views/DashboardView.vue'),
-      },
-      {
-        path: 'lorebook',
-        name: 'LorebookManage',
-        component: () => import('@/views/LorebookManage.vue'),
-      },
-      {
-        path: 'scene-config',
-        name: 'SceneConfig',
-        component: () => import('@/views/SceneConfig.vue'),
-      },
-      {
-        path: 'characters',
-        name: 'CharacterList',
-        component: () => import('@/views/CharacterList.vue'),
-      },
-      {
-        path: 'characters/:characterId',
-        name: 'CharacterEdit',
-        component: () => import('@/views/CharacterEdit.vue'),
-        props: true,
-      },
-    ],
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    component: () => import('@/views/NotFoundView.vue'),
-  },
-];
+import { createRouter, createWebHashHistory } from 'vue-router';
+import { basicRoutes } from './routes';
 
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
+// 白名单应该包含基本静态路由
+const WHITE_NAME_LIST: string[] = [];
+const getRouteNames = (array: any[]) =>
+  array.forEach((item) => {
+    WHITE_NAME_LIST.push(item.name);
+    getRouteNames(item.children || []);
+  });
+getRouteNames(basicRoutes);
+
+// app router
+// 创建一个可以被 Vue 应用程序使用的路由实例
+export const router = createRouter({
+  // 创建一个 hash 历史记录。
+  history: createWebHashHistory(import.meta.env.VITE_PUBLIC_PATH),
+  // 应该添加到路由的初始路由列表。
+  routes: basicRoutes as unknown as RouteRecordRaw[],
+  // 是否应该禁止尾部斜杠。默认为假
+  strict: true,
+  scrollBehavior: () => ({ left: 0, top: 0 }),
 });
 
-router.beforeEach(async (to) => {
-  const auth = useAuthStore();
-  auth.syncFromStorage();
-
-  // Fetch profile if authenticated but user not loaded
-  if (auth.isAuthenticated && !auth.user) {
-    try {
-      await auth.fetchProfile();
-    } catch {
-      auth.logout();
-      if (to.meta.requiresAuth) {
-        return { name: 'Login' };
-      }
+// reset router
+export function resetRouter() {
+  router.getRoutes().forEach((route) => {
+    const { name } = route;
+    if (name && !WHITE_NAME_LIST.includes(name as string)) {
+      router.hasRoute(name) && router.removeRoute(name);
     }
-  }
+  });
+}
 
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { name: 'Login', query: { redirect: to.fullPath } };
-  }
-
-  if (to.meta.requiresAdmin && !auth.isAdmin) {
-    // If user is authenticated but not admin, show error
-    if (auth.isAuthenticated) {
-      return { name: 'Dashboard' }; // Will show access denied in layout
-    }
-    return { name: 'Login' };
-  }
-
-  if (to.meta.guest && auth.isAuthenticated) {
-    return { name: 'Dashboard' };
-  }
-
-  return true;
-});
-
-export default router;
+// config router
+// 配置路由器
+export function setupRouter(app: App<Element>) {
+  app.use(router);
+}

@@ -1,7 +1,7 @@
 <template>
   <div class="dialogue-history" ref="scrollRef">
     <div v-if="history.length === 0" class="empty-hint">
-      暂无对话记录
+      {{ $t('dialogueHistory.noRecords') }}
     </div>
     <div
       v-for="msg in history"

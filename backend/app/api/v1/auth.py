@@ -301,13 +301,6 @@ async def login(
             message="Invalid email or password",
         )
     
-    if not user.email_verified:
-        raise AppException(
-            error_code=ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
-            status_code=status.HTTP_403_FORBIDDEN,
-            message="Email not verified",
-        )
-    
     # Clear lockout on success
     await _clear_failed_login(request.email)
 

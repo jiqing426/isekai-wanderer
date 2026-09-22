@@ -8,7 +8,7 @@
           @change="handleAutoPlayChange"
           class="control-checkbox"
         />
-        <span class="control-label">自动播放</span>
+        <span class="control-label">{{ $t('playbackControls.autoPlay') }}</span>
       </label>
       
       <button 
@@ -16,14 +16,14 @@
         @click="handleSkipRead"
         :disabled="!hasUnreadNodes"
       >
-        ⏭️ 跳过已读
+        {{ $t('playbackControls.skipRead') }}
       </button>
       
       <button 
         class="control-button" 
         @click="handlePauseResume"
       >
-        {{ isPaused ? '▶️ 继续' : '⏸️ 暂停' }}
+        {{ isPaused ? $t('playbackControls.resume') : $t('playbackControls.pause') }}
       </button>
     </div>
   </div>

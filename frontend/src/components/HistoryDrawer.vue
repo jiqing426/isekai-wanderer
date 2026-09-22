@@ -5,7 +5,7 @@
         <div class="history-drawer" @click.stop>
           <!-- 抽屉头部 -->
           <div class="drawer-header">
-            <h3>📜 对话历史</h3>
+            <h3>{{ $t('historyDrawer.title') }}</h3>
             <n-button text @click="close" class="close-btn">
               <span>✕</span>
             </n-button>
@@ -17,7 +17,7 @@
               <n-spin size="medium" />
             </div>
             <div v-else-if="dialogueHistory.length === 0" class="empty-state">
-              <p>暂无对话历史</p>
+              <p>{{ $t('historyDrawer.noHistory') }}</p>
             </div>
             <div v-else class="history-timeline">
               <div
@@ -34,7 +34,7 @@
                 <div class="timeline-content">
                   <div class="timeline-header">
                     <span class="timeline-label">
-                      {{ item.type === 'dialogue' ? item.characterName : '你的选择' }}
+                      {{ item.type === 'dialogue' ? item.characterName : $t('historyDrawer.yourChoice') }}
                     </span>
                     <span class="timeline-time">{{ formatTime(item.timestamp) }}</span>
                   </div>
@@ -44,10 +44,10 @@
                   </div>
                 </div>
               </div>
-              <!-- 加载更多按钮 -->
+              <!-- {{ $t('historyDrawer.loadMore') }}按钮 -->
               <div v-if="hasMore" class="load-more">
                 <n-button @click="loadMore" :loading="loading" size="small">
-                  加载更多
+                  {{ $t('historyDrawer.loadMore') }}
                 </n-button>
               </div>
             </div>
@@ -62,6 +62,7 @@
 import { ref, watch } from 'vue';
 import { NButton, NSpin } from 'naive-ui';
 import { gameApi } from '@/api/game';
+import { useI18n } from 'vue-i18n'
 
 interface DialogueHistoryItem {
   type: 'dialogue' | 'choice' | 'system';
@@ -75,6 +76,8 @@ interface Props {
   visible: boolean;
   sessionId?: string;
 }
+
+const { t } = useI18n()
 
 const props = defineProps<Props>();
 

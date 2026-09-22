@@ -11,20 +11,20 @@
       </div>
       <button class="detail-btn" @click="goToCharacterDetail">
         <span>📋</span>
-        <span>查看详情</span>
+        <span>{{ $t('chatWindow.viewDetail') }}</span>
       </button>
     </div>
 
     <!-- 消息列表区 -->
     <div class="message-list" ref="messageListRef" @scroll="handleScroll">
       <div v-if="isLoadingMore" class="loading-more">
-        <span>加载中...</span>
+        <span>{{ $t('chatWindow.loadingMore') }}</span>
       </div>
       <div v-else-if="!hasMoreMessages && messages.length > 0" class="no-more-messages">
-        <span>没有更多消息了</span>
+        <span>{{ $t('chatWindow.noMoreMessages') }}</span>
       </div>
       <div v-if="messages.length === 0 && !isStreaming" class="empty-messages">
-        <p>开始和{{ characterName }}对话吧！</p>
+        <p>{{ $t('chatWindow.startConversation', { name: characterName }) }}</p>
       </div>
       <div
         v-for="message in messages"
@@ -35,8 +35,8 @@
         <div class="message-avatar">
           <img v-if="message.sender_type === 'npc' && characterAvatar && !npcAvatarFailed" :src="characterAvatar" :alt="characterName" class="avatar-img" @error="npcAvatarFailed = true" />
           <span v-else-if="message.sender_type === 'npc'" class="avatar-initial">{{ characterName?.charAt(0) || '?' }}</span>
-          <img v-else-if="userAvatar && !userAvatarFailed" :src="userAvatar" alt="我" class="avatar-img" @error="userAvatarFailed = true" />
-          <span v-else class="avatar-initial">{{ userDisplayName?.charAt(0) || '我' }}</span>
+          <img v-else-if="userAvatar && !userAvatarFailed" :src="userAvatar" :alt="$t('chatWindow.me')" class="avatar-img" @error="userAvatarFailed = true" />
+          <span v-else class="avatar-initial">{{ userDisplayName?.charAt(0) || $t('chatWindow.me') }}</span>
         </div>
         <div class="message-bubble">
           <div class="message-content">{{ message.content }}</div>
@@ -62,7 +62,7 @@
 
     <!-- 推荐话题区 -->
     <div class="topics-section" v-if="topics.length > 0">
-      <div class="topics-label">推荐话题：</div>
+      <div class="topics-label">{{ $t('chatWindow.topicsLabel') }}</div>
       <div class="topics-list">
         <div
           v-for="topic in topics"
@@ -84,7 +84,7 @@
         <textarea
           ref="textareaRef"
           v-model="inputMessage"
-          placeholder="输入消息..."
+          :placeholder="$t('chatWindow.inputPlaceholder')"
           rows="1"
           @keydown="handleKeydown"
           @input="autoResize"
@@ -96,7 +96,7 @@
         @click="sendMessage"
         :disabled="!inputMessage.trim() || sending"
       >
-        发送
+        {{ $t('chatWindow.send') }}
       </button>
 
       <!-- 加号菜单 -->
@@ -104,11 +104,11 @@
         <div v-if="showPlusMenu" class="plus-menu">
           <div class="menu-item" @click="openGiftModal">
             <span>🎁</span>
-            <span>送礼</span>
+            <span>{{ $t('chatWindow.gift') }}</span>
           </div>
           <div class="menu-item" @click="openGiftHistoryModal">
             <span>📜</span>
-            <span>送礼记录</span>
+            <span>{{ $t('chatWindow.giftHistory') }}</span>
           </div>
         </div>
       </Transition>
@@ -125,10 +125,10 @@
     <!-- 送礼记录弹窗 -->
     <div v-if="showGiftHistoryModal" class="modal-overlay" @click="closeGiftHistoryModal">
       <div class="modal-content" @click.stop>
-        <h3>送礼记录</h3>
+        <h3>{{ $t('chatWindow.giftHistory') }}</h3>
         <div class="history-list">
           <div v-if="giftHistory.length === 0" class="empty-history">
-            <p>暂无送礼记录</p>
+            <p>{{ $t('chatWindow.noGiftHistory') }}</p>
           </div>
           <div
             v-for="record in giftHistory"
@@ -142,7 +142,7 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button class="close-btn" @click="closeGiftHistoryModal">关闭</button>
+          <button class="close-btn" @click="closeGiftHistoryModal">{{ $t('chatWindow.close') }}</button>
         </div>
       </div>
     </div>
@@ -157,6 +157,7 @@ import { affectionApi } from '@/api/character'
 import { useAuthStore } from '@/stores/auth'
 import { gameApi } from '@/api/game'
 import GiftModal from '@/components/GiftModal.vue'
+import { useI18n } from 'vue-i18n'
 import type { ChatMessage, ChatTopic, GiftHistory } from '@/types/chat'
 
 const props = defineProps<{
@@ -168,6 +169,7 @@ const props = defineProps<{
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 const userAvatar = computed(() => {
   const avatar = authStore.user?.avatar
   console.log('[ChatWindow] userAvatar:', avatar, 'user:', authStore.user)
@@ -175,7 +177,7 @@ const userAvatar = computed(() => {
 })
 
 const userDisplayName = computed(() => {
-  return authStore.user?.displayName || authStore.user?.username || '我'
+  return authStore.user?.displayName || authStore.user?.username || t('chatWindow.me')
 })
 
 // CR-032: 头像加载失败状态
@@ -221,7 +223,7 @@ const formatTime = (dateString: string) => {
   
   // 检查日期是否有效
   if (isNaN(date.getTime())) {
-    return '未知时间'
+    return t('chatWindow.unknownTime')
   }
   
   const now = new Date()
@@ -230,10 +232,10 @@ const formatTime = (dateString: string) => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 7) return `${days}天前`
+  if (minutes < 1) return t('chatWindow.justNow')
+  if (minutes < 60) return t('chatWindow.minutesAgo', { n: minutes })
+  if (hours < 24) return t('chatWindow.hoursAgo', { n: hours })
+  if (days < 7) return t('chatWindow.daysAgo', { n: days })
   return date.toLocaleDateString('zh-CN')
 }
 
@@ -432,7 +434,7 @@ const handleGiftSent = (result: any) => {
     id: Date.now().toString(),
     character_id: props.characterId,
     sender_type: 'npc',
-    content: `谢谢你送的礼物！我好喜欢！`,
+    content: t('chatWindow.giftThanksMessage'),
     created_at: new Date().toISOString()
   })
   scrollToBottom()

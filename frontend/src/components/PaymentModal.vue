@@ -16,9 +16,9 @@
           :class="{ 'pkg-selected': selectedPkg === pkg.id, 'pkg-popular': pkg.popular }"
           @click="selectedPkg = pkg.id"
         >
-          <div v-if="pkg.popular" class="popular-badge">热门</div>
+          <div v-if="pkg.popular" class="popular-badge">{{ $t('paymentModal.popular') }}</div>
           <div class="pkg-shards">💎 {{ pkg.shards }}</div>
-          <div v-if="pkg.bonus" class="pkg-bonus">赠送 {{ pkg.bonus }}</div>
+          <div v-if="pkg.bonus" class="pkg-bonus">{{ $t('paymentModal.bonus', { n: pkg.bonus }) }}</div>
           <div class="pkg-price">¥{{ pkg.price }}</div>
         </div>
       </div>
@@ -46,7 +46,7 @@
       <div v-if="scriptPurchase" class="script-confirm">
         <div class="script-title-large">📖 {{ scriptPurchase.scriptTitle }}</div>
         <div class="script-price">
-          {{ scriptPurchase.currency === 'shards' ? `💎 ${scriptPurchase.price} 碎片` : `¥${scriptPurchase.price}` }}
+          {{ scriptPurchase.currency === 'shards' ? $t('paymentModal.shardsPrice', { n: scriptPurchase.price }) : `¥${scriptPurchase.price}` }}
         </div>
       </div>
     </div>
@@ -61,7 +61,7 @@
 
     <template #action>
       <n-space justify="end">
-        <n-button @click="visible = false">{{ paymentResult ? '关闭' : '取消' }}</n-button>
+        <n-button @click="visible = false">{{ paymentResult ? $t('paymentModal.closeOrCancel') : $t('paymentModal.cancel') }}</n-button>
         <n-button
           v-if="!paymentResult"
           type="primary"
@@ -95,9 +95,9 @@ const shardPackages: ShardPkg[] = [
 ];
 
 const staminaPackages: StaminaPkg[] = [
-  { id: 'stamina_1', stamina: 1, description: '恢复 1 点体力', price: 1 },
-  { id: 'stamina_5', stamina: 5, description: '恢复 5 点体力', price: 4 },
-  { id: 'stamina_10', stamina: 10, description: '恢复 10 点体力', price: 7 },
+  { id: 'stamina_1', stamina: 1, description: t('paymentModal.stamina1Desc'), price: 1 },
+  { id: 'stamina_5', stamina: 5, description: t('paymentModal.stamina5Desc'), price: 4 },
+  { id: 'stamina_10', stamina: 10, description: t('paymentModal.stamina10Desc'), price: 7 },
 ];
 
 const props = defineProps<{
@@ -156,22 +156,22 @@ async function handlePurchase() {
 
     if (props.mode === 'shards') {
       const pkg = shardPackages.find((p) => p.id === selectedPkg.value);
-      if (!pkg) throw new Error('未选择碎片包');
+      if (!pkg) throw new Error(t('paymentModal.noShardPkg'));
       item_id = pkg.id;
-      item_name = `${pkg.shards} 碎片` + (pkg.bonus ? ` +${pkg.bonus} 赠送` : '');
+      item_name = t('paymentModal.shardPkgItem', { n: pkg.shards }) + (pkg.bonus ? t('paymentModal.shardBonus', { n: pkg.bonus }) : '');
       price = pkg.price;
     } else if (props.mode === 'stamina') {
       const pkg = staminaPackages.find((p) => p.id === selectedPkg.value);
-      if (!pkg) throw new Error('未选择体力包');
+      if (!pkg) throw new Error(t('paymentModal.noStaminaPkg'));
       item_id = pkg.id;
-      item_name = `${pkg.stamina} 体力`;
+      item_name = t('paymentModal.staminaItem', { n: pkg.stamina });
       price = pkg.price;
     } else if (props.mode === 'script' && props.scriptPurchase) {
       item_id = 'script_purchase';
       item_name = props.scriptPurchase.scriptTitle;
       price = props.scriptPurchase.price;
     } else {
-      throw new Error('无效的购买类型');
+      throw new Error(t('paymentModal.invalidType'));
     }
 
     const resp = await api.post<{
@@ -183,16 +183,16 @@ async function handlePurchase() {
     paymentResult.value = {
       success: resp.status === 'completed',
       message: resp.status === 'completed'
-        ? `购买成功：${item_name}`
-        : `支付状态异常：${resp.status}`,
+        ? t('paymentModal.purchaseSuccess', { name: item_name })
+        : t('paymentModal.paymentAbnormal', { status: resp.status }),
     };
     emit('success');
   } catch (err) {
     paymentResult.value = {
       success: false,
-      message: `支付失败: ${err instanceof Error ? err.message : '未知错误'}`,
+      message: t('paymentModal.paymentFailed', { error: err instanceof Error ? err.message : t('paymentModal.unknownError') }),
     };
-    message.error('支付失败');
+    message.error(t('paymentModal.paymentFailedShort'));
   } finally {
     processing.value = false;
   }

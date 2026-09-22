@@ -5,10 +5,10 @@
       <span v-else class="avatar-initial">{{ characterName?.[0] || '?' }}</span>
     </div>
     <div class="info-text">
-      <div class="char-name">{{ characterName || '未知角色' }}</div>
+      <div class="char-name">{{ characterName || $t('characterInfo.unknownCharacter') }}</div>
       <div v-if="characterTitle" class="char-title">{{ characterTitle }}</div>
       <div v-if="characterAge || characterBirthday" class="char-meta">
-        <span v-if="characterAge">{{ characterAge }}岁</span>
+        <span v-if="characterAge">{{ characterAge }}{{ $t('characterInfo.yearsOld', { age: characterAge }) }}</span>
         <span v-if="characterBirthday">· {{ characterBirthday }}</span>
       </div>
       <div v-if="characterLikes && characterLikes.length > 0" class="char-likes">
@@ -20,6 +20,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = withDefaults(defineProps<{
   characterId?: string;
@@ -30,7 +33,7 @@ const props = withDefaults(defineProps<{
   characterBirthday?: string;
   characterLikes?: string[];
 }>(), {
-  characterName: '未知角色',
+  characterName: t('characterInfo.unknownCharacter'),
   characterLikes: () => [],
 });
 

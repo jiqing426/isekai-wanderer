@@ -3,15 +3,15 @@
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>加载中...</p>
+      <p>{{ $t('scriptDetail.loading') }}</p>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
       <div class="error-icon">⚠️</div>
-      <h3>加载失败</h3>
+      <h3>{{ $t('scriptDetail.loadFailed') }}</h3>
       <p>{{ error }}</p>
-      <button class="cta-secondary" @click="loadScript">重试</button>
+      <button class="cta-secondary" @click="loadScript">{{ $t('scriptDetail.retry') }}</button>
     </div>
 
     <!-- Main Content -->
@@ -20,7 +20,7 @@
       <header class="detail-header">
         <button class="back-button" @click="router.back()">
           <span class="back-icon">🔙</span>
-          <span>返回</span>
+          <span>{{ $t('scriptDetail.back') }}</span>
         </button>
       </header>
 
@@ -38,36 +38,36 @@
         <div class="hero-right">
           <div class="hero-info">
             <h1 class="script-title">{{ scriptDetail.title }}</h1>
-            <p class="script-author">作者：{{ scriptDetail.author }}</p>
+            <p class="script-author">{{ $t('scriptDetail.author') }}：{{ scriptDetail.author }}</p>
             <p class="script-description">{{ scriptDetail.description }}</p>
 
             <!-- FE-FEAT-023: 展示路线和结局数量 -->
             <div class="script-stats">
               <div class="stat-badge">
                 <span class="stat-icon">🗺️</span>
-                <span class="stat-text">{{ routeChapters.length }} 条路线</span>
+                <span class="stat-text">{{ routeChapters.length }} {{ $t('scriptDetail.routes') }}</span>
               </div>
               <div class="stat-badge">
                 <span class="stat-icon">🏆</span>
-                <span class="stat-text">{{ unlockedEndings.length + lockedEndingCount }} 个结局</span>
+                <span class="stat-text">{{ unlockedEndings.length + lockedEndingCount }} {{ $t('scriptDetail.endings') }}</span>
               </div>
               <div class="stat-badge">
                 <span class="stat-icon">👥</span>
-                <span class="stat-text">{{ characters.length }} 个角色</span>
+                <span class="stat-text">{{ characters.length }} {{ $t('scriptDetail.characters') }}</span>
               </div>
             </div>
 
             <!-- Progress Bar -->
             <div class="progress-section">
               <div class="progress-header">
-                <span class="progress-label">完成进度</span>
+                <span class="progress-label">{{ $t('scriptDetail.completionProgress') }}</span>
                 <span class="progress-percentage">{{ scriptDetail.completionRate }}%</span>
               </div>
               <div class="progress-bar">
                 <div class="progress-fill" :style="{ width: `${scriptDetail.completionRate}%` }"></div>
               </div>
               <div class="progress-stats">
-                <span>已解锁节点：{{ scriptDetail.unlockedNodes }}/{{ scriptDetail.totalNodes }}</span>
+                <span>{{ $t('scriptDetail.unlockedNodes') }}：{{ scriptDetail.unlockedNodes }}/{{ scriptDetail.totalNodes }}</span>
               </div>
             </div>
 
@@ -83,8 +83,8 @@
 
       <!-- 2. Character Selection Section (CR-028: integrated playable badges + lock overlay) -->
       <section class="character-selection-section">
-        <h2 class="section-title">👥 角色图鉴</h2>
-        <p v-if="playableCharacters.length > 0" class="section-desc">点击可扮演角色选择扮演身份，体验不同的故事线</p>
+        <h2 class="section-title">{{ $t('scriptDetail.characterGuide') }}</h2>
+        <p v-if="playableCharacters.length > 0" class="section-desc">{{ $t('scriptDetail.characterSelectHint') }}</p>
         <div class="character-grid">
           <CharacterDetailCard
             v-for="character in characters"
@@ -118,19 +118,19 @@
 
       <!-- 3. Route Tree Section -->
       <section class="route-tree-section">
-        <h2 class="section-title">🗺️ 路线探索</h2>
+        <h2 class="section-title">{{ $t('scriptDetail.routeExploration') }}</h2>
         <RouteTree :chapters="routeChapters" @chapter-click="handleChapterClick" />
       </section>
 
       <!-- 4. Ending List Section -->
       <section class="ending-list-section">
-        <h2 class="section-title">🏆 结局收集</h2>
+        <h2 class="section-title">{{ $t('scriptDetail.endingCollection') }}</h2>
         <EndingList :chapter-endings="chapterEndings" :locked-count="lockedEndingCount" />
       </section>
 
       <!-- 5. CG Preview Grid Section -->
       <section class="cg-preview-section">
-        <h2 class="section-title">🎨 CG 预览</h2>
+        <h2 class="section-title">{{ $t('scriptDetail.cgPreview') }}</h2>
         <CGPreviewGrid :cgs="cgPreviews" />
       </section>
     </div>
@@ -138,10 +138,10 @@
     <!-- Empty State -->
     <div v-else class="empty-state">
       <div class="empty-icon">📖</div>
-      <h3>剧本不存在</h3>
-      <p>请返回剧本大厅选择其他剧本</p>
+      <h3>{{ $t('scriptDetail.scriptNotFound') }}</h3>
+      <p>{{ $t('scriptDetail.scriptNotFoundDesc') }}</p>
       <button class="cta-secondary" @click="router.push('/discover')">
-        返回剧本大厅
+        {{ $t('scriptDetail.backToLobby') }}
       </button>
     </div>
   </div>
@@ -150,6 +150,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import { api } from '@/api/http';
 import CharacterDetailCard from '@/components/CharacterDetailCard.vue';
@@ -162,6 +163,7 @@ import type { PlayableCharacter } from '@/components/LockedCharacterOverlay.vue'
 
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 const auth = useAuthStore();
 
 const scriptId = route.params.scriptId as string;
@@ -283,10 +285,10 @@ const startGameButtonText = computed(() => {
   if (selectedPlayableCharacterId.value) {
     const selectedChar = playableCharacters.value.find(c => c.id === selectedPlayableCharacterId.value);
     if (selectedChar) {
-      return `🎮 开始游戏（以${selectedChar.name}身份）`;
+      return t('scriptDetail.startGameAs', { name: selectedChar.name });
     }
   }
-  return '🎮 开始游戏';
+  return t('scriptDetail.startGameDefault');
 });
 
 function startGame() {
@@ -342,7 +344,7 @@ async function loadScript() {
       title: response.title,
       description: response.description,
       cover: response.cover_image_url,
-      author: response.author || '美澜',
+      author: response.author || t('scriptDetail.defaultAuthor'),
       completionRate: response.completionRate || 0,
       unlockedNodes: response.unlockedNodes || 0,
       totalNodes: response.totalNodes || 0,
@@ -381,9 +383,9 @@ async function loadScript() {
     if (response.routes && Array.isArray(response.routes)) {
       routeChapters.value = response.routes.map((route: any, index: number) => {
         // 优先使用 chapter_type_label（和游戏内一致），fallback 到 route.title
-        const chapterLabel = route.chapter_type_label || route.title || `第${index + 1}章`;
+        const chapterLabel = route.chapter_type_label || route.title || t('scriptDetail.chapterPrefix', { n: index + 1 });
         const chapterNum = route.chapter_number || index + 1;
-        const title = route.chapter_type_label ? `第${chapterNum}章：${chapterLabel}` : chapterLabel;
+        const title = route.chapter_type_label ? t('scriptDetail.chapterTitle', { n: chapterNum, title: chapterLabel }) : chapterLabel;
         return {
           id: route.id,
           routeId: route.id,
@@ -392,7 +394,7 @@ async function loadScript() {
           isCompleted: route.is_completed || false,
           isCurrent: route.is_unlocked && !route.is_completed, // 已解锁但未完成 = 当前章节
           isLocked: !route.is_unlocked,
-          lockReason: !route.is_unlocked ? '未解锁' : '',
+          lockReason: !route.is_unlocked ? t('scriptDetail.locked') : '',
         };
       });
     } else {
@@ -407,7 +409,7 @@ async function loadScript() {
       if (response.routes && Array.isArray(response.routes)) {
         response.routes.forEach((route: any, index: number) => {
           routeInfoMap.set(route.id, {
-            title: route.title || `第${index + 1}章`,
+            title: route.title || t('scriptDetail.chapterPrefix', { n: index + 1 }),
             index: index
           });
         });
@@ -425,7 +427,7 @@ async function loadScript() {
       if (response.routes && Array.isArray(response.routes)) {
         response.routes.forEach((route: any, index: number) => {
           chapterMap.set(route.id, {
-            chapter: route.title || `第${index + 1}章`,
+            chapter: route.title || t('scriptDetail.chapterPrefix', { n: index + 1 }),
             chapterIndex: index,
             endings: [],
             hasUnlocked: false
@@ -456,7 +458,7 @@ async function loadScript() {
         } else if (routeId) {
           // route_id 存在但不在 routes 数组中，创建新条目
           chapterMap.set(routeId, {
-            chapter: `未知章节`,
+            chapter: t('scriptDetail.unknownChapter'),
             chapterIndex: chapterMap.size,
             endings: [{
               id: ending.id,
@@ -508,7 +510,7 @@ async function loadScript() {
     
   } catch (err) {
     console.error('加载剧本详情失败:', err);
-    error.value = '加载剧本详情失败，请稍后重试';
+    error.value = t('scriptDetail.loadScriptFailed');
     characters.value = [];
     unlockedEndings.value = [];
     lockedEndingCount.value = 0;

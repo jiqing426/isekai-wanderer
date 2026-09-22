@@ -28,4 +28,9 @@ const router = useRouter();
 .not-found-page h1 { font-size: 48px; margin-bottom: 8px; }
 .not-found-page p { color: #94a3b8; }
 
+/* === 移动端适配 === */
+@media (max-width: 768px) {
+  .not-found-page h1 { font-size: 32px; }
+  .not-found-page p { font-size: 14px; }
+}
 </style>

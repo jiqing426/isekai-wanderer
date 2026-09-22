@@ -9,6 +9,8 @@ from enum import Enum
 from typing import AsyncGenerator, List, Optional
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 
 class ScenarioType(str, Enum):
     """场景类型"""
@@ -101,7 +103,7 @@ class ModelRouter:
                 return response
             except Exception as e:
                 # 记录错误，尝试下一个模型
-                print(f"Model {model.name} failed: {e}, trying fallback...")
+                logger.warning(f"Model {model.name} failed: {e}, trying fallback...")
                 continue
 
         # 所有模型都失败，返回预设回复

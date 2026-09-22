@@ -96,13 +96,28 @@ class SubscriptionService:
             )
             sub = sub_result.scalar_one_or_none()
             if sub:
+                now = datetime.now(timezone.utc)
                 # Check if subscription is still valid
-                if sub.expires_at and sub.expires_at < datetime.now(timezone.utc):
-                    # Subscription expired, update status
-                    sub.status = SubscriptionStatus.expired.value
-                    user.subscription_tier = SubscriptionTier.free.value
-                    await self.db.flush()
-                    return SubscriptionTier.free.value
+                if sub.expires_at and sub.expires_at < now:
+                    # Subscription expired — check for pending downgrade
+                    if sub.pending_tier:
+                        # Apply pending downgrade
+                        sub.tier = sub.pending_tier
+                        sub.pending_tier = None
+                        sub.status = SubscriptionStatus.active.value
+                        # Extend for new cycle
+                        cycle_days = 30 if sub.billing_cycle == "monthly" else 365
+                        sub.expires_at = now + timedelta(days=cycle_days)
+                        sub.started_at = now
+                        user.subscription_tier = sub.tier
+                        await self.db.flush()
+                        return sub.tier
+                    else:
+                        # No pending — downgrade to free
+                        sub.status = SubscriptionStatus.expired.value
+                        user.subscription_tier = SubscriptionTier.free.value
+                        await self.db.flush()
+                        return SubscriptionTier.free.value
                 return sub.tier
         
         return SubscriptionTier.free.value
@@ -184,20 +199,33 @@ class SubscriptionService:
             expires_at: Subscription expiration time
             
         Returns:
-            Created Subscription record
+            Created or updated Subscription record
         """
-        # Create new subscription record (CR-016 table)
-        subscription = Subscription(
-            user_id=user_id,
-            tier=tier,
-            status=SubscriptionStatus.active.value,
-            started_at=datetime.now(timezone.utc),
-            expires_at=expires_at,
-            fragment_quota=TIER_FRAGMENT_QUOTAS.get(tier, 0),
-            last_fragment_grant_at=datetime.now(timezone.utc),
-            next_fragment_grant_at=datetime.now(timezone.utc) + timedelta(days=30),
-        )
-        self.db.add(subscription)
+        # Check for existing active subscription — reuse if exists, don't create duplicate
+        existing = await self.get_user_subscription(user_id)
+        if existing:
+            # Update existing record instead of creating a new one
+            existing.tier = tier
+            existing.status = SubscriptionStatus.active.value
+            existing.started_at = datetime.now(timezone.utc)
+            existing.expires_at = expires_at
+            existing.fragment_quota = TIER_FRAGMENT_QUOTAS.get(tier, 0)
+            existing.last_fragment_grant_at = datetime.now(timezone.utc)
+            existing.next_fragment_grant_at = datetime.now(timezone.utc) + timedelta(days=30)
+            subscription = existing
+        else:
+            # Create new subscription record
+            subscription = Subscription(
+                user_id=user_id,
+                tier=tier,
+                status=SubscriptionStatus.active.value,
+                started_at=datetime.now(timezone.utc),
+                expires_at=expires_at,
+                fragment_quota=TIER_FRAGMENT_QUOTAS.get(tier, 0),
+                last_fragment_grant_at=datetime.now(timezone.utc),
+                next_fragment_grant_at=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            self.db.add(subscription)
         
         # Update user's subscription_tier
         result = await self.db.execute(
@@ -250,8 +278,9 @@ class SubscriptionService:
         else:
             logger.info(f"Subscription created: user={user_id}, tier={tier}")
         
-        # Grant initial fragments for this month
-        await self._grant_fragments(user_id, tier)
+        # CR-044: Fragment granting moved to CR-016 create endpoint
+        # Only grant on first subscription or upgrade, not on renew/downgrade
+        # await self._grant_fragments(user_id, tier)  # moved to cr016_subscription.py
         
         return subscription
 

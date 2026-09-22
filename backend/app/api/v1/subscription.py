@@ -88,67 +88,6 @@ async def list_plans():
     return {"plans": plans}
 
 
-from pydantic import BaseModel
-from typing import Optional
-
-
-class CreateOrderRequest(BaseModel):
-    planId: str
-    cycleType: str  # "monthly" or "yearly"
-
-
-@router.post("/order/create")
-async def create_order(
-    request: CreateOrderRequest,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """创建订阅订单（需要认证）"""
-    uid = UUID(user_id)
-    
-    # Validate planId
-    valid_plans = ["basic", "standard", "premium"]
-    if request.planId not in valid_plans:
-        raise AppException("PLAN_NOT_FOUND", 404, f"套餐不存在: {request.planId}")
-    
-    # Validate cycleType
-    if request.cycleType not in ["monthly", "yearly"]:
-        raise AppException("INVALID_CYCLE_TYPE", 400, f"无效的订阅周期: {request.cycleType}")
-    
-    # Price map
-    price_map = {
-        "basic": {"monthly": 1.99, "yearly": 19.99},
-        "standard": {"monthly": 4.99, "yearly": 49.99},
-        "premium": {"monthly": 9.99, "yearly": 99.99}
-    }
-    
-    amount = price_map[request.planId][request.cycleType]
-    
-    # Generate order ID
-    import uuid
-    order_id = f"order_{uuid.uuid4().hex[:12]}"
-    
-    # Directly activate subscription (no mock payment gateway)
-    from datetime import datetime, timezone, timedelta
-    
-    if request.cycleType == "monthly":
-        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-    else:
-        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
-    subscription_service = SubscriptionService(db)
-    await subscription_service.on_subscription_created(uid, request.planId, expires_at)
-    await db.commit()
-    
-    return {
-        "orderId": order_id,
-        "payUrl": None,
-        "amount": amount,
-        "currency": "USD",
-        "status": "success",
-        "message": "订阅成功"
-    }
-
-
 @router.get("/status")
 async def get_subscription_status(
     user_id: str = Depends(get_current_user_id),

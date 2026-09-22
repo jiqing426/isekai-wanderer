@@ -63,7 +63,7 @@ export interface SSEStreamResult {
  *   { url: '/api/v1/game/session/choice', method: 'POST', body: { choice_id: '...' } },
  *   {
  *     onText: (content) => { fullText += content; },
- *     onDone: (data) => { console.log('done', data); },
+ *     onDone: (data) => { /* done */ },
  *     onError: (msg) => { console.error('error', msg); },
  *   }
  * );

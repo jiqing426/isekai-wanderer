@@ -29,11 +29,11 @@
     <transition name="expand">
       <div class="bar-detail" v-if="expanded">
         <div class="detail-row">
-          <span class="detail-label">好感度</span>
+          <span class="detail-label">{{ $t('affectionBar.affectionLabel') }}</span>
           <span class="detail-value">{{ clampedValue }} / 100</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">等级</span>
+          <span class="detail-label">{{ $t('affectionBar.levelLabel') }}</span>
           <span class="detail-value" :style="{ color: levelColor }">{{ levelLabel }}</span>
         </div>
       </div>
@@ -44,6 +44,9 @@
 <script setup lang="ts">
 import { NProgress } from 'naive-ui';
 import { ref, computed, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   characterId: string;
@@ -51,7 +54,7 @@ const props = defineProps<{
   value: number;
 }>();
 
-const displayName = computed(() => props.characterName || '角色');
+const displayName = computed(() => props.characterName || t('affection.unknownCharacter'));
 
 const expanded = ref(false);
 const clampedValue = computed(() => Math.max(0, Math.min(100, props.value)));
@@ -95,11 +98,11 @@ watch(
 );
 
 const levels = [
-  { min: 0, max: 19, label: '相识', color: '#9CA3AF' },
-  { min: 20, max: 39, label: '暧昧', color: '#F472B6' },
-  { min: 40, max: 59, label: '信赖', color: '#38BDF8' },
-  { min: 60, max: 79, label: '羁绊', color: '#A78BFA' },
-  { min: 80, max: 100, label: '挚友', color: '#F43F5E' },
+  { min: 0, max: 19, label: t('affectionBar.tierAcquainted'), color: '#9CA3AF' },
+  { min: 20, max: 39, label: t('affectionBar.tierAmbiguous'), color: '#F472B6' },
+  { min: 40, max: 59, label: t('affectionBar.tierTrusted'), color: '#38BDF8' },
+  { min: 60, max: 79, label: t('affectionBar.tierBonded'), color: '#A78BFA' },
+  { min: 80, max: 100, label: t('affectionBar.tierBestFriend'), color: '#F43F5E' },
 ];
 
 const currentLevel = computed(() => levels.find(l => clampedValue.value >= l.min && clampedValue.value <= l.max) || levels[0]);
@@ -107,7 +110,7 @@ const levelLabel = computed(() => currentLevel.value.label);
 const levelColor = computed(() => currentLevel.value.color);
 
 const avatarEmoji = computed(() => {
-  const map: Record<string, string> = { '初识': '🤝', '暧昧': '💫', '信任': '🤝', '羁绊': '💜', '爱恋': '💕' };
+  const map: Record<string, string> = { [t('affectionBar.emojiInitial')]: '🤝', [t('affectionBar.emojiAmbiguous')]: '💫', [t('affectionBar.emojiTrust')]: '🤝', [t('affectionBar.emojiBonded')]: '💜', [t('affectionBar.emojiLove')]: '💕' };
   return map[levelLabel.value] || '💫';
 });
 </script>

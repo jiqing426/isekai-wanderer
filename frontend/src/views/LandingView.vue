@@ -80,8 +80,8 @@
     <!-- Script Showcase Section -->
     <section class="script-showcase-section">
       <div class="section-header">
-        <h2 class="section-title gradient-text reveal">🎭 精选剧本</h2>
-        <p class="section-desc reveal delay-1">探索我们精心打造的互动故事世界</p>
+        <h2 class="section-title gradient-text reveal">{{ $t('landing.showcaseIcon') }}{{ $t('landing.showcaseTitle') }}</h2>
+        <p class="section-desc reveal delay-1">{{ $t('landing.showcaseDesc') }}</p>
       </div>
       
       <div class="script-cards-grid reveal-scale">
@@ -135,7 +135,7 @@
             
             <!-- CTA Button -->
             <button class="card-cta-btn" @click="router.push('/discover')">
-              🔍 查看
+              {{ $t('landing.viewScript') }}
             </button>
           </div>
         </div>
@@ -202,7 +202,7 @@
         <h2 class="cta-title gradient-text">{{ $t('landing.ctaTitle') }}</h2>
         <p class="cta-desc">{{ $t('landing.heroSubtitle') }}</p>
         <n-button type="primary" size="large" class="cta-final-btn" @click="handlePrimaryCta">
-          {{ auth.isAuthenticated ? '开始冒险' : '立即注册' }}
+          {{ auth.isAuthenticated ? $t('landing.ctaStart') : $t('landing.ctaRegister') }}
         </n-button>
         <div class="social-links">
           <a href="#" class="social-link" aria-label="Discord">💬</a>
@@ -232,17 +232,20 @@ import { useRouter } from 'vue-router';
 import { useHead } from '@vueuse/head';
 import { useAuthStore } from '@/stores/auth';
 import { useScrollReveal } from '@/composables/useScrollReveal';
+import { useI18n } from 'vue-i18n';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { Autoplay, Pagination } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/pagination';
 
+const { t } = useI18n();
+
 useHead({
-  title: 'Isekai Wanderer - 穿越异世界，书写你的传奇',
+  title: t('landing.seoTitle'),
   meta: [
-    { name: 'description', content: '沉浸式 AI 互动叙事游戏，每一个选择都改变命运。探索精彩剧本，与角色建立羁绊，收集精美 CG。' },
-    { property: 'og:title', content: 'Isekai Wanderer - 穿越异世界，书写你的传奇' },
-    { property: 'og:description', content: 'AI 驱动的沉浸式叙事游戏，每一个选择都改变命运。' },
+    { name: 'description', content: t('landing.seoDescription') },
+    { property: 'og:title', content: t('landing.seoTitle') },
+    { property: 'og:description', content: t('landing.seoOgDescription') },
     { property: 'og:image', content: '/og-image.png' },
     { property: 'og:type', content: 'website' },
     { name: 'twitter:card', content: 'summary_large_image' },
@@ -280,8 +283,8 @@ interface ShowcaseScript {
 const showcaseScripts = ref<ShowcaseScript[]>([
   {
     id: 'e56ca348-cc08-45f2-a6fa-baa4c725d192',
-    title: '星辰之约',
-    description: '在星光璀璨的夜晚，你与温柔的占星师林辰相遇。命运的齿轮开始转动，每一次选择都将改变你们的未来。',
+    title: t('landing.script1.title'),
+    description: t('landing.script1.desc'),
     emoji: '⭐',
     images: [
       '/assets/covers/starry-vow.jpg',
@@ -289,15 +292,15 @@ const showcaseScripts = ref<ShowcaseScript[]>([
       '/assets/covers/starry-vow.jpg',
     ],
     characters: [
-      { id: '1', name: '林辰', emoji: '🌟', description: '温柔的占星师' },
-      { id: '2', name: '月华', emoji: '🌙', description: '月之守护者' },
-      { id: '3', name: '星野', emoji: '✨', description: '星辰精灵' },
+      { id: '1', name: t('landing.script1.char1.name'), emoji: '🌟', description: t('landing.script1.char1.desc') },
+      { id: '2', name: t('landing.script1.char2.name'), emoji: '🌙', description: t('landing.script1.char2.desc') },
+      { id: '3', name: t('landing.script1.char3.name'), emoji: '✨', description: t('landing.script1.char3.desc') },
     ],
   },
   {
     id: 'de1c935a-3e82-4e29-aff9-c69c3a460418',
-    title: '星月奇缘',
-    description: '在神秘的月夜下，你与天才天文学家沈星澜相遇。星辰与月光的交织，开启了一段奇幻的缘分。',
+    title: t('landing.script2.title'),
+    description: t('landing.script2.desc'),
     emoji: '🌙',
     images: [
       '/assets/covers/star-moon-fate.jpg',
@@ -305,14 +308,14 @@ const showcaseScripts = ref<ShowcaseScript[]>([
       '/assets/covers/star-moon-fate.jpg',
     ],
     characters: [
-      { id: '1', name: '沈星澜', emoji: '🔭', description: '天才天文学家' },
-      { id: '2', name: '月影', emoji: '🌕', description: '月之精灵' },
+      { id: '1', name: t('landing.script2.char1.name'), emoji: '🔭', description: t('landing.script2.char1.desc') },
+      { id: '2', name: t('landing.script2.char2.name'), emoji: '🌕', description: t('landing.script2.char2.desc') },
     ],
   },
   {
     id: '93bbc975-04f8-452d-ab27-d8f5348eb29d',
-    title: '樱花恋曲',
-    description: '在樱花盛开的季节，你与温柔的文学教授藤原雪相遇。古典文学与现代情感的碰撞，开启了一段诗意的恋情。',
+    title: t('landing.script3.title'),
+    description: t('landing.script3.desc'),
     emoji: '🌸',
     images: [
       '/assets/covers/cherry-blossom-romance.jpg',
@@ -320,9 +323,9 @@ const showcaseScripts = ref<ShowcaseScript[]>([
       '/assets/covers/cherry-blossom-romance.jpg',
     ],
     characters: [
-      { id: '1', name: '藤原雪', emoji: '📚', description: '文学教授' },
-      { id: '2', name: '樱井', emoji: '🌸', description: '文学少女' },
-      { id: '3', name: '白雪', emoji: '❄️', description: '古典文学研究者' },
+      { id: '1', name: t('landing.script3.char1.name'), emoji: '📚', description: t('landing.script3.char1.desc') },
+      { id: '2', name: t('landing.script3.char2.name'), emoji: '🌸', description: t('landing.script3.char2.desc') },
+      { id: '3', name: t('landing.script3.char3.name'), emoji: '❄️', description: t('landing.script3.char3.desc') },
     ],
   },
 ]);
@@ -336,9 +339,9 @@ function handleCardImageError(event: Event) {
 
 // Rotating subtitle (3 sentences, typewriter effect, 3s interval)
 const rotatingSubtitles = [
-  'AI驱动的互动视觉小说平台',
-  '每一次选择，都改变世界',
-  '穿越异世界，书写你的传奇'
+  t('landing.subtitle1'),
+  t('landing.subtitle2'),
+  t('landing.subtitle3')
 ];
 const rotatingSubtitle = ref('');
 const subtitleTypingDone = ref(false);
@@ -370,9 +373,9 @@ function rotateSubtitle() {
 
 // Demo dialogue (3 sentences, typewriter effect, 3s interval)
 const demoDialogues = [
-  '「你知道吗……我一直在想你昨天说过的话。关于故事不是被讲述的——而是被经历的。」',
-  '「和你在一起的每一刻，都像是被星光笼罩。时间仿佛在这一刻停住了。」',
-  '「我想告诉你一件事……一件我从未告诉过任何人的事。你愿意听吗？」'
+  t('landing.demoDialogue1'),
+  t('landing.demoDialogue2'),
+  t('landing.demoDialogue3')
 ];
 const demoDialogue = ref('');
 const demoTypingDone = ref(false);
@@ -409,9 +412,9 @@ function rotateDemoDialogue() {
 function handleDemoChoice(choiceIndex: number) {
   demoReplied.value = true;
   if (choiceIndex === 0) {
-    demoReply.value = '雪乃微微一笑，握紧了你的手。💕 好感度+5';
+    demoReply.value = t('landing.demoReply1');
   } else {
-    demoReply.value = '雪乃低下头，嘴角微微上扬。💕 好感度+3';
+    demoReply.value = t('landing.demoReply2');
   }
   
   // Reset after 3 seconds
@@ -455,9 +458,9 @@ const steps = [
 ];
 
 const testimonials = [
-  { name: '资深玩家', title: '游戏评论家', rating: 5, text: '这是我玩过的最沉浸的 AI 叙事游戏，每个选择都让我欲罢不能！', avatar: '🎮' },
-  { name: '二次元爱好者', title: '剧情党', rating: 5, text: '角色刻画太细腻了，每个角色都有自己的故事线，好感度系统让我更有代入感。', avatar: '🌸' },
-  { name: '独立游戏开发者', title: '行业观察者', rating: 5, text: 'AI 驱动的叙事生成技术非常前沿，每次游玩都是独一无二的体验。', avatar: '💻' },
+  { name: t('landing.testimonial1Name'), title: t('landing.testimonial1Title'), rating: 5, text: t('landing.testimonial1Text'), avatar: '🎮' },
+  { name: t('landing.testimonial2Name'), title: t('landing.testimonial2Title'), rating: 5, text: t('landing.testimonial2Text'), avatar: '🌸' },
+  { name: t('landing.testimonial3Name'), title: t('landing.testimonial3Title'), rating: 5, text: t('landing.testimonial3Text'), avatar: '💻' },
 ];
 
 function handlePrimaryCta() {

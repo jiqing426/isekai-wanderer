@@ -16,12 +16,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { UnlockReward } from '@/types/unlock'
 
 interface FloatItem extends UnlockReward {
   id: number
 }
+
+const { t } = useI18n()
 
 const props = defineProps<{
   rewards: UnlockReward[]
@@ -38,11 +41,11 @@ const iconMap: Record<string, string> = {
   gold: '🪙'
 }
 
-const labelMap: Record<string, string> = {
-  fragment: '碎片',
-  exp: '经验',
-  gold: '金币'
-}
+const labelMap = computed<Record<string, string>>(() => ({
+  fragment: t('rewardFloat.fragment'),
+  exp: t('rewardFloat.exp'),
+  gold: t('rewardFloat.gold')
+}))
 
 onMounted(() => {
   props.rewards.forEach((reward, index) => {

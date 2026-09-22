@@ -3,10 +3,12 @@
 生产安全：当 APP_ENV=production 或 DISABLE_MOCK=1 时，mock 中间件完全跳过，
 mock_data.py 不被导入，所有 mock 路由注册为空操作，所有请求走真实路由。
 """
-import os, json, re, sys
+import os, json, re, sys, logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 MOCK_ENABLED = (
     os.getenv("DISABLE_MOCK", "").strip() not in ("1", "true", "True", "yes")
@@ -21,7 +23,7 @@ if MOCK_ENABLED:
         ROUTE_MAP,
     )
 else:
-    print("[MockMiddleware] DISABLED — production mode or DISABLE_MOCK=1", file=sys.stderr)
+    logger.warning("[MockMiddleware] DISABLED — production mode or DISABLE_MOCK=1")
 
 # (method, regex) -> handler
 ROUTES = []

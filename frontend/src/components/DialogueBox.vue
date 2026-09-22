@@ -11,7 +11,7 @@
       <span class="cursor" v-if="!isComplete">▍</span>
     </div>
     <div class="dialogue-hint" v-if="isComplete && !hasChoices">
-      <span>点击继续 ▸</span>
+      <span>{{ $t('dialogueBox.clickToContinue') }}</span>
     </div>
   </div>
 </template>

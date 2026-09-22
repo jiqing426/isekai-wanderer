@@ -134,4 +134,22 @@ onMounted(loadRouteMap);
 .node-connector { position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); width: 40px; height: 24px; z-index: 1; }
 .connector-line { width: 100%; height: 100%; }
 
+/* === 移动端适配 === */
+@media (max-width: 768px) {
+  .route-map-page { padding: 16px 8px 32px; }
+  .map-header { margin-bottom: 16px; }
+  .map-header h1 { font-size: 20px; }
+  .map-subtitle { font-size: 13px; }
+  .back-btn { font-size: 12px !important; }
+  .route-map-container { margin-top: 8px; }
+  .route-node { max-width: 100%; padding: 12px 14px; gap: 10px; }
+  .route-node:hover { transform: none; }
+  .node-index { width: 30px; height: 30px; font-size: 12px; }
+  .node-label { font-size: 14px; }
+  .node-meta { font-size: 11px; gap: 6px; }
+  .node-emotion { font-size: 14px; }
+  .node-choices { gap: 4px; }
+  .choice-tag { font-size: 10px; }
+  .node-connector { bottom: -16px; height: 16px; }
+}
 </style>

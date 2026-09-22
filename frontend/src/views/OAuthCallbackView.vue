@@ -92,4 +92,14 @@ onMounted(async () => {
 .error-icon { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 .callback-success h2, .callback-error h2 { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
 .callback-success p, .callback-error p { color: var(--text-muted); font-size: 14px; margin: 0 0 20px; }
+
+/* === 移动端适配 === */
+@media (max-width: 768px) {
+  .callback-page { padding: 8px; }
+  .callback-card { max-width: 100%; padding: 32px 20px; border-radius: 20px; }
+  .callback-loading p { font-size: 13px; margin-top: 12px; }
+  .success-icon, .error-icon { width: 56px; height: 56px; font-size: 28px; margin-bottom: 12px; }
+  .callback-success h2, .callback-error h2 { font-size: 18px; }
+  .callback-success p, .callback-error p { font-size: 13px; margin-bottom: 16px; }
+}
 </style>

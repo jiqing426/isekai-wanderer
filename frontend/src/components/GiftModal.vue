@@ -3,13 +3,13 @@
   <n-modal
     v-model:show="showGiftModal"
     preset="card"
-    :title="`🎁 赠送礼物给 ${targetName}`"
+    :title="$t('giftModal.giftTitle', { name: targetName })"
     :style="{ maxWidth: '480px' }"
     :bordered="false"
   >
     <div class="gift-modal-body">
       <div class="gift-balance-row">
-        <span class="gift-balance-label">我的碎片</span>
+        <span class="gift-balance-label">{{ $t('giftModal.myFragments') }}</span>
         <span class="gift-balance-value">💎 {{ shardBalance }}</span>
       </div>
       <n-spin :show="loading">
@@ -29,7 +29,7 @@
             </div>
           </div>
         </div>
-        <n-empty v-else-if="!loading" description="暂无礼物" />
+        <n-empty v-else-if="!loading" :description="$t('giftModal.noGifts')" />
       </n-spin>
     </div>
   </n-modal>
@@ -37,33 +37,33 @@
   <!-- 确认赠送弹框 -->
   <n-modal v-model:show="showConfirm" :mask-closable="false" style="width: 400px; max-width: 92vw" :bordered="false">
     <div class="confirm-card glass-card" v-if="selectedGift">
-      <h2 class="confirm-title">确认赠送</h2>
+      <h2 class="confirm-title">{{ $t('giftModal.confirmTitle') }}</h2>
       <div class="confirm-gift">
         <span class="confirm-icon">{{ giftIcon(selectedGift.id) }}</span>
         <div class="confirm-info">
           <div class="confirm-name">{{ selectedGift.name }}</div>
           <div class="confirm-meta">
-            <span>💎 {{ selectedGift.cost }} 碎片</span>
-            <span class="bonus">💕 +{{ selectedGift.affection_bonus }} 好感</span>
+            <span>{{ $t('giftModal.costFragments', { n: selectedGift.cost }) }}</span>
+            <span class="bonus">{{ $t('giftModal.affectionBonus', { n: selectedGift.affection_bonus }) }}</span>
           </div>
         </div>
       </div>
       <p class="confirm-desc">"{{ selectedGift.description }}"</p>
       <div class="confirm-balance">
-        <span>当前碎片</span>
+        <span>{{ $t('giftModal.currentFragments') }}</span>
         <span class="balance-value">💎 {{ shardBalance }}</span>
       </div>
       <div class="confirm-after">
-        <span>赠送后剩余</span>
+        <span>{{ $t('giftModal.afterGift') }}</span>
         <span class="balance-value">💎 {{ shardBalance - selectedGift.cost }}</span>
       </div>
       <div class="confirm-target">
-        赠送给 <strong>{{ targetName }}</strong>
+        {{ $t('giftModal.giftTo', { name: targetName }) }}
       </div>
       <div class="confirm-actions">
-        <n-button @click="showConfirm = false" secondary>取消</n-button>
+        <n-button @click="showConfirm = false" secondary>{{ $t('giftModal.cancel') }}</n-button>
         <n-button type="primary" @click="confirmSend" :loading="sending">
-          🎁 确认赠送
+          {{ $t('giftModal.confirmGift') }}
         </n-button>
       </div>
     </div>
@@ -73,28 +73,29 @@
   <n-modal v-model:show="showResult" :mask-closable="true" style="max-width: 360px" :bordered="false">
     <div class="result-card glass-card" v-if="sendResult">
       <div class="result-icon">🎉</div>
-      <h2 class="result-title">赠送成功！</h2>
+      <h2 class="result-title">{{ $t('giftModal.successTitle') }}</h2>
       <div class="result-stats">
         <div class="result-stat">
-          <span class="result-label">好感度变化</span>
+          <span class="result-label">{{ $t('giftModal.affectionChange') }}</span>
           <span class="result-value up">💕 +{{ sendResult.affection_gained }}</span>
         </div>
         <div class="result-stat">
-          <span class="result-label">当前好感度</span>
+          <span class="result-label">{{ $t('giftModal.currentAffection') }}</span>
           <span class="result-value">{{ sendResult.new_affection_value }}</span>
         </div>
         <div class="result-stat">
-          <span class="result-label">剩余碎片</span>
+          <span class="result-label">{{ $t('giftModal.remainingFragments') }}</span>
           <span class="result-value">💎 {{ sendResult.remaining_shards }}</span>
         </div>
       </div>
-      <n-button type="primary" @click="showResult = false" block>好的</n-button>
+      <n-button type="primary" @click="showResult = false" block>{{ $t('giftModal.ok') }}</n-button>
     </div>
   </n-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useMessage } from 'naive-ui';
 import { gameApi } from '@/api/game';
 import type { GiftItem } from '@/api/game';
@@ -112,6 +113,7 @@ const emit = defineEmits<{
 }>();
 
 const message = useMessage();
+const { t } = useI18n();
 
 const showGiftModal = ref(false);
 const showConfirm = ref(false);
@@ -167,7 +169,7 @@ async function loadGifts() {
     }
   } catch (err) {
     console.error('加载礼物列表失败:', err);
-    message.error('加载礼物列表失败');
+    message.error(t('giftModal.loadGiftsFailed'));
   } finally {
     loading.value = false;
   }
@@ -175,7 +177,7 @@ async function loadGifts() {
 
 function selectGift(gift: GiftItem) {
   if (gift.cost > shardBalance.value) {
-    message.warning('碎片不足，无法赠送此礼物');
+    message.warning(t('giftModal.insufficientFragments'));
     return;
   }
   selectedGift.value = gift;
@@ -203,10 +205,10 @@ async function confirmSend() {
     shardBalance.value = sendResult.value.remaining_shards;
     showConfirm.value = false;
     showResult.value = true;
-    message.success(`成功赠送「${selectedGift.value.name}」！`);
+    message.success(t('giftModal.giftSuccess', { name: selectedGift.value.name }));
     emit('giftSent', result);
   } catch (err) {
-    message.error(err instanceof Error ? err.message : '赠送失败');
+    message.error(err instanceof Error ? err.message : t('giftModal.giftFailed'));
   } finally {
     sending.value = false;
   }

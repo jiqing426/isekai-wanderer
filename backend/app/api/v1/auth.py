@@ -34,7 +34,11 @@ LOGIN_LOCKOUT_SECONDS = 900  # 15 minutes
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    code: str  # 邮箱验证码
     display_name: Optional[str] = None
+
+class SendCodeRequest(BaseModel):
+    email: EmailStr
 
 
 class LoginRequest(BaseModel):
@@ -145,39 +149,123 @@ async def _clear_failed_login(email: str) -> None:
 
 # ---- Endpoints ----
 
+# ---- Email Verification Code ----
+
+VERIFY_CODE_TTL = 300  # 5 minutes
+VERIFY_CODE_RESEND_COOLDOWN = 60  # 60s between sends
+VERIFY_CODE_HOURLY_LIMIT = 5  # max 5 per hour
+
+@router.post("/auth/send-code")
+async def send_verification_code(
+    request: SendCodeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """发送注册验证码到邮箱。防刷：60秒冷却 + 每小时5次上限。"""
+    email = request.email
+
+    # Check if email already registered
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none():
+        raise AppException(
+            error_code="AUTH_EMAIL_EXISTS",
+            status_code=status.HTTP_409_CONFLICT,
+            message="该邮箱已注册",
+        )
+
+    redis = await get_redis()
+
+    # Cooldown check (60s between sends)
+    cooldown_key = f"email:verify:lock:{email}"
+    if await redis.get(cooldown_key):
+        raise AppException(
+            error_code="RATE_LIMIT",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            message="请稍后再试（60秒冷却中）",
+        )
+
+    # Hourly limit check
+    count_key = f"email:verify:count:{email}"
+    count = await redis.get(count_key)
+    if count and int(count) >= VERIFY_CODE_HOURLY_LIMIT:
+        raise AppException(
+            error_code="RATE_LIMIT",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            message="请求过于频繁，请稍后再试",
+        )
+
+    # Generate 6-digit code
+    import random
+    code = str(random.randint(100000, 999999))
+
+    # Store code in Redis (5 min TTL)
+    code_key = f"email:verify:code:{email}"
+    await redis.setex(code_key, VERIFY_CODE_TTL, code)
+
+    # Set cooldown (60s)
+    await redis.setex(cooldown_key, VERIFY_CODE_RESEND_COOLDOWN, "1")
+
+    # Increment hourly counter
+    hourly_count = await redis.incr(count_key)
+    if hourly_count == 1:
+        await redis.expire(count_key, 3600)
+
+    # Send email
+    from app.core.email import get_email_service
+    email_service = get_email_service()
+    await email_service.send_verification_code(email, code)
+
+    return {"message": "验证码已发送"}
+
+
 @router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(
     request: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Register a new user."""
+    """Register a new user. Requires email verification code."""
+    # Verify code from Redis
+    redis = await get_redis()
+    code_key = f"email:verify:code:{request.email}"
+    stored_code = await redis.get(code_key)
+
+    if not stored_code or stored_code != request.code:
+        raise AppException(
+            error_code="AUTH_INVALID_CODE",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message="验证码无效或已过期",
+        )
+
     # Check if email exists
     stmt = select(User).where(User.email == request.email)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
-    
+
     if existing:
         raise AppException(
             error_code="AUTH_EMAIL_EXISTS",
             status_code=status.HTTP_409_CONFLICT,
             message="Email already registered",
         )
-    
+
     # Create user
     user = User(
         email=request.email,
         password_hash=get_password_hash(request.password),
         display_name=request.display_name or request.email.split("@")[0],
-        email_verified=True,  # Auto-verify for MVP
+        email_verified=False,  # 需要邮箱验证
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    
+
+    # Clear verification code from Redis
+    await redis.delete(code_key)
+
     # Generate tokens
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-    
+
     return {
         "id": str(user.id),
         "email": user.email,
@@ -186,6 +274,7 @@ async def register(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": 86400,
+        "email_verified": False,
     }
 
 
@@ -212,22 +301,10 @@ async def login(
             message="Invalid email or password",
         )
     
-    if not user.email_verified:
-        raise AppException(
-            error_code=ErrorCode.AUTH_EMAIL_NOT_VERIFIED,
-            status_code=status.HTTP_403_FORBIDDEN,
-            message="Email not verified",
-        )
-    
     # Clear lockout on success
     await _clear_failed_login(request.email)
 
-    # CR-016: Apply affection decay based on inactivity (before updating last_login)
-    from app.services.affection_service import AffectionService
-    affection_service = AffectionService(db)
-    decay_result = await affection_service.apply_decay(user.id)
-
-    # Track last_login for recall emails (AC-057)
+    # Track last_login
     from datetime import datetime, timezone
     user.last_login = datetime.now(timezone.utc)
     await db.commit()
@@ -243,7 +320,6 @@ async def login(
         "id": str(user.id),
         "email": user.email,
         "display_name": user.display_name,
-        "affection_decay": decay_result,  # CR-016: decay info for frontend
     }
 
 

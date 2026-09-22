@@ -5,7 +5,7 @@
       <span v-else class="card-emoji">{{ genreEmoji }}</span>
       <n-tag v-if="script.genre" size="small" :bordered="false" class="genre-tag">{{ genreLabel }}</n-tag>
       <div v-if="script.route_count" class="route-badge">
-        <span>🗺️ {{ script.route_count }} 路线</span>
+        <span>🗺️ {{ script.route_count }} {{ $t('scriptCard.routes') }}</span>
       </div>
     </div>
     <div class="card-body">
@@ -16,7 +16,7 @@
       </div>
     </div>
     <div class="card-footer">
-      <div v-if="script.play_count_7d" class="play-count">🔥 {{ script.play_count_7d }} 人玩过</div>
+      <div v-if="script.play_count_7d" class="play-count">🔥 {{ script.play_count_7d }} {{ $t('scriptCard.playedBy', { n: script.play_count_7d }) }}</div>
       <n-button type="primary" size="small">{{ $t('game.startGame') }}</n-button>
     </div>
   </div>
@@ -26,6 +26,9 @@
 import { NButton, NTag } from 'naive-ui';
 import { computed } from 'vue';
 import type { DiscoverCard } from '@/api/game';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = withDefaults(defineProps<{
   script: DiscoverCard;
@@ -44,15 +47,15 @@ const genreEmojiMap: Record<string, string> = {
 };
 
 const genreLabelMap: Record<string, string> = {
-  fantasy: '奇幻', romance: '恋爱', mystery: '悬疑', scifi: '科幻',
-  horror: '恐怖', slice_of_life: '日常', action: '动作', drama: '剧情',
+  fantasy: t('scriptCard.genreFantasy'), romance: t('scriptCard.genreRomance'), mystery: t('scriptCard.genreMystery'), scifi: t('scriptCard.genreScifi'),
+  horror: t('scriptCard.genreHorror'), slice_of_life: t('scriptCard.genreSliceOfLife'), action: t('scriptCard.genreAction'), drama: t('scriptCard.genreDrama'),
 };
 
 const tagLabelMap: Record<string, string> = {
-  multiple_endings: '多结局', character_driven: '角色驱动', romance_options: '恋爱选项',
-  dark_story: '暗黑', lighthearted: '轻松', emotional: '感人',
-  short: '短篇', medium: '中篇', long: '长篇',
-  male_protagonist: '男主', female_protagonist: '女主', custom_protagonist: '自定义',
+  multiple_endings: t('scriptCard.tagMultipleEndings'), character_driven: t('scriptCard.tagCharacterDriven'), romance_options: t('scriptCard.tagRomanceOptions'),
+  dark_story: t('scriptCard.tagDarkStory'), lighthearted: t('scriptCard.tagLighthearted'), emotional: t('scriptCard.tagEmotional'),
+  short: t('scriptCard.tagShort'), medium: t('scriptCard.tagMedium'), long: t('scriptCard.tagLong'),
+  male_protagonist: t('scriptCard.tagMaleProtagonist'), female_protagonist: t('scriptCard.tagFemaleProtagonist'), custom_protagonist: t('scriptCard.tagCustomProtagonist'),
 };
 
 const genreEmoji = computed(() => genreEmojiMap[props.script.genre] || '📖');

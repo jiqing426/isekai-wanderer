@@ -1,12 +1,12 @@
 <template>
   <div class="snapshot-timeline">
     <div class="timeline-header">
-      <span class="timeline-title">🕐 快照时间线</span>
-      <n-button size="tiny" type="primary" @click="createManual" :loading="creating">+ 创建快照</n-button>
+      <span class="timeline-title">{{ $t('snapshotTimeline.title') }}</span>
+      <n-button size="tiny" type="primary" @click="createManual" :loading="creating">{{ $t('snapshotTimeline.createSnapshot') }}</n-button>
     </div>
 
     <n-spin :show="loading" size="small">
-      <n-empty v-if="!loading && snapshots.length === 0" description="暂无快照" size="small" />
+      <n-empty v-if="!loading && snapshots.length === 0" :description="$t('snapshotTimeline.noSnapshots')" size="small" />
       <div v-else class="timeline-list">
         <div
           v-for="snap in snapshots"
@@ -18,9 +18,9 @@
           <div class="timeline-content">
             <div class="snap-header">
               <span class="snap-node">{{ snap.node_name }}</span>
-              <n-tag v-if="snap.is_auto" size="tiny" :bordered="false" type="default">自动</n-tag>
-              <n-tag v-if="!snap.is_auto" size="tiny" :bordered="false" type="success">手动</n-tag>
-              <n-tag v-if="snap.is_pinned" size="tiny" :bordered="false" type="warning">📌 已固定</n-tag>
+              <n-tag v-if="snap.is_auto" size="tiny" :bordered="false" type="default">{{ $t('snapshotTimeline.auto') }}</n-tag>
+              <n-tag v-if="!snap.is_auto" size="tiny" :bordered="false" type="success">{{ $t('snapshotTimeline.manual') }}</n-tag>
+              <n-tag v-if="snap.is_pinned" size="tiny" :bordered="false" type="warning">{{ $t('snapshotTimeline.pinned') }}</n-tag>
             </div>
             <div class="snap-meta">
               <span>{{ formatTime(snap.created_at) }}</span>
@@ -28,8 +28,8 @@
             </div>
             <!-- Expiry warning (AC-SAVE-003.7) -->
             <div v-if="expiringSoon(snap) && !snap.is_pinned" class="snap-expiry">
-              ⚠️ 将在 {{ daysUntilExpiry(snap) }} 天后自动清理
-              <n-button size="tiny" text type="warning" @click="pinSnapshot(snap, true)">📌 固定</n-button>
+              {{ $t('snapshotTimeline.autoCleanupWarning', { n: daysUntilExpiry(snap) }) }}
+              <n-button size="tiny" text type="warning" @click="pinSnapshot(snap, true)">{{ $t('snapshotTimeline.pin') }}</n-button>
             </div>
             <div class="snap-actions">
               <ForkButton :snapshot-id="snap.id" @fork="$emit('fork', $event)" />
@@ -38,13 +38,13 @@
                 size="tiny"
                 text
                 @click="pinSnapshot(snap, true)"
-              >📌 固定</n-button>
+              >{{ $t('snapshotTimeline.pin') }}</n-button>
               <n-button
                 v-else
                 size="tiny"
                 text
                 @click="pinSnapshot(snap, false)"
-              >📍 取消固定</n-button>
+              >{{ $t('snapshotTimeline.unpin') }}</n-button>
             </div>
           </div>
         </div>
@@ -55,6 +55,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useMessage } from 'naive-ui';
 import { gameApi } from '@/api/game';
 import type { SnapshotItem } from '@/api/game';
@@ -69,6 +70,7 @@ defineEmits<{
 }>();
 
 const message = useMessage();
+const { t } = useI18n();
 const snapshots = ref<SnapshotItem[]>([]);
 const loading = ref(false);
 const creating = ref(false);
@@ -108,9 +110,9 @@ async function createManual() {
   try {
     const snap = await gameApi.createSnapshot(props.sessionId);
     snapshots.value.unshift(snap);
-    message.success('快照创建成功');
+    message.success(t('snapshotTimeline.createSuccess'));
   } catch (err) {
-    message.error(`创建快照失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    message.error(t('snapshotTimeline.createFailed', { error: err instanceof Error ? err.message : t('snapshotTimeline.unknownError') }));
   } finally {
     creating.value = false;
   }
@@ -120,9 +122,9 @@ async function pinSnapshot(snap: SnapshotItem, pinned: boolean) {
   try {
     await gameApi.pinSnapshot(snap.id, pinned);
     snap.is_pinned = pinned;
-    message.success(pinned ? '已固定' : '已取消固定');
+    message.success(pinned ? t('snapshotTimeline.pinnedStatus') : t('snapshotTimeline.unpinnedStatus'));
   } catch (err) {
-    message.error(`操作失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    message.error(t('snapshotTimeline.operationFailed', { error: err instanceof Error ? err.message : t('snapshotTimeline.unknownError') }));
   }
 }
 

@@ -50,7 +50,6 @@ function selectBestVoice() {
     const voice = voices.find(v => v.name.includes(preferredName) && v.lang.startsWith('zh'));
     if (voice) {
       selectedSpeechVoice = voice;
-      console.log('[TTS] Selected voice:', voice.name);
       return;
     }
   }
@@ -58,7 +57,6 @@ function selectBestVoice() {
   const chineseVoice = voices.find(v => v.lang.startsWith('zh'));
   if (chineseVoice) {
     selectedSpeechVoice = chineseVoice;
-    console.log('[TTS] Selected fallback voice:', chineseVoice.name);
   }
 }
 
@@ -154,7 +152,6 @@ async function speak(
     
     // 没有音频 URL，降级到 Web Speech
     if (fallbackConfig?.text) {
-      console.log('[TTS] No audio URL, falling back to Web Speech API');
       speakWithWebSpeech(fallbackConfig.text, fallbackConfig, onEnd);
     }
   } catch (err) {

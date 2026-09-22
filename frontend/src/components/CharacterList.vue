@@ -1,7 +1,7 @@
 <template>
   <div class="character-list">
     <div class="list-header">
-      <h2>我的角色</h2>
+      <h2>{{ $t('characterList.myCharacters') }}</h2>
     </div>
     <div class="list-content">
       <div
@@ -38,6 +38,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Character } from '@/types/character'
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 defineProps<{
   characters: Character[]
@@ -59,11 +62,11 @@ const handleImageError = (characterId: string) => {
 }
 
 const getAffectionStatus = (value: number): string => {
-  if (value >= 80) return '挚友'
-  if (value >= 60) return '羁绊'
-  if (value >= 40) return '信赖'
-  if (value >= 20) return '暧昧'
-  return '相识'
+  if (value >= 80) return t('characterList.tierBestFriend')
+  if (value >= 60) return t('characterList.tierBonded')
+  if (value >= 40) return t('characterList.tierTrusted')
+  if (value >= 20) return t('characterList.tierAmbiguous')
+  return t('characterList.tierAcquainted')
 }
 </script>
 

@@ -4,14 +4,14 @@
     <div class="free-chat-input" :class="{ expanded: isExpanded }">
       <div v-if="!isExpanded" class="collapsed-trigger" @click="isExpanded = true">
         <span class="trigger-icon">💬</span>
-        <span class="trigger-placeholder">输入你想说的话...</span>
+        <span class="trigger-placeholder">{{ $t('freeChatInput.placeholder') }}</span>
       </div>
       <div v-else class="expanded-input">
         <div class="input-row">
           <n-input
             v-model:value="inputText"
             type="textarea"
-            placeholder="输入你想说的话..."
+            :placeholder="$t('freeChatInput.placeholder')"
             :autosize="{ minRows: 1, maxRows: 4 }"
             @keydown.enter.exact.prevent="sendMessage"
           />
@@ -21,12 +21,12 @@
             :disabled="!inputText.trim()"
             @click="sendMessage"
           >
-            发送
+            {{ $t('freeChatInput.send') }}
           </n-button>
         </div>
         <div class="input-footer">
-          <span class="hint">Enter 发送，Shift+Enter 换行</span>
-          <n-button text size="small" @click="isExpanded = false">收起</n-button>
+          <span class="hint">{{ $t('freeChatInput.hint') }}</span>
+          <n-button text size="small" @click="isExpanded = false">{{ $t('freeChatInput.collapse') }}</n-button>
         </div>
       </div>
     </div>
@@ -34,13 +34,13 @@
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-state">
       <n-spin size="small" />
-      <span>{{ characterName }}正在思考...</span>
+      <span>{{ $t('freeChatInput.thinking', { name: characterName }) }}</span>
     </div>
 
     <!-- 错误状态 -->
     <div v-if="error" class="error-state">
       <span>{{ error }}</span>
-      <n-button text size="small" @click="error = ''">关闭</n-button>
+      <n-button text size="small" @click="error = ''">{{ $t('freeChatInput.close') }}</n-button>
     </div>
   </div>
 </template>

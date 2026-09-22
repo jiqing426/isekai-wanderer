@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -10,18 +11,24 @@ from app.api.v1 import api_router
 from app.core.redis import close_redis
 from fastapi.exceptions import RequestValidationError
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
     # Startup
+    # Load system configs from DB (overrides .env values)
+    from app.core.config import load_system_configs
+    load_system_configs()
+
     # HIGH-003: Warn if using weak JWT secret
     import sys
     if settings.jwt_secret == "change-me-local-only":
-        print("\n" + "="*70, file=sys.stderr)
-        print("⚠️  SECURITY WARNING: Using default JWT secret!", file=sys.stderr)
-        print("   Set JWT_SECRET environment variable for production!", file=sys.stderr)
-        print("="*70 + "\n", file=sys.stderr)
+        logger.warning("\n" + "="*70)
+        logger.warning("⚠️  SECURITY WARNING: Using default JWT secret!")
+        logger.warning("   Set JWT_SECRET environment variable for production!")
+        logger.warning("="*70)
     
     # Start daily cron tasks
     import asyncio
@@ -37,14 +44,14 @@ async def lifespan(app: FastAPI):
                     # Check expired subscriptions
                     downgraded = await run_subscription_expiry_check(session)
                     if downgraded:
-                        print(f"[CRON] Downgraded {downgraded} expired subscriptions")
+                        logger.info(f"[CRON] Downgraded {downgraded} expired subscriptions")
                     
                     # Grant monthly fragments
                     granted = await run_monthly_fragment_grant(session)
                     if granted:
-                        print(f"[CRON] Granted monthly fragments to {granted} users")
+                        logger.info(f"[CRON] Granted monthly fragments to {granted} users")
             except Exception as e:
-                print(f"[CRON] Error in daily tasks: {e}")
+                logger.warning(f"[CRON] Error in daily tasks: {e}")
     
     task = asyncio.create_task(daily_tasks())
     
@@ -75,9 +82,9 @@ app.add_middleware(LoggingMiddleware)
 from app.mock_middleware import MockMiddleware, MOCK_ENABLED
 if MOCK_ENABLED:
     app.add_middleware(MockMiddleware)
-    print("[Startup] MockMiddleware enabled — mock routes active")
+    logger.info("[Startup] MockMiddleware enabled — mock routes active")
 else:
-    print("[Startup] MockMiddleware skipped — production mode")
+    logger.info("[Startup] MockMiddleware skipped — production mode")
 
 # Routes
 app.include_router(api_router)

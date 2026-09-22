@@ -13,7 +13,7 @@
       </div>
     </div>
     <div class="cg-hint">
-      完整版 CG 前往画廊查看
+      {{ $t('cgPreviewGrid.viewFullInGallery') }}
     </div>
   </div>
 </template>

@@ -7,7 +7,7 @@
         @click="showCharacterList = !showCharacterList"
       >
         <span class="icon">{{ showCharacterList ? '💬' : '👥' }}</span>
-        <span class="text">{{ showCharacterList ? '返回聊天' : '角色列表' }}</span>
+        <span class="text">{{ showCharacterList ? $t('characterChat.backToChat') : $t('characterChat.characterList') }}</span>
       </button>
       <div v-if="!showCharacterList && selectedCharacterName" class="current-character">
         {{ selectedCharacterName }}
@@ -40,7 +40,7 @@
         class="no-character-selected"
         :class="{ 'mobile-full': isMobile }"
       >
-        <p>请选择一个角色开始对话</p>
+        <p>{{ $t('characterChat.selectCharacter') }}</p>
       </div>
     </div>
   </div>
@@ -51,8 +51,10 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import CharacterList from '@/components/CharacterList.vue'
 import ChatWindow from '@/components/ChatWindow.vue'
 import { characterApi, affectionApi } from '@/api/character'
+import { useI18n } from 'vue-i18n'
 import type { Character } from '@/types/character'
 
+const { t } = useI18n()
 const characters = ref<Character[]>([])
 const selectedCharacterId = ref<string | null>(null)
 
@@ -116,7 +118,7 @@ onMounted(async () => {
       return {
         ...char,
         affection_value: affection?.value ?? 0,
-        affection_level: affection?.level ?? '陌生'
+        affection_level: affection?.level ?? t('characterChat.defaultLevel')
       }
     })
     

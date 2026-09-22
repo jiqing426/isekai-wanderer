@@ -22,7 +22,7 @@
       @click="handleSearch"
       :disabled="!searchQuery.trim()"
     >
-      🔍 搜索
+      {{ $t('searchBar.search') }}
     </button>
   </div>
 </template>

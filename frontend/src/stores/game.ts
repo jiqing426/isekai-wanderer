@@ -241,7 +241,6 @@ export const useGameStore = defineStore('game', () => {
             }
           }
           // 如果角色或路线变化了，继续往下走，调用后端 API 创建新会话
-          console.log(`CR-028: Session changed - character: ${savedCharacterId} -> ${characterId}, route: ${savedRouteId} -> ${routeId}`);
         }
       }
       

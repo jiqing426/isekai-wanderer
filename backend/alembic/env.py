@@ -25,7 +25,6 @@ from app.models.discord import DiscordConfig
 from app.models.free_chat import FreeChatSession
 from app.models.asset import (
     UnlockedScript, UnlockedCG, CGAsset,
-    UserPreference, EmailVerification,
 )
 from app.models.share import ShareCard
 from app.models.gallery import Achievement, UserAchievementClaim, ActivityChestClaim

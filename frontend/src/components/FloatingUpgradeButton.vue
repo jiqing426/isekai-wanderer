@@ -1,7 +1,7 @@
 <template>
   <div class="floating-upgrade-button" @click="handleUpgrade">
     <span class="upgrade-icon">💎</span>
-    <span class="upgrade-text">升级会员</span>
+    <span class="upgrade-text">{{ $t('floatingUpgradeButton.upgrade') }}</span>
   </div>
 </template>
 

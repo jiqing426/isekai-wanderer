@@ -15,6 +15,9 @@ import { ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useMessage } from 'naive-ui';
 import { likePost, unlikePost } from '@/api/community';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   postId: string;
@@ -33,7 +36,7 @@ const loading = ref(false);
 
 async function handleClick() {
   if (!authStore.isAuthenticated) {
-    message.warning('请先登录后再点赞');
+    message.warning(t('likeButton.loginRequired'));
     return;
   }
 
@@ -48,7 +51,7 @@ async function handleClick() {
     }
   } catch (error) {
     console.error('点赞操作失败:', error);
-    message.error('操作失败，请重试');
+    message.error(t('likeButton.failed'));
   } finally {
     loading.value = false;
   }

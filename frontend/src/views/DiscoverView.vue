@@ -12,8 +12,8 @@
       <!-- Header with title and search in one row for PC -->
       <div class="discover-header">
         <div class="header-left">
-          <h1 class="gradient-text">🎭 剧本大厅</h1>
-          <p class="subtitle">探索精彩的异世界冒险故事</p>
+          <h1 class="gradient-text">🎭 {{ $t('discoverView.title') }}</h1>
+          <p class="subtitle">{{ $t('discoverView.subtitle') }}</p>
         </div>
         <div class="header-right">
           <div class="search-box" :class="{ focused: searchFocused }">
@@ -21,7 +21,7 @@
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="搜索剧本..."
+              :placeholder="$t('discoverView.searchPlaceholder')"
               class="search-input"
               @focus="searchFocused = true"
               @blur="searchFocused = false"
@@ -38,7 +38,7 @@
               class="search-button"
               @click="handleSearch"
             >
-              搜索
+              {{ $t('common.search') }}
             </button>
           </div>
         </div>
@@ -62,7 +62,7 @@
       <div class="sort-section">
         <div class="sort-dropdown">
           <button class="sort-button" @click="toggleSortMenu">
-            <span class="sort-label">排序：</span>
+            <span class="sort-label">{{ $t('discoverView.sortLabel') }}</span>
             <span class="sort-value">{{ currentSortLabel }}</span>
             <span class="sort-arrow" :class="{ open: sortMenuOpen }">▼</span>
           </button>
@@ -79,7 +79,7 @@
           </div>
         </div>
         <div class="result-count">
-          共 {{ totalScripts }} 个剧本
+          {{ $t('discoverView.resultCount', { n: totalScripts }) }}
         </div>
       </div>
 
@@ -87,13 +87,13 @@
       <div class="scripts-section">
         <div v-if="loading" class="loading-state">
           <div class="spinner"></div>
-          <p>加载中...</p>
+          <p>{{ $t('common.loading') }}</p>
         </div>
 
         <div v-else-if="scripts.length === 0" class="empty-state">
           <div class="empty-icon">🔍</div>
-          <h3>未找到相关剧本</h3>
-          <p>试试其他搜索词或分类</p>
+          <h3>{{ $t('discoverView.noResults') }}</h3>
+          <p>{{ $t('discoverView.noResultsHint') }}</p>
         </div>
 
         <div v-else class="scripts-grid">
@@ -114,7 +114,7 @@
                 <span class="script-rating">
                   <span class="stars">{{ renderStars(script.rating) }}</span>
                 </span>
-                <span class="script-routes">{{ script.routes }} 条路线</span>
+                <span class="script-routes">{{ $t('discoverView.routes', { n: script.routes }) }}</span>
               </div>
             </div>
           </div>
@@ -123,12 +123,12 @@
         <!-- 加载状态 -->
         <div v-if="loadingMore" class="loading-more">
           <div class="spinner-small"></div>
-          <p>加载更多...</p>
+          <p>{{ $t('discoverView.loadingMore') }}</p>
         </div>
 
         <!-- 没有更多剧本 -->
         <div v-if="!loading && scripts.length > 0 && currentPage >= totalPages" class="no-more">
-          <p>— 没有更多剧本 —</p>
+          <p>{{ $t('discoverView.noMore') }}</p>
         </div>
       </div>
 
@@ -139,7 +139,7 @@
           :disabled="currentPage === 1"
           @click="goToPage(currentPage - 1)"
         >
-          ‹ 上一页
+          ‹ {{ $t('discoverView.prevPage') }}
         </button>
 
         <div class="page-numbers">
@@ -160,7 +160,7 @@
           :disabled="currentPage === totalPages"
           @click="goToPage(currentPage + 1)"
         >
-          下一页 ›
+          {{ $t('discoverView.nextPage') }} ›
         </button>
       </div>
     </div>
@@ -170,6 +170,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 interface Script {
   id: string;
@@ -190,6 +191,7 @@ interface Category {
 }
 
 const router = useRouter();
+const { t } = useI18n();
 
 // State
 const searchQuery = ref('');
@@ -207,19 +209,19 @@ const scriptsPerPage = 12;
 
 // Categories - 从后端 categoryList 动态获取
 const categories = ref<Category[]>([
-  { id: 'all', name: '全部', icon: '🎭' },
+  { id: 'all', name: t('common.all'), icon: '🎭' },
 ]);
 
 // Sort options - 使用 sortType=popular/rating 触发后端排序
-const sortOptions = [
-  { value: 'newest', label: '最新' },
-  { value: 'popular', label: '热门优先' },
-  { value: 'rating', label: '评分优先' },
-];
+const sortOptions = computed(() => [
+  { value: 'newest', label: t('discoverView.sortNewest') },
+  { value: 'popular', label: t('discoverView.sortPopular') },
+  { value: 'rating', label: t('discoverView.sortRating') },
+]);
 
 // Computed
 const currentSortLabel = computed(() => {
-  return sortOptions.find(o => o.value === sortBy.value)?.label || '最新';
+  return sortOptions.value.find(o => o.value === sortBy.value)?.label || t('discoverView.sortNewest');
 });
 
 const displayedPages = computed(() => {
@@ -251,14 +253,14 @@ function categoryLabel(cat: string): string {
   if (found) return found.name;
   
   const map: Record<string, string> = {
-    romance: '恋爱',
-    fantasy: '冒险',
-    mystery: '悬疑',
-    horror: '恐怖',
-    scifi: '科幻',
-    slice_of_life: '日常',
-    action: '动作',
-    drama: '剧情',
+    romance: t('discoverView.catRomance'),
+    fantasy: t('discoverView.catFantasy'),
+    mystery: t('discoverView.catMystery'),
+    horror: t('discoverView.catHorror'),
+    scifi: t('discoverView.catScifi'),
+    slice_of_life: t('discoverView.catSliceOfLife'),
+    action: t('discoverView.catAction'),
+    drama: t('discoverView.catDrama'),
   };
   return map[cat] || cat;
 }

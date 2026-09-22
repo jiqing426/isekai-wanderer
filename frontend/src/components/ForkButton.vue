@@ -1,15 +1,18 @@
 <template>
-  <n-popconfirm @positive-click="handleFork" positive-text="确认" negative-text="取消">
+  <n-popconfirm @positive-click="handleFork" :positive-text="$t('common.confirm')" :negative-text="$t('common.cancel')">
     <template #trigger>
-      <n-button size="tiny" text type="primary">🔀 从这里重新开始</n-button>
+      <n-button size="tiny" text type="primary">{{ $t('forkButton.restartFromHere') }}</n-button>
     </template>
-    将从此快照创建新存档，复制到此节点的所有选择历史。
+    {{ $t('forkButton.forkDescription') }}
   </n-popconfirm>
 </template>
 
 <script setup lang="ts">
 import { useMessage } from 'naive-ui';
 import { gameApi } from '@/api/game';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   snapshotId: string;
@@ -24,10 +27,10 @@ const message = useMessage();
 async function handleFork() {
   try {
     const resp = await gameApi.forkFromSnapshot(props.snapshotId);
-    message.success('新存档已创建');
+    message.success(t('forkButton.created'));
     emit('fork', resp.new_session_id);
   } catch (err) {
-    message.error(`创建分支失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    message.error(t('forkButton.createFailed', { error: err instanceof Error ? err.message : t('forkButton.unknownError') }));
   }
 }
 </script>

@@ -16,16 +16,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n'
 
 const route = useRoute();
 const router = useRouter();
 
 const tabs = [
-  { route: '/discover', icon: '🏠', label: '首页' },
-  { route: '/discover', icon: '🔍', label: '发现' },
-  { route: '/game', icon: '🎮', label: '游戏' },
-  { route: '/community', icon: '👥', label: '社区' },
-  { route: '/personal-center', icon: '👤', label: '我的' },
+  { route: '/discover', icon: '🏠', label: t('mobileTabBar.home') },
+  { route: '/discover', icon: '🔍', label: t('mobileTabBar.discover') },
+  { route: '/game', icon: '🎮', label: t('mobileTabBar.game') },
+  { route: '/community', icon: '👥', label: t('mobileTabBar.community') },
+  { route: '/personal-center', icon: '👤', label: t('mobileTabBar.profile') },
 ];
 
 // GameView 隐藏 TabBar（沉浸模式）

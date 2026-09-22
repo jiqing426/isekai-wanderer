@@ -5,17 +5,17 @@
         <div v-if="post.author?.avatar" class="author-avatar-wrapper">
           <img 
             :src="post.author.avatar" 
-            :alt="post.author.name || '匿名用户'" 
+            :alt="post.author.name || $t('postCard.anonymousUser')" 
             class="author-avatar" 
           />
         </div>
         <div v-else class="author-avatar-wrapper">
           <div class="author-avatar-initial">
-            {{ (post.author?.name || '匿名用户').charAt(0).toUpperCase() }}
+            {{ (post.author?.name || $t('postCard.anonymousUser')).charAt(0).toUpperCase() }}
           </div>
         </div>
         <div class="author-details">
-          <span class="author-name">{{ post.author?.name || '匿名用户' }}</span>
+          <span class="author-name">{{ post.author?.name || $t('postCard.anonymousUser') }}</span>
           <span class="post-time">{{ formatTime(post.created_at) }}</span>
         </div>
       </div>
@@ -70,6 +70,9 @@ import { useAuthStore } from '@/stores/auth';
 import type { Post } from '@/types/community';
 import LikeButton from './LikeButton.vue';
 import DeletePostButton from './DeletePostButton.vue';
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   post: Post;
@@ -102,10 +105,10 @@ function formatTime(dateString: string): string {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
   
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes}分钟前`;
-  if (hours < 24) return `${hours}小时前`;
-  if (days < 7) return `${days}天前`;
+  if (minutes < 1) return t('postCard.justNow');
+  if (minutes < 60) return t('postCard.minutesAgo', { n: minutes });
+  if (hours < 24) return t('postCard.hoursAgo', { n: hours });
+  if (days < 7) return t('postCard.daysAgo', { n: days });
   
   return date.toLocaleDateString('zh-CN');
 }

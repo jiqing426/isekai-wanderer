@@ -5,11 +5,11 @@
       <div class="paywall-content">
         <button class="close-btn" @click="close">✕</button>
         <div class="paywall-icon">🔒</div>
-        <h2 class="paywall-title">升级会员</h2>
+        <h2 class="paywall-title">{{ $t('paywallManagerComp.upgradeTitle') }}</h2>
         <p class="paywall-message">{{ message }}</p>
         <div class="paywall-actions">
-          <button class="btn-primary" @click="goToSubscription">查看套餐</button>
-          <button class="btn-secondary" @click="close">稍后再说</button>
+          <button class="btn-primary" @click="goToSubscription">{{ $t('paywallManagerComp.viewPlans') }}</button>
+          <button class="btn-secondary" @click="close">{{ $t('paywallManagerComp.later') }}</button>
         </div>
       </div>
     </div>
@@ -19,7 +19,7 @@
       <div class="banner-content">
         <span class="banner-icon">💎</span>
         <span class="banner-message">{{ message }}</span>
-        <button class="banner-btn" @click="goToSubscription">升级</button>
+        <button class="banner-btn" @click="goToSubscription">{{ $t('paywallManagerComp.upgrade') }}</button>
         <button class="banner-close" @click="close">✕</button>
       </div>
     </div>
@@ -29,7 +29,7 @@
       <div class="toast-content">
         <span class="toast-icon">⚠️</span>
         <span class="toast-message">{{ message }}</span>
-        <button class="toast-btn" @click="goToSubscription">了解更多</button>
+        <button class="toast-btn" @click="goToSubscription">{{ $t('paywallManagerComp.learnMore') }}</button>
       </div>
     </div>
   </div>

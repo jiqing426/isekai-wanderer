@@ -20,7 +20,7 @@
 
       <!-- 文字信息 -->
       <div class="info-section">
-        <div class="unlock-label">CG 已解锁</div>
+        <div class="unlock-label">{{ $t('cgUnlockCard.unlocked') }}</div>
         <h3 class="cg-title">{{ title }}</h3>
         <p v-if="description" class="cg-description">{{ description }}</p>
       </div>
@@ -28,10 +28,10 @@
       <!-- 按钮组 -->
       <div class="button-group">
         <button class="btn-view" @click="$emit('view')">
-          立即查看
+          {{ $t('cgUnlockCard.viewNow') }}
         </button>
         <button class="btn-later" @click="$emit('later')">
-          稍后
+          {{ $t('cgUnlockCard.later') }}
         </button>
       </div>
     </div>
@@ -44,7 +44,10 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { Rarity } from '@/types/unlock'
+
+const { t } = useI18n()
 
 defineProps<{
   title: string

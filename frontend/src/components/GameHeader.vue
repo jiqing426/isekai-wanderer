@@ -1,6 +1,6 @@
 <template>
   <header class="game-header">
-    <button class="back-btn" @click="router.back()">← 返回</button>
+    <button class="back-btn" @click="router.back()">{{ $t('gameHeader.back') }}</button>
     <h1 class="game-title">{{ scriptTitle }}</h1>
     <button class="settings-btn" @click="openSettings">⚙️</button>
   </header>
@@ -8,6 +8,9 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const router = useRouter();
 
@@ -16,12 +19,11 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
-  scriptTitle: '游戏进行中'
+  scriptTitle: t('gameHeader.inProgress')
 });
 
 function openSettings() {
   // TODO: 打开设置面板
-  console.log('打开设置面板');
 }
 </script>
 

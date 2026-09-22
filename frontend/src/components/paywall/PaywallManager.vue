@@ -1,16 +1,5 @@
 <template>
   <div v-if="shouldRender" class="paywall-manager-root">
-    <!-- 全屏弹窗 -->
-    <QuotaExhaustedModal
-      v-if="currentTrigger?.display_type === 'modal' && quotaInfo"
-      :visible="modalVisible"
-      :quota-info="quotaInfo"
-      :script-progress="scriptProgress ?? undefined"
-      @close="handleClose"
-      @subscribe="handleSubscribe"
-      @buy-fragment="handleBuyFragment"
-    />
-
     <!-- 横幅 -->
     <PaywallBanner
       v-if="currentTrigger?.display_type === 'banner'"
@@ -34,21 +23,19 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSubscriptionStore } from '@/stores/subscription';
-import type { PaywallTrigger, DialogueQuotaStatus, ScriptProgressInfo } from '@/types/subscription';
-import QuotaExhaustedModal from './QuotaExhaustedModal.vue';
+import { useI18n } from 'vue-i18n'
+import type { PaywallTrigger } from '@/types/subscription';
 import PaywallBanner from './PaywallBanner.vue';
 import PaywallToast from './PaywallToast.vue';
 
+const { t } = useI18n();
 const router = useRouter();
 const subscriptionStore = useSubscriptionStore();
 
 const triggerQueue = ref<PaywallTrigger[]>([]);
 const currentTrigger = ref<PaywallTrigger | null>(null);
-const modalVisible = ref(false);
 const bannerVisible = ref(false);
 const toastVisible = ref(false);
-const quotaInfo = ref<DialogueQuotaStatus | null>(null);
-const scriptProgress = ref<ScriptProgressInfo | null>(null);
 
 // 订阅用户不渲染任何引导
 const shouldRender = computed(() => {
@@ -57,17 +44,17 @@ const shouldRender = computed(() => {
 
 const bannerText = computed(() => {
   if (!currentTrigger.value) return '';
-  return currentTrigger.value.payload?.text ?? '升级订阅解锁更多功能';
+  return currentTrigger.value.payload?.text ?? t('paywallManager.defaultUpgradeText');
 });
 
 const bannerActionText = computed(() => {
   if (!currentTrigger.value) return undefined;
-  return currentTrigger.value.payload?.actionText ?? '立即升级';
+  return currentTrigger.value.payload?.actionText ?? t('paywallManager.defaultActionText');
 });
 
 const toastMessage = computed(() => {
   if (!currentTrigger.value) return '';
-  return currentTrigger.value.payload?.message ?? '额度不足';
+  return currentTrigger.value.payload?.message ?? t('paywallManager.defaultMessage');
 });
 
 // 处理队列
@@ -80,18 +67,8 @@ function processQueue() {
 
   currentTrigger.value = next;
 
-  // 准备数据
-  if (next.payload?.quotaInfo) {
-    quotaInfo.value = next.payload.quotaInfo;
-  }
-  if (next.payload?.scriptProgress) {
-    scriptProgress.value = next.payload.scriptProgress;
-  }
-
   // 展示
-  if (next.display_type === 'modal') {
-    modalVisible.value = true;
-  } else if (next.display_type === 'banner') {
+  if (next.display_type === 'banner') {
     bannerVisible.value = true;
   } else if (next.display_type === 'toast') {
     toastVisible.value = true;
@@ -114,7 +91,6 @@ function triggerPaywall(trigger: PaywallTrigger) {
 }
 
 function handleClose() {
-  modalVisible.value = false;
   bannerVisible.value = false;
   toastVisible.value = false;
   setTimeout(() => {
@@ -126,12 +102,6 @@ function handleClose() {
 function handleSubscribe() {
   handleClose();
   router.push('/subscription');
-}
-
-function handleBuyFragment() {
-  handleClose();
-  // TODO: 打开碎片购买流程
-  console.log('Buy fragment flow');
 }
 
 function handleBannerAction() {

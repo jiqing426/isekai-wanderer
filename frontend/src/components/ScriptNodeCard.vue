@@ -61,6 +61,9 @@
 
 <script setup lang="ts">
 import type { ScriptNode } from '@/types/script';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 defineProps<{
   node: ScriptNode;
@@ -80,11 +83,11 @@ function getNodeIcon(type: string): string {
 
 function getEndingLabel(type?: string): string {
   const labels: Record<string, string> = {
-    good: '好结局',
-    normal: '普通结局',
-    bad: '坏结局',
+    good: t('scriptNodeCard.goodEnding'),
+    normal: t('scriptNodeCard.normalEnding'),
+    bad: t('scriptNodeCard.badEnding'),
   };
-  return labels[type || ''] || '结局';
+  return labels[type || ''] || t('scriptNodeCard.ending');
 }
 </script>
 

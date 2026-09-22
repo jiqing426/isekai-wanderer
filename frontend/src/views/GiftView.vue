@@ -13,18 +13,18 @@
         </div>
         <div class="header-info">
           <h1 class="char-name">{{ characterName }}</h1>
-          <p class="char-subtitle">选择一份礼物，增进你们的羁绊</p>
+          <p class="char-subtitle">{{ $t('giftView.subtitle') }}</p>
         </div>
         <div class="shard-balance" v-if="shardBalance !== null">
           <span class="shard-icon">💎</span>
           <span class="shard-value">{{ shardBalance }}</span>
-          <span class="shard-label">碎片</span>
+          <span class="shard-label">{{ $t('giftView.shards') }}</span>
         </div>
       </div>
 
       <!-- Gift Catalog -->
       <n-spin :show="loading">
-        <n-empty v-if="!loading && gifts.length === 0" description="暂无礼物" />
+        <n-empty v-if="!loading && gifts.length === 0" :description="$t('giftView.noGifts')" />
         <div class="gift-grid" v-else>
           <div
             v-for="gift in gifts"
@@ -54,33 +54,33 @@
       <!-- Confirm Modal -->
       <n-modal v-model:show="showConfirm" :mask-closable="false" class="gift-modal" :style="{ width: '380px' }">
         <div class="confirm-card glass-card" v-if="selectedGift">
-          <h2 class="confirm-title">确认赠送</h2>
+          <h2 class="confirm-title">{{ $t('giftView.confirmTitle') }}</h2>
           <div class="confirm-gift">
             <span class="confirm-icon">{{ giftIcon(selectedGift.id) }}</span>
             <div class="confirm-info">
               <div class="confirm-name">{{ selectedGift.name }}</div>
               <div class="confirm-meta">
-                <span>💎 {{ selectedGift.cost }} 碎片</span>
-                <span class="bonus">💕 +{{ selectedGift.affection_bonus }} 好感</span>
+                <span>💎 {{ selectedGift.cost }} {{ $t('giftView.shards') }}</span>
+                <span class="bonus">💕 +{{ selectedGift.affection_bonus }} {{ $t('giftView.affection') }}</span>
               </div>
             </div>
           </div>
           <p class="confirm-desc">"{{ selectedGift.description }}"</p>
           <div class="confirm-balance">
-            <span>当前碎片</span>
+            <span>{{ $t('giftView.currentShards') }}</span>
             <span class="balance-value">💎 {{ shardBalance ?? '-' }}</span>
           </div>
           <div class="confirm-after">
-            <span>赠送后剩余</span>
+            <span>{{ $t('giftView.remainingAfter') }}</span>
             <span class="balance-value">💎 {{ shardBalance !== null && selectedGift ? shardBalance - selectedGift.cost : '-' }}</span>
           </div>
           <div class="confirm-target">
-            赠送给 <strong>{{ characterName }}</strong>
+            {{ $t('giftView.giftTo') }} <strong>{{ characterName }}</strong>
           </div>
           <div class="confirm-actions">
-            <n-button @click="showConfirm = false" secondary block>取消</n-button>
+            <n-button @click="showConfirm = false" secondary block>{{ $t('common.cancel') }}</n-button>
             <n-button type="primary" @click="confirmSend" :loading="sending" block>
-              🎁 确认赠送
+              🎁 {{ $t('giftView.confirmSend') }}
             </n-button>
           </div>
         </div>
@@ -90,22 +90,22 @@
       <n-modal v-model:show="showResult" :mask-closable="true" class="gift-modal" :style="{ width: '360px' }">
         <div class="result-card glass-card" v-if="sendResult">
           <div class="result-icon">🎉</div>
-          <h2 class="result-title">赠送成功！</h2>
+          <h2 class="result-title">{{ $t('giftView.sendSuccess') }}</h2>
           <div class="result-stats">
             <div class="result-stat">
-              <span class="result-label">好感度变化</span>
+              <span class="result-label">{{ $t('giftView.affectionChange') }}</span>
               <span class="result-value up">💕 +{{ sendResult.affection_gained }}</span>
             </div>
             <div class="result-stat">
-              <span class="result-label">当前好感度</span>
+              <span class="result-label">{{ $t('giftView.currentAffection') }}</span>
               <span class="result-value">{{ sendResult.new_affection_value }}</span>
             </div>
             <div class="result-stat">
-              <span class="result-label">剩余碎片</span>
+              <span class="result-label">{{ $t('giftView.remainingShards') }}</span>
               <span class="result-value">💎 {{ sendResult.remaining_shards }}</span>
             </div>
           </div>
-          <n-button type="primary" @click="showResult = false" block>好的</n-button>
+          <n-button type="primary" @click="showResult = false" block>{{ $t('common.confirm') }}</n-button>
         </div>
       </n-modal>
     </div>
@@ -138,7 +138,7 @@ const shardBalance = ref<number | null>(null);
 const sendResult = ref<{ new_affection_value: number; affection_gained: number; remaining_shards: number } | null>(null);
 
 useHead({
-  title: '赠送礼物 - Isekai Wanderer',
+  title: t('giftView.pageTitle'),
 });
 
 function nameInitial(name: string): string {
@@ -158,7 +158,7 @@ function giftIcon(giftId: string): string {
 
 function selectGift(gift: GiftItem) {
   if (gift.cost > (shardBalance.value || 0)) {
-    message.warning('碎片不足，无法赠送此礼物');
+    message.warning(t('giftView.insufficientShards'));
     return;
   }
   selectedGift.value = gift;
@@ -174,9 +174,9 @@ async function confirmSend() {
     shardBalance.value = result.remaining_shards;
     showConfirm.value = false;
     showResult.value = true;
-    message.success(`成功赠送「${selectedGift.value.name}」！`);
+    message.success(t('giftView.sendSuccessMsg', { name: selectedGift.value.name }));
   } catch (err) {
-    message.error(err instanceof Error ? err.message : '赠送失败');
+    message.error(err instanceof Error ? err.message : t('giftView.sendFailed'));
   } finally {
     sending.value = false;
   }
@@ -391,4 +391,52 @@ onMounted(loadData);
 .result-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
 .result-value { font-size: 18px; font-weight: 700; color: var(--text-main); }
 .result-value.up { color: #f472b6; }
+
+/* === 移动端适配 === */
+@media (max-width: 768px) {
+  .gift-page { padding: 16px 8px 32px; }
+  .back-bar { margin-bottom: 12px; }
+
+  /* Header */
+  .gift-header { flex-direction: column; gap: 12px; padding: 16px; margin-bottom: 16px; text-align: center; }
+  .avatar-circle { width: 56px; height: 56px; font-size: 26px; }
+  .char-name { font-size: 19px; }
+  .char-subtitle { font-size: 12px; }
+
+  /* Shard balance badge */
+  .shard-balance { padding: 6px 12px; gap: 4px; }
+  .shard-icon { font-size: 16px; }
+  .shard-value { font-size: 16px; }
+  .shard-label { font-size: 10px; }
+
+  /* Gift grid */
+  .gift-grid { grid-template-columns: 1fr; gap: 12px; }
+  .gift-card { padding: 16px; }
+  .gift-icon-wrap { width: 52px; height: 52px; margin-bottom: 8px; }
+  .gift-icon { font-size: 26px; }
+  .gift-name { font-size: 15px; }
+  .gift-desc { font-size: 12px; }
+  .gift-footer { padding-top: 10px; }
+  .gift-cost { font-size: 12px; }
+  .cost-icon { font-size: 13px; }
+  .gift-bonus { font-size: 12px; }
+
+  /* Confirm modal */
+  .confirm-card { padding: 20px 16px; }
+  .confirm-title { font-size: 18px; margin-bottom: 16px; }
+  .confirm-gift { gap: 12px; padding: 12px; }
+  .confirm-icon { font-size: 32px; }
+  .confirm-name { font-size: 15px; }
+  .confirm-meta { flex-direction: column; gap: 4px; font-size: 12px; }
+  .confirm-desc { font-size: 12px; }
+  .confirm-balance, .confirm-after { padding: 8px 12px; font-size: 13px; }
+  .confirm-target { font-size: 13px; }
+
+  /* Result modal */
+  .result-card { padding: 24px 16px; }
+  .result-icon { font-size: 40px; }
+  .result-title { font-size: 18px; }
+  .result-stats { flex-direction: column; gap: 12px; }
+  .result-value { font-size: 16px; }
+}
 </style>

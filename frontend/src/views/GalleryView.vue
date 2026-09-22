@@ -33,7 +33,7 @@
             </n-spin>
             <!-- 图鉴子项 -->
             <div v-else>
-              <n-button text @click="activeCollection = null" class="back-to-collections">← 返回图鉴列表</n-button>
+              <n-button text @click="activeCollection = null" class="back-to-collections">← {{ $t('galleryView.backToCollections') }}</n-button>
               <h3 class="cg-collection-title">{{ activeCollection.name }}</h3>
               <p class="cg-collection-desc">{{ activeCollection.description }}</p>
               <n-spin :show="loadingCGItems">
@@ -43,7 +43,7 @@
                       <img :src="item.thumbnail_url" class="cg-item-img" />
                       <div v-if="item.unlock_status === 'locked' || item.is_accessible === false" class="cg-lock-overlay">
                         <span class="cg-lock-icon">{{ item.is_accessible === false ? '🔒' : '🔒' }}</span>
-                        <span class="cg-lock-hint">{{ item.is_accessible === false ? '订阅后可解锁' : item.unlock_condition }}</span>
+                        <span class="cg-lock-hint">{{ item.is_accessible === false ? $t('galleryView.subLockedHint') : item.unlock_condition }}</span>
                       </div>
                     </div>
                     <div class="cg-item-info">
@@ -52,7 +52,7 @@
                     </div>
                   </div>
                 </div>
-                <n-empty v-if="!loadingCGItems && cgItems.length === 0" description="暂无CG" />
+                <n-empty v-if="!loadingCGItems && cgItems.length === 0" :description="$t('galleryExtra.noCg')" />
               </n-spin>
             </div>
             <div v-if="collections.length > 0 && !activeCollection" class="gallery-stats">
@@ -153,7 +153,7 @@
           </div>
           <div class="cg-detail-meta">
             <span class="cg-detail-script">{{ selectedCG.script_name }}</span>
-            <span class="cg-detail-condition">解锁条件：{{ selectedCG.unlock_condition }}</span>
+            <span class="cg-detail-condition">{{ $t('galleryView.unlockCondition') }}: {{ selectedCG.unlock_condition }}</span>
           </div>
         </div>
       </n-modal>
@@ -204,9 +204,9 @@ const claimingId = ref<string | null>(null);
 
 function getInitial(name: string): string { return name.charAt(0).toUpperCase(); }
 function formatDate(iso: string | null): string { 
-  if (!iso) return '未知时间';
+  if (!iso) return t('galleryView.unknownDate');
   const date = new Date(iso);
-  if (isNaN(date.getTime())) return '未知时间';
+  if (isNaN(date.getTime())) return t('galleryView.unknownDate');
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 function previewCG(cg: CGItem) { selectedCG.value = cg; showCGModal.value = true; }
@@ -232,7 +232,7 @@ function handleCGClick(item: CGItem) {
 
 // CR-043 DEV-002: 显示订阅升级提示
 function showUpgradeHint() {
-  message.info('订阅后可解锁全部 CG', { duration: 3000 });
+  message.info(t('galleryView.subLockedFullHint'), { duration: 3000 });
 }
 
 function showProgress(ach: Achievement): boolean {
@@ -249,26 +249,26 @@ function formatCondition(ach: Achievement): string {
   const cond = parseConditionObj(ach);
   if (!cond) return '';
   const typeMap: Record<string, string> = {
-    'dialogue_count': '对话次数',
-    'completed_scripts': '完成剧本',
-    'affection': '好感度',
-    'cg_count': '收集 CG',
-    'gifts_sent': '赠送礼物',
-    'choice_count': '做出选择',
-    'streak': '连续登录',
-    'friends_count': '添加好友',
-    'branches_explored': '探索分支',
-    'characters_unlocked': '解锁角色',
-    'all_good_endings': '达成所有好结局',
-    'all_achievements_unlocked': '解锁所有成就',
-    'dialogue': '对话次数',
-    'choice': '做出选择',
-    'ending': '解锁结局',
-    'script': '完成剧本',
-    'checkin': '签到',
-    'gift': '赠送礼物',
-    'fragments': '碎片收集',
-    'cg': '收集 CG',
+    'dialogue_count': t('galleryView.condDialogueCount'),
+    'completed_scripts': t('galleryView.condCompletedScripts'),
+    'affection': t('galleryView.condAffection'),
+    'cg_count': t('galleryView.condCgCount'),
+    'gifts_sent': t('galleryView.condGiftsSent'),
+    'choice_count': t('galleryView.condChoiceCount'),
+    'streak': t('galleryView.condStreak'),
+    'friends_count': t('galleryView.condFriendsCount'),
+    'branches_explored': t('galleryView.condBranchesExplored'),
+    'characters_unlocked': t('galleryView.condCharactersUnlocked'),
+    'all_good_endings': t('galleryView.condAllGoodEndings'),
+    'all_achievements_unlocked': t('galleryView.condAllAchievementsUnlocked'),
+    'dialogue': t('galleryView.condDialogueCount'),
+    'choice': t('galleryView.condChoiceCount'),
+    'ending': t('galleryView.condEnding'),
+    'script': t('galleryView.condCompletedScripts'),
+    'checkin': t('galleryView.condCheckin'),
+    'gift': t('galleryView.condGiftsSent'),
+    'fragments': t('galleryView.condFragments'),
+    'cg': t('galleryView.condCgCount'),
   };
   const label = typeMap[cond.type] || cond.type;
   const current = ach.progress?.current ?? cond.current ?? 0;
@@ -295,10 +295,10 @@ function parseReward(reward: any): string {
   if (!reward) return '';
   const parsed = typeof reward === 'string' ? JSON.parse(reward) : reward;
   const typeMap: Record<string, string> = {
-    'fragments': '碎片',
-    'fragment': '碎片',
-    'gold': '金币',
-    'exp': '经验',
+    'fragments': t('galleryView.rewardFragments'),
+    'fragment': t('galleryView.rewardFragments'),
+    'gold': t('galleryView.rewardGold'),
+    'exp': t('galleryView.rewardExp'),
   };
   const label = typeMap[parsed.type] || parsed.type;
   return `🎁 ${parsed.amount} ${label}`;
@@ -361,9 +361,9 @@ async function claimAchievement(ach: Achievement) {
   try {
     await api.post('/achievements/claim', { achievement_id: ach.id });
     ach.isClaimed = true;
-    message.success(`领取成功：${ach.name}`);
+    message.success(t('galleryView.claimSuccess', { name: ach.name }));
   } catch (err: any) {
-    message.error(err?.message || '领取失败');
+    message.error(err?.message || t('galleryView.claimFailed'));
   } finally {
     claimingId.value = null;
   }
@@ -527,4 +527,44 @@ onMounted(() => { loadCollections(); loadCharacters(); loadAchievements(); });
 .cg-detail-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
 .cg-detail-script { font-weight: 600; color: var(--text-main); }
 .cg-detail-condition { color: var(--text-muted); }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .gallery-page { padding: 16px 12px 32px; }
+  .page-header { margin-bottom: 16px; }
+  .page-header h1 { font-size: 22px; }
+  .page-subtitle { font-size: 13px; }
+  .gallery-tabs { margin-bottom: 16px; }
+  .cg-grid { grid-template-columns: 1fr; gap: 12px; }
+  .cg-info { padding: 10px 12px; }
+  .cg-name { font-size: 14px; }
+  .cg-script { font-size: 11px; }
+  .cg-collection-title { font-size: 18px; }
+  .cg-items-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cg-item-info { padding: 8px 10px; }
+  .cg-item-name { font-size: 12px; }
+  .cg-item-script { font-size: 10px; }
+  .character-grid { grid-template-columns: 1fr; gap: 12px; }
+  .char-card { padding: 16px; gap: 12px; }
+  .char-avatar { width: 48px; height: 48px; }
+  .char-avatar-text { font-size: 20px; }
+  .char-name { font-size: 15px; }
+  .affection-label { font-size: 10px; }
+  .achievement-stats { flex-wrap: wrap; gap: 12px; padding: 14px; }
+  .achievement-stats .stat-value { font-size: 22px; }
+  .achievement-stats .stat-label { font-size: 12px; }
+  .achievement-grid { grid-template-columns: 1fr; gap: 12px; }
+  .ach-header { padding: 12px; }
+  .ach-icon { font-size: 28px; }
+  .ach-reward { font-size: 11px; }
+  .ach-body { padding: 12px; }
+  .ach-name { font-size: 14px; }
+  .ach-desc { font-size: 11px; margin-bottom: 8px; }
+  .ach-progress .progress-text { font-size: 10px; }
+  .ach-date { font-size: 10px; }
+  .ach-claim-section { margin-top: 8px; }
+  .ach-claimed-badge { font-size: 11px; }
+  .gallery-stats { font-size: 12px; }
+  .cg-detail-meta { flex-direction: column; gap: 4px; }
+}
 </style>

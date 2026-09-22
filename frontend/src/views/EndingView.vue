@@ -83,4 +83,11 @@ function handleRestart() {
 .ending-container { max-width: 600px; width: 100%; }
 .ending-actions { display: flex; justify-content: center; gap: 12px; margin-top: 24px; }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .ending-page { padding: 16px 12px; }
+  .ending-container { max-width: 100%; }
+  .ending-actions { flex-direction: column; gap: 10px; margin-top: 16px; }
+  .ending-actions :deep(.n-button) { width: 100%; }
+}
 </style>

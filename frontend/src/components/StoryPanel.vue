@@ -11,7 +11,7 @@
         <div class="pulse-line short"></div>
         <div class="pulse-line medium"></div>
       </div>
-      <span class="loading-label">AI 正在编织故事…</span>
+      <span class="loading-label">{{ $t('storyPanel.aiWeaving') }}</span>
     </div>
     <div class="story-text" v-html="formattedText" v-show="displayedText || !isLoading"></div>
   </div>

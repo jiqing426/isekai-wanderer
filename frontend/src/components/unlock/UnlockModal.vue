@@ -5,7 +5,7 @@
         <div class="unlock-modal-content">
           <!-- 跳过按钮 -->
           <button v-if="canSkip" class="skip-btn" @click="handleSkip">
-            跳过
+            {{ $t('unlockModal.skip') }}
           </button>
 
           <!-- 根据类型渲染不同卡片 -->
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useUnlockModal } from '@/composables/useUnlockModal'
 import CGUnlockCard from './CGUnlockCard.vue'
@@ -66,6 +67,7 @@ import RewardFloat from './RewardFloat.vue'
 import GenericUnlockCard from './GenericUnlockCard.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 
 defineProps<{
   autoProcess?: boolean

@@ -21,7 +21,7 @@
             :value="currentAffection"
           />
           <div class="script-info">
-            <div class="script-label">📖 剧本</div>
+            <div class="script-label">📖 {{ $t('freeChatView.script') }}</div>
             <div class="script-value">{{ scriptName }}</div>
           </div>
         </aside>
@@ -60,7 +60,7 @@
           <div class="topic-recommendation" v-if="topics.length > 0">
             <div class="topic-header">
               <span class="topic-icon">💡</span>
-              <span class="topic-title">推荐话题</span>
+              <span class="topic-title">{{ $t('freeChatView.recommendedTopics') }}</span>
             </div>
             <div class="topic-chips-row">
               <button
@@ -141,13 +141,13 @@ const currentAffection = computed(() => {
 });
 
 // 预设快捷话题
-const presetTopics = [
-  { id: 'past', emoji: '📖', label: '聊聊你的过去' },
-  { id: 'favorite', emoji: '⭐', label: '你最喜欢的地方' },
-  { id: 'mood', emoji: '😊', label: '今天的心情' },
-  { id: 'dream', emoji: '✨', label: '你的梦想是什么' },
-  { id: 'secret', emoji: '🤫', label: '告诉我一个秘密' },
-];
+const presetTopics = computed(() => [
+  { id: 'past', emoji: '📖', label: t('freeChatView.topicPast') },
+  { id: 'favorite', emoji: '⭐', label: t('freeChatView.topicFavorite') },
+  { id: 'mood', emoji: '😊', label: t('freeChatView.topicMood') },
+  { id: 'dream', emoji: '✨', label: t('freeChatView.topicDream') },
+  { id: 'secret', emoji: '🤫', label: t('freeChatView.topicSecret') },
+]);
 
 // 好感度相关
 const affectionLevel = computed(() => {
@@ -159,11 +159,11 @@ const affectionLevel = computed(() => {
 const affectionEmoji = computed(() => {
   const level = affectionLevel.value;
   const emojiMap: Record<string, string> = {
-    '相识': '🤝',
-    '暧昧': '💕',
-    '信赖': '💙',
-    '羁绊': '💜',
-    '挚友': '💖',
+    [t('freeChatView.levelAcquaintance')]: '🤝',
+    [t('freeChatView.levelAmbiguous')]: '💕',
+    [t('freeChatView.levelTrust')]: '💙',
+    [t('freeChatView.levelBond')]: '💜',
+    [t('freeChatView.levelBestFriend')]: '💖',
   };
   return emojiMap[level] || '🤝';
 });
@@ -180,7 +180,7 @@ async function loadTopics() {
     topics.value = resp.topics;
   } catch {
     // 如果API失败，使用预设话题
-    topics.value = presetTopics;
+    topics.value = presetTopics.value;
   }
 }
 
@@ -302,13 +302,13 @@ onMounted(async () => {
     characterId.value = queryCharacterId || status.character_id || '';
     characterName.value = queryCharacterName || status.character_name || t('freeChat.defaultCharacter');
     characterTitle.value = (status as any).character_title || '';
-    scriptName.value = status.script_name || (route.query.scriptName as string) || '未知剧本';
+    scriptName.value = status.script_name || (route.query.scriptName as string) || t('freeChatView.unknownScript');
     affectionValue.value = status.affection_value ?? 0;
   } catch {
     characterName.value = queryCharacterName || t('freeChat.defaultCharacter');
     characterTitle.value = '';
     characterId.value = queryCharacterId || '';
-    scriptName.value = (route.query.scriptName as string) || '未知剧本';
+    scriptName.value = (route.query.scriptName as string) || t('freeChatView.unknownScript');
     affectionValue.value = 0;
   }
   

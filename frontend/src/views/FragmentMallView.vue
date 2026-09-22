@@ -359,7 +359,7 @@ function getTransactionDescription(tx: FragmentTransaction): string {
   }
   
   // 否则返回原始值或默认文本
-  return typeKey || '交易';
+  return typeKey || t('fragmentView.defaultTransaction');
 }
 
 // Lifecycle

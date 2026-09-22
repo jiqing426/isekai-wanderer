@@ -1,9 +1,9 @@
 <template>
   <div class="choice-panel">
-    <div class="choice-label">做出你的选择</div>
+    <div class="choice-label">{{ $t('choicePanel.makeChoice') }}</div>
     <div v-if="loading" class="choice-loading">
       <div class="loading-spinner"></div>
-      <span>思考中...</span>
+      <span>{{ $t('choicePanel.thinking') }}</span>
     </div>
     <div class="choice-list">
       <div
@@ -26,15 +26,15 @@
         <div class="choice-content">
           <span class="choice-text">{{ choice.text }}</span>
           <span class="affection-delta" v-if="choice.affection_delta && !choice.locked" :class="choice.affection_delta > 0 ? 'positive' : 'negative'">
-            {{ choice.affection_delta > 0 ? '+' : '' }}{{ choice.affection_delta }} 好感
+            {{ choice.affection_delta > 0 ? '+' : '' }}{{ choice.affection_delta }} {{ $t('choicePanel.affectionPoints') }}
           </span>
           <!-- AC-GAME-005: Consequence warning tag -->
           <span class="consequence-tag" v-if="choice.has_consequence && !choice.locked">
-            ⚠️ 影响剧情走向
+            {{ $t('choicePanel.affectsStory') }}
           </span>
           <!-- AC-GAME-006: Locked state with required affection -->
           <span class="locked-tag" v-if="choice.locked">
-            需要好感 {{ choice.required_affection }}
+            {{ $t('choicePanel.requiresAffection', { n: choice.required_affection }) }}
           </span>
           <!-- AC-GAME-007: Consequence preview hint on hover -->
           <n-tooltip v-if="choice.hint && !choice.locked" trigger="hover" placement="top">
@@ -312,7 +312,7 @@ watch(() => props.choices, () => {
   opacity: 1;
 }
 
-/* 好感度变化动画 */
+/* {{ $t('choicePanel.affectionPoints') }}度变化动画 */
 .affection-animation {
   position: fixed;
   top: 50%;

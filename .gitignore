@@ -83,3 +83,8 @@ login_data.json
 
 # Misc - root-level test scripts have been moved to tests/legacy/
 # (kept for backward compatibility with any old git tracking)
+
+# Admin frontend build artifacts
+admin/node_modules/
+admin/node-jiti/
+admin/.npm/

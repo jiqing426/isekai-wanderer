@@ -3,7 +3,7 @@
     <div v-for="(chapterData, index) in chapterEndings" :key="`chapter-${index}-${chapterData.chapterIndex}`" class="chapter-group">
       <div class="chapter-header">
         <span class="chapter-label">{{ chapterData.chapter }}</span>
-        <span class="chapter-progress">{{ chapterData.unlockedCount }}/{{ chapterData.endings.length }} 结局</span>
+        <span class="chapter-progress">{{ chapterData.unlockedCount }}/{{ chapterData.endings.length }} {{ $t('endingList.endingsCount') }}</span>
       </div>
       <div class="endings-grid">
         <div
@@ -24,8 +24,8 @@
               <span v-if="ending.type" class="ending-type">{{ endingTypeLabel(ending.type) }}</span>
             </div>
             <div v-if="ending.unlocked && ending.description" class="ending-description">{{ ending.description }}</div>
-            <div v-else-if="!ending.unlocked" class="ending-hint">完成本章以解锁结局</div>
-            <div v-else class="ending-hint">暂无结局描述</div>
+            <div v-else-if="!ending.unlocked" class="ending-hint">{{ $t('endingList.completeToUnlock') }}</div>
+            <div v-else class="ending-hint">{{ $t('endingList.noDescription') }}</div>
           </div>
         </div>
       </div>
@@ -36,15 +36,18 @@
       </div>
       <div class="ending-content">
         <div class="ending-header">
-          <span class="ending-name">暂无结局</span>
+          <span class="ending-name">{{ $t('endingList.noEnding') }}</span>
         </div>
-        <div class="ending-hint">完成剧本以解锁结局</div>
+        <div class="ending-hint">{{ $t('endingList.completeScript') }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 interface Ending {
   id: string;
   name: string;
@@ -69,11 +72,11 @@ defineProps<{
 
 const endingTypeLabel = (type: string): string => {
   const map: Record<string, string> = {
-    good: '好结局',
-    bad: '坏结局',
-    normal: '普通结局',
-    true_end: '真结局',
-    hidden: '隐藏结局'
+    good: t('endingList.goodEnding'),
+    bad: t('endingList.badEnding'),
+    normal: t('endingList.normalEnding'),
+    true_end: t('endingList.trueEnding'),
+    hidden: t('endingList.hiddenEnding')
   };
   return map[type] || type;
 };

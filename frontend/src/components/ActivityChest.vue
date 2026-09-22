@@ -84,11 +84,11 @@ const milestones = ref<Milestone[]>([
 ]);
 
 const activitySources = ref<ActivitySource[]>([
-  { id: 'login', name: '登录', icon: '📱', points: 10 },
-  { id: 'play', name: '游玩剧本', icon: '🎮', points: 20 },
-  { id: 'choice', name: '做出选择', icon: '🎯', points: 15 },
-  { id: 'share', name: '分享', icon: '📤', points: 10 },
-  { id: 'community', name: '社区互动', icon: '💬', points: 15 },
+  { id: 'login', name: t('activityChest.sources.login'), icon: '📱', points: 10 },
+  { id: 'play', name: t('activityChest.sources.play'), icon: '🎮', points: 20 },
+  { id: 'choice', name: t('activityChest.sources.choice'), icon: '🎯', points: 15 },
+  { id: 'share', name: t('activityChest.sources.share'), icon: '📤', points: 10 },
+  { id: 'community', name: t('activityChest.sources.community'), icon: '💬', points: 15 },
 ]);
 
 const claimableMilestones = computed(() =>

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.exceptions import AppException, ErrorCode
 from app.services.narrative import NarrativeEngine
 from app.services.narrative.script_service import ScriptService
@@ -248,10 +249,26 @@ def _stream_legacy_turn(
                     yield f'data: {_json.dumps({"type":"text","content":narrator_text})}\n\n'
 
             # Done event with metadata
+            full_response_text = "".join(deferred_data["text_chunks"])
+            # CR-044: Deduct fragments for narrative generation (by character length)
+            from app.services.fragment_billing_service import FragmentBillingService
+            billing_service = FragmentBillingService(db)
+            # First deduct dialogue cost (free or flat fragment cost)
+            dialogue_result = await billing_service.check_and_deduct_dialogue(user_uuid)
+            # Then, if response is long enough, deduct narrative cost based on char length
+            narrative_cost = 0
+            if len(full_response_text) > settings.narrative_free_chars:
+                narrative_result = await billing_service.deduct_narrative_cost(user_uuid, len(full_response_text))
+                narrative_cost = narrative_result.get("cost", 0)
+            
+            total_cost = dialogue_result.get("cost", 0) + narrative_cost
             done_payload = {
                 "type": "done",
                 "session_id": str(session_uuid),
                 "node_id": _node_id_str,
+                "fragment_cost": total_cost,
+                "fragment_balance": dialogue_result.get("remaining_balance", 0),
+                "free_remaining": dialogue_result.get("free_remaining", 0),
             }
             # Add affection_change if present
             if choice_result.get("affection_change"):
@@ -1145,24 +1162,19 @@ async def submit_choice(
     # CRIT-003: verify ownership
     await _verify_session_ownership(UUID(session_id), user_id, db)
     
-    # CR-016: Check quota before processing choice (user action = deduct quota)
-    from app.services.quota_service import QuotaService
-    from app.services.paywall_service import PaywallService
-    quota_service = QuotaService(db)
-    paywall_service = PaywallService(db)
+    # CR-044: Check fragment balance before processing (replaces quota system)
+    from app.services.fragment_billing_service import FragmentBillingService
+    billing_service = FragmentBillingService(db)
     
-    # Check if user has quota remaining
-    quota_status = await quota_service.get_user_quota_status(UUID(user_id))
-    quota_exhausted = quota_status["remaining"] == 0 and not quota_status["is_exempt"]
-    
-    if quota_exhausted:
-        # Check if should show paywall
-        trigger_result = await paywall_service.check_trigger(UUID(user_id), "T1_quota")
+    pre_check = await billing_service.check_dialogue_allowed(UUID(user_id))
+    if not pre_check["allowed"]:
         return {
-            "error": "quota_exhausted",
-            "message": "对话额度已用完",
+            "error": "insufficient_fragments",
+            "message": f"碎片不足，需要 {pre_check['cost_preview']} 碎片，当前余额 {pre_check['balance']}",
             "remaining_quota": 0,
-            "paywall_trigger": trigger_result,
+            "fragment_balance": pre_check["balance"],
+            "free_remaining": pre_check["free_remaining"],
+            "cost_preview": pre_check["cost_preview"],
         }
     
     # CR-021: 获取当前节点和选择信息（用于存储对话历史）
@@ -1268,22 +1280,17 @@ async def submit_choice(
         import logging
         logging.warning(f"Failed to store choice dialogue: {e}")
     
-    # CR-016: Consume quota after successful choice
-    quota_deducted = False
-    if not quota_status["is_exempt"]:
-        success = await quota_service.consume_quota(UUID(user_id))
-        quota_deducted = success
+    # CR-044: Deduct fragments after successful choice (replaces quota consumption)
+    billing_result = await billing_service.check_and_deduct_dialogue(UUID(user_id))
     
-    # Get updated quota status
-    updated_quota_status = await quota_service.get_user_quota_status(UUID(user_id))
-    result["remaining_quota"] = updated_quota_status["remaining"]
-    result["quota_deducted"] = quota_deducted
-    
-    # Check if should trigger paywall for next action
-    paywall_trigger = None
-    if updated_quota_status["remaining"] == 0 and not updated_quota_status["is_exempt"]:
-        paywall_trigger = await paywall_service.check_trigger(UUID(user_id), "T1_quota")
-    result["paywall_trigger"] = paywall_trigger
+    # If dialogue was transition/ai_dialog (SSE streaming), narrative cost is computed later
+    # For preset/choice nodes, use flat dialogue cost
+    result["fragment_cost"] = billing_result.get("cost", 0)
+    result["fragment_source"] = billing_result.get("source", "fragment")
+    result["fragment_balance"] = billing_result.get("remaining_balance", 0)
+    result["free_remaining"] = billing_result.get("free_remaining", 0)
+    result["remaining_quota"] = result["free_remaining"]  # backward compat for frontend
+    result["quota_deducted"] = billing_result.get("success", False)
     
     # DEV-BE-006: Check if convergence point is reached after choice
     from app.services.narrative.convergence_service import convergence_service
@@ -1766,12 +1773,25 @@ async def free_chat_stream(
     from app.models.game import GameSession
     from app.models.corvus import CorvusGameSession
     from app.services.llm.gateway import LLMMessage
+    from app.services.fragment_billing_service import FragmentBillingService
     import asyncio
     import logging as _fc_log
     _fc_logger = _fc_log.getLogger(__name__)
 
     # Verify session ownership
     await _verify_session_ownership(UUID(session_id), user_id, db)
+
+    # CR-044: Check fragment balance before processing
+    billing_service = FragmentBillingService(db)
+    pre_check = await billing_service.check_dialogue_allowed(UUID(user_id))
+    if not pre_check["allowed"]:
+        return {
+            "error": "insufficient_fragments",
+            "message": f"碎片不足，需要 {pre_check['cost_preview']} 碎片，当前余额 {pre_check['balance']}",
+            "fragment_balance": pre_check["balance"],
+            "free_remaining": pre_check["free_remaining"],
+            "cost_preview": pre_check["cost_preview"],
+        }
 
     # Get game session for character/script info
     session_result = await db.execute(
@@ -1825,9 +1845,18 @@ async def free_chat_stream(
                 yield f'data: {json.dumps({"type":"text","content":chunk})}\n\n'
 
             # Done event
+            full_response_text = "".join(deferred_data["text_chunks"])
+            # CR-044: Deduct fragments after successful dialogue
+            billing_result = await billing_service.check_and_deduct_dialogue(UUID(user_id))
+            # If response is long enough to be narrative, also deduct narrative cost
+            # (narrative cost only applies to AI narrative generation, not regular chat)
             done_payload = {
                 "type": "done",
                 "session_id": str(session_id),
+                "fragment_cost": billing_result.get("cost", 0),
+                "fragment_source": billing_result.get("source", "fragment"),
+                "fragment_balance": billing_result.get("remaining_balance", 0),
+                "free_remaining": billing_result.get("free_remaining", 0),
             }
             yield f'data: {json.dumps(done_payload, default=str)}\n\n'
 
@@ -2030,21 +2059,19 @@ async def submit_custom_input(
     # Legacy engine path (original behavior)
     await _verify_session_ownership(UUID(session_id), user_id, db)
 
-    # CR-016: Check quota before processing (user action = deduct quota)
-    from app.services.quota_service import QuotaService
-    from app.services.paywall_service import PaywallService
-    quota_service = QuotaService(db)
+    # CR-044: Check fragment balance before processing (replaces quota)
+    from app.services.fragment_billing_service import FragmentBillingService
+    billing_service = FragmentBillingService(db)
     
-    quota_status = await quota_service.get_user_quota_status(UUID(user_id))
-    quota_exhausted = quota_status["remaining"] == 0 and not quota_status["is_exempt"]
-    
-    if quota_exhausted:
-        trigger_result = await paywall_service.check_trigger(UUID(user_id), "T1_quota")
+    pre_check = await billing_service.check_dialogue_allowed(UUID(user_id))
+    if not pre_check["allowed"]:
         return {
-            "error": "quota_exhausted",
-            "message": "对话额度已用完",
+            "error": "insufficient_fragments",
+            "message": f"碎片不足，需要 {pre_check['cost_preview']} 碎片，当前余额 {pre_check['balance']}",
             "remaining_quota": 0,
-            "paywall_trigger": trigger_result,
+            "fragment_balance": pre_check["balance"],
+            "free_remaining": pre_check["free_remaining"],
+            "cost_preview": pre_check["cost_preview"],
         }
 
     # CR-042 AC-006: Legacy custom-input → SSE streaming
@@ -2153,13 +2180,12 @@ async def submit_custom_input(
         import logging
         logging.getLogger(__name__).warning(f"Failed to store custom-input dialogue: {e}")
     
-    # CR-016: Consume quota after successful custom input
-    if not quota_status["is_exempt"]:
-        await quota_service.consume_quota(UUID(user_id))
-    
-    # Get updated quota status
-    updated_quota_status = await quota_service.get_user_quota_status(UUID(user_id))
-    result["remaining_quota"] = updated_quota_status["remaining"]
+    # CR-044: Deduct fragments (replaces quota consumption)
+    billing_result = await billing_service.check_and_deduct_dialogue(UUID(user_id))
+    result["fragment_cost"] = billing_result.get("cost", 0)
+    result["fragment_balance"] = billing_result.get("remaining_balance", 0)
+    result["free_remaining"] = billing_result.get("free_remaining", 0)
+    result["remaining_quota"] = result["free_remaining"]  # backward compat
     
     # Achievement trigger logic (same as submit_choice)
     new_achievements = []
